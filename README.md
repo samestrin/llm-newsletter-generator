@@ -10,7 +10,14 @@ newsletter-generator is an experimental Python script designed to generate text-
 
 - **RSS Feed Integration**: The generator seamlessly retrieves content from RSS feeds, ensuring up-to-date newsletter content.
 - **Customizable Output**: Users can specify the title and topic of the newsletter to tailor content according to their preferences.
-- **Transformer-based Text Generation**: Utilizing the powerful capabilities of the Transformers library, the generator produces engaging and diverse newsletter content.
+- **Transformer-based Text Generation**: Utilizing the powerful capabilities of the Transformers library, the generator produces engaging and diverse newsletter content using multiple models.
+
+### Large Language Models
+
+- **Dolphin 2.9 Llama 3 8b**: [cognitivecomputations/dolphin-2.9-llama3-8b](https://huggingface.co/cognitivecomputations/dolphin-2.9-llama3-8b)
+- **Meta Llama 3**: [meta-llama/Meta-Llama-3-8B]()
+- **Microsoft Phi-3-Mini-128K-Instruct**: [microsoft/Phi-3-mini-128k-instruct](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct) (Default)
+- **Snowflake Artic**: [Snowflake/snowflake-arctic-instruct](https://huggingface.co/Snowflake/snowflake-arctic-instruct)
 
 ## Dependencies
 
@@ -24,13 +31,6 @@ The Newsletter Generator relies on the following dependencies:
 - **rich**: Used to display progress during command-line operations.
 - **transformers**: Employed for tokenization and model-based text generation.
 - **tensorflow**: For machine learning operations (e.g., model loading and inference).
-
-## Large Language Models
-
-- **Dolphin 2.9 Llama 3 8b**: [cognitivecomputations/dolphin-2.9-llama3-8b](https://huggingface.co/cognitivecomputations/dolphin-2.9-llama3-8b)
-- **Meta Llama 3**: [meta-llama/Meta-Llama-3-8B]()
-- **Microsoft Phi-3-Mini-128K-Instruct**: [microsoft/Phi-3-mini-128k-instruct](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct) (Default)
-- **Snowflake Artic**: [Snowflake/snowflake-arctic-instruct](https://huggingface.co/Snowflake/snowflake-arctic-instruct)
 
 ### Installation
 
