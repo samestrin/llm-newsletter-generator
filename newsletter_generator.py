@@ -32,7 +32,6 @@ class NewsletterGenerator:
             'snowflake': ("Snowflake/snowflake-arctic-instruct", "Snowflake/snowflake-arctic-instruct"),
             'dolphin': ("cognitivecomputations/dolphin-2.9-llama3-8b", "cognitivecomputations/dolphin-2.9-llama3-8b")
         }
-
         model, tokenizer = self.model_configs.get(model_name, self.model_configs['microsoft'])
         self.model = model
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
