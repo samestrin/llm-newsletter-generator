@@ -18,7 +18,7 @@ import hashlib
 import os
 import time
 import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, pipeline, AutoTokenizer
+from transformers import pipeline, AutoTokenizer
 from bs4 import BeautifulSoup
 from rich.progress import Progress
 
