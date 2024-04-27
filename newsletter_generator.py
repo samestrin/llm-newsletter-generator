@@ -23,29 +23,30 @@ from bs4 import BeautifulSoup
 from rich.progress import Progress
 
 class NewsletterGenerator:
-    def __init__(self, feed_url, cache_timeout=3600):
-        """
-        Initializes the NewsletterGenerator.
-
-        Args:
-            feed_url (str): URL of the feed to parse.
-            cache_timeout (int): Timeout for the cache in seconds.
-        """
-        torch.manual_seed(0)
-
+    def __init__(self, feed_url, cache_timeout=3600, model_name='default'):
         self.feed_url = feed_url
-        self.cache = {}
-        self.tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-7b-instruct")        
         self.cache_timeout = cache_timeout
+        self.model_configs = {
+            'microsoft': ("microsoft/Phi-3-mini-128k-instruct", "microsoft/Phi-3-mini-128k-instruct"),
+            'meta-llama': ("meta-llama/Meta-Llama-3-8B-Instruct", "meta-llama/Meta-Llama-3-8B-Instruct"),
+            'snowflake': ("Snowflake/snowflake-arctic-instruct", "Snowflake/snowflake-arctic-instruct"),
+            'dolphin': ("cognitivecomputations/dolphin-2.9-llama3-8b", "cognitivecomputations/dolphin-2.9-llama3-8b")
+        }
+
+        model, tokenizer = self.model_configs.get(model_name, self.model_configs['microsoft'])
+        self.model = model
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
         self.text_generation = pipeline(
             "text-generation", 
-            model="tiiuae/falcon-7b-instruct", 
-            pad_token_id=self.tokenizer.eos_token_id
+            model=model, 
+            tokenizer=self.tokenizer,
+            trust_remote_code=True
         )
         self.summarizer = pipeline(
             "summarization", 
             model="sshleifer/distilbart-cnn-12-6"
         )
+
 
     def load_feed(self):
         """
@@ -108,8 +109,9 @@ class NewsletterGenerator:
         """
         
         cache_dir = "./cache/"
+        cache_key = self.model + " " + prompt
         cache_file = os.path.join(
-            cache_dir, f"{hashlib.md5(prompt.encode()).hexdigest()}.txt"
+            cache_dir, f"{hashlib.md5(cache_key.encode()).hexdigest()}.txt"
         )
         if os.path.exists(cache_file):
             with open(cache_file, "r") as f:
@@ -283,29 +285,24 @@ def main():
     Tracks the total runtime of the newsletter generation process.
     """
     parser = argparse.ArgumentParser(description="Generate text-only newsletter from a feed")
-    parser.add_argument("--feed", type=str, help="URL of the feed")
-    parser.add_argument("--title", type=str, help="Title of the newsletter")
+    parser.add_argument("--feed", type=str, required=True, help="URL of the feed")
+    parser.add_argument("--title", type=str, required=True, help="Title of the newsletter")
     parser.add_argument("--topic", type=str, help="Topic of the newsletter (optional)")
     parser.add_argument("--max", type=int, help="Maximum number of items to process (optional)")
+    parser.add_argument("--model", type=str, default='microsoft', help="Model to use for text generation (microsoft, meta-llama, snowflake, dolphin)")
+
     args = parser.parse_args()
-
-    if not args.feed or not args.title:
-        parser.error("Please provide both --feed and --title arguments")
-
-    # Start timing the newsletter generation process
-    start_time = time.time()
 
     # Create a cache directory if it doesn't exist
     cache_dir = "./cache/"
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
 
-    generator = NewsletterGenerator(args.feed)
+    generator = NewsletterGenerator(args.feed, model_name=args.model)
     feed_content = generator.load_feed()
     if feed_content:
         items = generator.get_items(feed_content)
         
-        # Limit the number of items processed if --max argument is provided
         if args.max:
             items = items[:args.max]
 
@@ -314,10 +311,12 @@ def main():
     else:
         print("Failed to generate newsletter")
 
-    # End timing and calculate the elapsed time
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    print(f"\n\nTotal runtime: {elapsed_time:.2f} seconds")
+    # Print runtime
+    print(f"\n\nTotal runtime: {time.time() - start_time:.2f} seconds")
+
+if __name__ == "__main__":
+    main()
+
 
 if __name__ == "__main__":
     main()
