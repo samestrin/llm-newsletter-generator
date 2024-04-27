@@ -1,15 +1,20 @@
+#!/usr/bin/env python3
+
 import argparse
-import hashlib
 import requests
 import feedparser
+import hashlib
 import os
-from transformers import pipeline
+import time
+from transformers import TFAutoModelForCausalLM, AutoTokenizer
+import tensorflow as tf
 
 class NewsletterGenerator:
     def __init__(self, feed_url, cache_timeout=3600):
         self.feed_url = feed_url
         self.cache = {}
-        self.text_generator = pipeline("text-generation", model="gpt2")
+        self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+        self.model = TFAutoModelForCausalLM.from_pretrained("gpt2")
         self.cache_timeout = cache_timeout
 
     def load_feed(self):
@@ -49,17 +54,6 @@ class NewsletterGenerator:
         except Exception as e:
             print("Error loading feed:", str(e))
             return None
-
-    def generate_hash(self, content):
-        """Generates an MD5 hash for the given content.
-
-        Args:
-            content (str): The content to be hashed.
-
-        Returns:
-            str: The MD5 hash of the content.
-        """        
-        return hashlib.md5(content.encode()).hexdigest()
 
     def get_items(self, feed_content):
         """Parses the feed content and retrieves its items.
@@ -117,7 +111,9 @@ class NewsletterGenerator:
                    'flow, be natural-sounding narrative, and write at a college level.\n\n'
                    'Write a creative newsletter following these directions.\n')
 
-        generated_text = self.text_generator(prompt, max_length=100, do_sample=False)[0]['generated_text']
+        input_ids = self.tokenizer.encode(prompt, return_tensors='tf')
+        output = self.model.generate(input_ids, max_length=100, num_return_sequences=1)
+        generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
         return generated_text
 
 
