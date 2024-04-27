@@ -16,7 +16,7 @@ jobs:
       - name: Update README
         run: |
           VERSION=$(cat .version)
-          sed -i "s/Version-[0-9]*\.[0-9]*\.[0-9]*/Version-$VERSION/g" README.md
+          sed -i "s/Version [0-9]*\.[0-9]*\.[0-9]*/Version $VERSION/g" README.md
           sed -i "s/badge\/Version-[0-9]*\.[0-9]*\.[0-9]*-/badge\/Version-$VERSION-/g" README.md
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
