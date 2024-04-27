@@ -2,7 +2,7 @@
 
 [![Star on GitHub](https://img.shields.io/github/stars/samestrin/newsletter-generator?style=social)](https://github.com/samestrin/newsletter-generator/stargazers) [![Fork on GitHub](https://img.shields.io/github/forks/samestrin/newsletter-generator?style=social)](https://github.com/samestrin/newsletter-generator/network/members) [![Watch on GitHub](https://img.shields.io/github/watchers/samestrin/newsletter-generator?style=social)](https://github.com/samestrin/newsletter-generator/watchers)
 
-![Version 0.0.2](https://img.shields.io/badge/Version-0.0.2-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
+![Version 0.0.3](https://img.shields.io/badge/Version-0.0.3-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
 
 newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. newsletter-generator currently processes prompts using [tiiuae/falcon-7b-instruct](https://huggingface.co/tiiuae/falcon-7b-instruct) and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
 
