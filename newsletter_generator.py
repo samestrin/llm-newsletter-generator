@@ -37,9 +37,14 @@ class NewsletterGenerator:
         self.cache = {}
         self.tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-7b-instruct")        
         self.cache_timeout = cache_timeout
-        self.text_generation = pipeline("text-generation", model="tiiuae/falcon-7b-instruct")
+        self.text_generation = pipeline(
+            "text-generation", 
+            model="tiiuae/falcon-7b-instruct", 
+            pad_token_id=self.tokenizer.eos_token_id
+        )
         self.summarizer = pipeline(
-            "summarization", model="sshleifer/distilbart-cnn-12-6"
+            "summarization", 
+            model="sshleifer/distilbart-cnn-12-6"
         )
 
     def load_feed(self):
