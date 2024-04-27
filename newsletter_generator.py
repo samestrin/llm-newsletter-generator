@@ -7,9 +7,10 @@ import hashlib
 import os
 import time
 import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, pipeline
+from transformers import GPT2Tokenizer, GPTNeoForCausalLM, pipeline
 from bs4 import BeautifulSoup
 from rich.progress import Progress
+
 
 class NewsletterGenerator:
     def __init__(self, feed_url, cache_timeout=3600):
@@ -22,10 +23,12 @@ class NewsletterGenerator:
         """
         self.feed_url = feed_url
         self.cache = {}
-        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        self.model = GPT2LMHeadModel.from_pretrained("gpt2")
+        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2-medium")
+        self.model = GPTNeoForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B")
         self.cache_timeout = cache_timeout
-        self.summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+        self.summarizer = pipeline(
+            "summarization", model="sshleifer/distilbart-cnn-12-6"
+        )
 
     def load_feed(self):
         """
@@ -35,21 +38,23 @@ class NewsletterGenerator:
             str: The content of the feed if successful, None otherwise.
         """
         cache_dir = "./cache/"
-        cache_file = os.path.join(cache_dir, f"{hashlib.md5(self.feed_url.encode()).hexdigest()}.txt")
+        cache_file = os.path.join(
+            cache_dir, f"{hashlib.md5(self.feed_url.encode()).hexdigest()}.txt"
+        )
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
         if os.path.exists(cache_file):
             file_modified_time = os.path.getmtime(cache_file)
             if time.time() - file_modified_time < self.cache_timeout:
                 print("Using cached feed")
-                with open(cache_file, 'r') as f:
+                with open(cache_file, "r") as f:
                     return f.read()
 
         try:
             response = requests.get(self.feed_url)
             if response.status_code == 200:
                 feed_content = response.text
-                with open(cache_file, 'w') as f:
+                with open(cache_file, "w") as f:
                     f.write(feed_content)
                 return feed_content
             else:
@@ -70,7 +75,10 @@ class NewsletterGenerator:
             list: A list of items parsed from the feed.
         """
         parsed_feed = feedparser.parse(feed_content)
-        return [(item.get('title', ''), item.get('description', ''), item.get('link', '')) for item in parsed_feed.entries]
+        return [
+            (item.get("title", ""), item.get("description", ""), item.get("link", ""))
+            for item in parsed_feed.entries
+        ]
 
     def generate_text(self, prompt):
         """
@@ -82,14 +90,21 @@ class NewsletterGenerator:
         Returns:
             str: The generated text.
         """
-        
-        input_ids = self.tokenizer.encode(prompt, return_tensors='pt')
-                
-        attention_mask = torch.ones(input_ids.shape, dtype=torch.long)  # Ensure all tokens are attended to
-        pad_token_id = self.tokenizer.eos_token_id  # EOS token is used as pad token in GPT-2
+
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
+
+        attention_mask = torch.ones(
+            input_ids.shape, dtype=torch.long
+        )  # Ensure all tokens are attended to
+        pad_token_id = (
+            self.tokenizer.eos_token_id
+        )  # EOS token is used as pad token in GPT-2
         output = self.model.generate(
-            input_ids, attention_mask=attention_mask,
-            pad_token_id=pad_token_id, max_length=1024, do_sample=True
+            input_ids,
+            attention_mask=attention_mask,
+            pad_token_id=pad_token_id,
+            max_length=1024,
+            do_sample=True,
         )
         generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
         return generated_text
@@ -128,7 +143,9 @@ class NewsletterGenerator:
         if section == "introduction":
             prompt += "Please write an engaging introduction that sets the stage for the following articles."
         else:
-            prompt += "Please summarize the key points and conclude the newsletter elegantly."
+            prompt += (
+                "Please summarize the key points and conclude the newsletter elegantly."
+            )
 
         return prompt
 
@@ -146,7 +163,7 @@ class NewsletterGenerator:
         title, description, url = item
 
         # Remove all tags from the description
-        soup = BeautifulSoup(description, 'html.parser')
+        soup = BeautifulSoup(description, "html.parser")
         cleaned_description = str(soup.get_text())
 
         # Tokenize the cleaned description to check its length
@@ -155,8 +172,12 @@ class NewsletterGenerator:
         # Check if description is longer than estimated_tokens tokens, if so, summarize it
         if len(tokens) > estimated_tokens:
             # Attempt to summarize to about estimated_tokens tokens (exact control of token length is hard in summarization)
-            summary = self.summarizer(cleaned_description, max_length=1024, min_length=800, do_sample=False)
-            summary_description = summary[0]['summary_text'] if summary else cleaned_description
+            summary = self.summarizer(
+                cleaned_description, max_length=1024, min_length=800, do_sample=False
+            )
+            summary_description = (
+                summary[0]["summary_text"] if summary else cleaned_description
+            )
         else:
             summary_description = cleaned_description
 
@@ -184,12 +205,18 @@ class NewsletterGenerator:
             newsletter_output = []
             row_titles = [item[0] for item in items]
 
-            progress.update(task1, advance=1, description="[cyan]Generating introduction...")
-            intro_prompt = self.generate_prompt(title, topic, row_titles, "introduction")
+            progress.update(
+                task1, advance=1, description="[cyan]Generating introduction..."
+            )
+            intro_prompt = self.generate_prompt(
+                title, topic, row_titles, "introduction"
+            )
             introduction = self.generate_text(intro_prompt)
             newsletter_output.append(introduction)
 
-            progress.update(task1, advance=1, description="[cyan]Generating item stories...")
+            progress.update(
+                task1, advance=1, description="[cyan]Generating item stories..."
+            )
             for item in items:
                 story_prompt = self.generate_prompt_for_item(item, topic)
                 story = self.generate_text(story_prompt)
@@ -200,16 +227,15 @@ class NewsletterGenerator:
             closing = self.generate_text(closing_prompt)
             newsletter_output.append(closing)
 
-            progress.update(task1, advance=1, description="[cyan]Finalizing newsletter...")
+            progress.update(
+                task1, advance=1, description="[cyan]Finalizing newsletter..."
+            )
             return "\n\n".join(newsletter_output)
-
-# Main function and argument parsing are omitted for brevity
-
-
 
 def main():
     """
     Main function to handle command line arguments and initiate newsletter generation.
+    Tracks the total runtime of the newsletter generation process.
     """
     parser = argparse.ArgumentParser(description="Generate text-only newsletter from a feed")
     parser.add_argument("--feed", type=str, help="URL of the feed")
@@ -220,6 +246,9 @@ def main():
     if not args.feed or not args.title:
         parser.error("Please provide both --feed and --title arguments")
 
+    # Start timing the newsletter generation process
+    start_time = time.time()
+
     generator = NewsletterGenerator(args.feed)
     feed_content = generator.load_feed()
     if feed_content:
@@ -228,6 +257,11 @@ def main():
         print(newsletter_text)
     else:
         print("Failed to generate newsletter")
+
+    # End timing and calculate the elapsed time
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"\n\nTotal runtime: {elapsed_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()
