@@ -3,7 +3,7 @@
 """
 newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS 
 feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided 
-feed, title, and optional topic. newsletter-generator currently processes prompts using GPT-Neo 1.3B and summarizes 
+feed, title, and optional topic. newsletter-generator currently processes prompts using GPT-J 6B and summarizes 
 with sshleifer/distilbart-cnn-12-6.
 
 Copyright (c) 2024-PRESENT Sam Estrin
@@ -18,7 +18,7 @@ import hashlib
 import os
 import time
 import torch
-from transformers import GPT2Tokenizer, GPTNeoForCausalLM, pipeline
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, pipeline
 from bs4 import BeautifulSoup
 from rich.progress import Progress
 
@@ -34,8 +34,8 @@ class NewsletterGenerator:
         """
         self.feed_url = feed_url
         self.cache = {}
-        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2-medium")
-        self.model = GPTNeoForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B")
+        self.tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-j-6B")
+        self.model = GPT2LMHeadModel.from_pretrained("EleutherAI/gpt-j-6B")
         self.cache_timeout = cache_timeout
         self.summarizer = pipeline(
             "summarization", model="sshleifer/distilbart-cnn-12-6"
@@ -92,14 +92,15 @@ class NewsletterGenerator:
 
     def generate_text(self, prompt):
         """
-        Generates text based on the provided prompt using GPT-Neo 1.3B and caches the result.
+        Generates text based on the provided prompt using GPT-J 6B and caches the result.
 
         Args:
-            prompt (str): Prompt to feed to the GPT-Neo 1.3B model.
+            prompt (str): Prompt to feed to the GPT-J 6B model.
 
         Returns:
             str: The generated text.
         """
+        print(prompt);
         cache_dir = "./cache/"
         cache_file = os.path.join(
             cache_dir, f"{hashlib.md5(prompt.encode()).hexdigest()}.txt"
@@ -115,7 +116,7 @@ class NewsletterGenerator:
         )  # Ensure all tokens are attended to
         pad_token_id = (
             self.tokenizer.eos_token_id
-        )  # EOS token is used as pad token in GPT-Neo 1.3B
+        )  # EOS token is used as pad token in GPT-J 6B
         output = self.model.generate(
             input_ids,
             attention_mask=attention_mask,
@@ -138,7 +139,7 @@ class NewsletterGenerator:
 
     def generate_prompt(self, title, topic, row_titles, section, max_tokens=768):
         """
-        Generates a prompt for the GPT-Neo 1.3B model to create the introduction, story introductions, or closing of the newsletter.
+        Generates a prompt for the GPT-J 6B model to create the introduction, story introductions, or closing of the newsletter.
 
         Args:
             title (str): The title of the newsletter.
@@ -168,17 +169,17 @@ class NewsletterGenerator:
         prompt = f"{section.capitalize()} for the newsletter titled '{title}' on the topic '{topic}'.\n"
         prompt += "Featured articles include:\n" + rowTitles + "\n"
         if section == "introduction":
-            prompt += "Please write an engaging introduction that sets the stage for the following articles."
+            prompt += "Please write an engaging single paragaph introduction that sets the stage for the following articles. Return only this paragraph."
         else:
             prompt += (
-                "Please summarize the key points and conclude the newsletter elegantly."
+                "In a single paragraph, please summarize the key points and conclude the newsletter elegantly. Return only this paragraph."
             )
 
         return prompt
 
     def generate_prompt_for_item(self, item, topic, estimated_tokens=768):
         """
-        Generates a prompt for GPT-Neo 1.3B to write a story introduction based on a single news item.
+        Generates a prompt for GPT-J 6B to write a story introduction based on a single news item.
 
         Args:
             item (tuple): A news item containing title, description, and URL.
