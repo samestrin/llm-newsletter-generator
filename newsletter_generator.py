@@ -11,6 +11,11 @@ class NewsletterGenerator:
         self.text_generator = pipeline("text-generation", model="gpt2")
 
     def load_feed(self):
+        """Loads the content of the provided feed URL.
+
+        Returns:
+            str: The content of the feed if successful, None otherwise.
+        """
         try:
             response = requests.get(self.feed_url)
             if response.status_code == 200:
@@ -23,20 +28,54 @@ class NewsletterGenerator:
             return None
 
     def generate_hash(self, content):
+        """Generates an MD5 hash for the given content.
+
+        Args:
+            content (str): The content to be hashed.
+
+        Returns:
+            str: The MD5 hash of the content.
+        """        
         return hashlib.md5(content.encode()).hexdigest()
 
     def get_items(self, feed_content):
+        """Parses the feed content and retrieves its items.
+
+        Args:
+            feed_content (str): The content of the feed.
+
+        Returns:
+            list: A list of items parsed from the feed.
+        """        
         parsed_feed = feedparser.parse(feed_content)
         items = parsed_feed.entries
         return items
 
     def extract_info(self, item):
+        """Extracts title, description, and URL from the given feed item.
+
+        Args:
+            item (dict): The feed item.
+
+        Returns:
+            tuple: A tuple containing title, description, and URL of the feed item.
+        """        
         title = item['title']
         description = item['description']
         url = item['link']
         return title, description, url
 
     def get_newsletter_text(self, items_csv, title, topic=None):
+        """Generates text for the newsletter based on the provided items, title, and optional topic.
+
+        Args:
+            items_csv (str): A CSV formatted string containing item titles and links.
+            title (str): The title of the newsletter.
+            topic (str, optional): The topic of the newsletter.
+
+        Returns:
+            str: The generated text for the newsletter.
+        """        
         prompt = f'I\'d like to create a newsletter with the title "{title}"\n'
         if topic:
             prompt += f'The topic is "{topic}"\n'
