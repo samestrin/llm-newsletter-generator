@@ -41,8 +41,7 @@ class NewsletterGenerator:
         cache_file = os.path.join(
             cache_dir, f"{hashlib.md5(self.feed_url.encode()).hexdigest()}.txt"
         )
-        if not os.path.exists(cache_dir):
-            os.makedirs(cache_dir)
+
         if os.path.exists(cache_file):
             file_modified_time = os.path.getmtime(cache_file)
             if time.time() - file_modified_time < self.cache_timeout:
@@ -82,14 +81,21 @@ class NewsletterGenerator:
 
     def generate_text(self, prompt):
         """
-        Generates text based on the provided prompt using GPT-2.
+        Generates text based on the provided prompt using GPT-Neo 1.3B and caches the result.
 
         Args:
-            prompt (str): Prompt to feed to the GPT-2 model.
+            prompt (str): Prompt to feed to the GPT-Neo 1.3B model.
 
         Returns:
             str: The generated text.
         """
+        cache_dir = "./cache/"
+        cache_file = os.path.join(
+            cache_dir, f"{hashlib.md5(prompt.encode()).hexdigest()}.txt"
+        )
+        if os.path.exists(cache_file):
+            with open(cache_file, "r") as f:
+                return f.read()
 
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
 
@@ -98,7 +104,7 @@ class NewsletterGenerator:
         )  # Ensure all tokens are attended to
         pad_token_id = (
             self.tokenizer.eos_token_id
-        )  # EOS token is used as pad token in GPT-2
+        )  # EOS token is used as pad token in GPT-Neo 1.3B
         output = self.model.generate(
             input_ids,
             attention_mask=attention_mask,
@@ -107,11 +113,15 @@ class NewsletterGenerator:
             do_sample=True,
         )
         generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
+        
+        with open(cache_file, "w") as f:
+            f.write(generated_text)
+
         return generated_text
 
     def generate_prompt(self, title, topic, row_titles, section, max_tokens=768):
         """
-        Generates a prompt for the GPT-2 model to create the introduction, story introductions, or closing of the newsletter.
+        Generates a prompt for the GPT-Neo 1.3B model to create the introduction, story introductions, or closing of the newsletter.
 
         Args:
             title (str): The title of the newsletter.
@@ -151,7 +161,7 @@ class NewsletterGenerator:
 
     def generate_prompt_for_item(self, item, topic, estimated_tokens=768):
         """
-        Generates a prompt for GPT-2 to write a story introduction based on a single news item.
+        Generates a prompt for GPT-Neo 1.3B to write a story introduction based on a single news item.
 
         Args:
             item (tuple): A news item containing title, description, and URL.
@@ -199,8 +209,12 @@ class NewsletterGenerator:
         Returns:
             str: The complete newsletter text.
         """
+        # Calculate the total number of tasks including the introduction, each item, and closing
+        total_tasks = 4 + len(items)
+
         with Progress() as progress:
-            task1 = progress.add_task("[cyan]Generating newsletter...", total=4)
+            # Add a task for generating the newsletter with the total number of tasks
+            task1 = progress.add_task("[cyan]Generating newsletter...", total=total_tasks)
 
             newsletter_output = []
             row_titles = [item[0] for item in items]
@@ -217,7 +231,13 @@ class NewsletterGenerator:
             progress.update(
                 task1, advance=1, description="[cyan]Generating item stories..."
             )
-            for item in items:
+            # Loop through each item, updating progress to show which story is being generated
+            for index, item in enumerate(items, start=1):
+                progress.update(
+                    task1,
+                    advance=1,
+                    description=f"[cyan]Generating story {index}/{len(items)}..."
+                )
                 story_prompt = self.generate_prompt_for_item(item, topic)
                 story = self.generate_text(story_prompt)
                 newsletter_output.append(story)
@@ -231,6 +251,7 @@ class NewsletterGenerator:
                 task1, advance=1, description="[cyan]Finalizing newsletter..."
             )
             return "\n\n".join(newsletter_output)
+
 
 def main():
     """
@@ -246,8 +267,14 @@ def main():
     if not args.feed or not args.title:
         parser.error("Please provide both --feed and --title arguments")
 
+
     # Start timing the newsletter generation process
     start_time = time.time()
+
+    # Create a cache directory if it doesn't exist
+    cache_dir = "./cache/"
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
 
     generator = NewsletterGenerator(args.feed)
     feed_content = generator.load_feed()
