@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+"""
+newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS 
+feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided 
+feed, title, and optional topic. newsletter-generator currently processes prompts using GPT-Neo 1.3B and summarizes 
+with sshleifer/distilbart-cnn-12-6.
+
+Copyright (c) 2024-PRESENT Sam Estrin
+This script is licensed under the MIT License (see LICENSE for details)
+GitHub: https://github.com/samestrin/newsletter-generator
+"""
+
 import argparse
 import requests
 import feedparser
@@ -109,10 +120,16 @@ class NewsletterGenerator:
             input_ids,
             attention_mask=attention_mask,
             pad_token_id=pad_token_id,
-            max_length=1024,
+            max_length=2048,
             do_sample=True,
         )
         generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
+
+        # Remove the original prompt from the generated text
+        generated_text = generated_text.replace(prompt, "")       
+
+        # Trim whitespace characters from both ends of the generated text
+        generated_text = generated_text.strip()         
         
         with open(cache_file, "w") as f:
             f.write(generated_text)
@@ -191,9 +208,9 @@ class NewsletterGenerator:
         else:
             summary_description = cleaned_description
 
-        prompt = f"Create a compelling story introduction for an article titled '{title}' which is part of a newsletter on the topic '{topic}'.\n"
-        prompt += f"Description: {summary_description}\nURL: {url}\n\n"
-        prompt += "Please write an engaging introduction that captures the essence of the article."
+        prompt = f"Title: '{title}'\n"
+        prompt += f"Description: {summary_description}\n\n"
+        prompt += f"Please write a single paragagraph, engaging '{topic}' story introduction that captures the essence of the title and description."
         return prompt
 
     def create_newsletter(self, title, topic, items):
@@ -262,11 +279,11 @@ def main():
     parser.add_argument("--feed", type=str, help="URL of the feed")
     parser.add_argument("--title", type=str, help="Title of the newsletter")
     parser.add_argument("--topic", type=str, help="Topic of the newsletter (optional)")
+    parser.add_argument("--max", type=int, help="Maximum number of items to process (optional)")
     args = parser.parse_args()
 
     if not args.feed or not args.title:
         parser.error("Please provide both --feed and --title arguments")
-
 
     # Start timing the newsletter generation process
     start_time = time.time()
@@ -280,6 +297,11 @@ def main():
     feed_content = generator.load_feed()
     if feed_content:
         items = generator.get_items(feed_content)
+        
+        # Limit the number of items processed if --max argument is provided
+        if args.max:
+            items = items[:args.max]
+
         newsletter_text = generator.create_newsletter(args.title, args.topic, items)
         print(newsletter_text)
     else:
