@@ -1,4 +1,4 @@
-```
+```python
 Closing for the newsletter titled '{{ title }}' on the topic '{{ topic }}'.
 Featured articles include:
 {{ row_titles }}
