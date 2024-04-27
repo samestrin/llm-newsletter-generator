@@ -62,9 +62,7 @@ To run the script, you need to provide two mandatory arguments: the feed (`--fee
 python newsletter_generator.py --feed <feed_url> --title <newsletter_title> [--topic <newsletter_topic>] [--max <max_items>] [--model <valid_model>]
 ```
 
-Replace <feed_url> with the URL of the RSS feed you want to generate the newsletter from. Specify <newsletter_title> as the desired title for the newsletter. Optionally, you can include <newsletter_topic> to define a specific topic for the newsletter, <max_items> to limit the number of items included in your newsletter, or <model>.
-
-Valid models are: `dolphin`, `meta-llama`, `microsoft`, and `snowflake`.
+Replace <feed_url> with the URL of the RSS feed you want to generate the newsletter from. Specify <newsletter_title> as the desired title for the newsletter. Optionally, you can include <newsletter_topic> to define a specific topic for the newsletter, <max_items> to limit the number of items included in your newsletter, or <valid_model>. Valid models are: `dolphin`, `meta-llama`, `microsoft`, and `snowflake`.
 
 ## Contributing
 
