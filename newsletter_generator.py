@@ -6,15 +6,16 @@ import feedparser
 import hashlib
 import os
 import time
-from transformers import TFAutoModelForCausalLM, AutoTokenizer
+from transformers import BigBirdTokenizer, BigBirdForCausalLM
+
 import tensorflow as tf
 
 class NewsletterGenerator:
     def __init__(self, feed_url, cache_timeout=3600):
         self.feed_url = feed_url
         self.cache = {}
-        self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
-        self.model = TFAutoModelForCausalLM.from_pretrained("gpt2")
+        self.tokenizer = BigBirdTokenizer.from_pretrained("google/bigbird-roberta-base")
+        self.model = BigBirdForCausalLM.from_pretrained("google/bigbird-roberta-base", is_decoder=True)
         self.cache_timeout = cache_timeout
 
     def load_feed(self):
@@ -55,18 +56,39 @@ class NewsletterGenerator:
             print("Error loading feed:", str(e))
             return None
 
-    def get_items(self, feed_content):
+    def get_items(self, feed_content, max_size=3000):
         """Parses the feed content and retrieves its items.
 
         Args:
             feed_content (str): The content of the feed.
+            max_size (int): The maximum size of the CSV data.
 
         Returns:
             list: A list of items parsed from the feed.
-        """        
+        """
         parsed_feed = feedparser.parse(feed_content)
         items = parsed_feed.entries
-        return items
+
+        # Truncate items to fit within the max_size limit
+        csv_items = []
+        current_size = 0
+        for item in items:
+            item_title = item.get('title', '')
+            item_description = item.get('description', '')
+            item_url = item.get('link', '')
+
+            # Calculate the size of the item
+            item_size = len(item_title) + len(item_description) + len(item_url)
+
+            # If adding the current item exceeds the max_size, stop adding more items
+            if current_size + item_size > max_size:
+                break
+
+            # Append the item to the CSV list
+            csv_items.append((item_title, item_description, item_url))
+            current_size += item_size
+
+        return csv_items
 
     def extract_info(self, item):
         """Extracts title, description, and URL from the given feed item.
@@ -111,8 +133,13 @@ class NewsletterGenerator:
                    'flow, be natural-sounding narrative, and write at a college level.\n\n'
                    'Write a creative newsletter following these directions.\n')
 
-        input_ids = self.tokenizer.encode(prompt, return_tensors='tf')
-        output = self.model.generate(input_ids, max_length=100, num_return_sequences=1)
+        # Tokenize the input prompt
+        input_ids = self.tokenizer.encode(prompt, return_tensors='pt')
+
+        # Generate text using the Longformer model
+        output = self.model.generate(input_ids, max_length=4096, do_sample=True)
+
+        # Decode the generated output
         generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
         return generated_text
 
@@ -131,7 +158,7 @@ def main():
     feed_content = generator.load_feed()
     if feed_content:
         items = generator.get_items(feed_content)
-        items_csv = '\n'.join([f"{item['title']}, {item['link']}" for item in items])
+        items_csv = '\n'.join([f"{item[0]}, {item[2]}" for item in items])
         newsletter_text = generator.get_newsletter_text(items_csv, args.title, args.topic)
         print(newsletter_text)
     else:
