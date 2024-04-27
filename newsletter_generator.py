@@ -283,12 +283,16 @@ def main():
     Main function to handle command line arguments and initiate newsletter generation.
     Tracks the total runtime of the newsletter generation process.
     """
+
+    start_time = time.time() 
+    
     parser = argparse.ArgumentParser(description="Generate text-only newsletter from a feed")
     parser.add_argument("--feed", type=str, required=True, help="URL of the feed")
     parser.add_argument("--title", type=str, required=True, help="Title of the newsletter")
     parser.add_argument("--topic", type=str, help="Topic of the newsletter (optional)")
     parser.add_argument("--max", type=int, help="Maximum number of items to process (optional)")
     parser.add_argument("--model", type=str, default='microsoft', help="Model to use for text generation (microsoft, meta-llama, snowflake, dolphin)")
+    parser.add_argument("--output", type=str, help="Filename to write the output to (optional)")
 
     args = parser.parse_args()
 
@@ -306,16 +310,18 @@ def main():
             items = items[:args.max]
 
         newsletter_text = generator.create_newsletter(args.title, args.topic, items)
-        print(newsletter_text)
+        
+        if args.output:
+            with open(args.output, "w") as file:
+                file.write(newsletter_text)
+            print(f"Newsletter written to {args.output}")
+        else:
+            print(newsletter_text)
     else:
         print("Failed to generate newsletter")
 
     # Print runtime
     print(f"\n\nTotal runtime: {time.time() - start_time:.2f} seconds")
-
-if __name__ == "__main__":
-    main()
-
 
 if __name__ == "__main__":
     main()
