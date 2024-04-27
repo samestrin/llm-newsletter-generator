@@ -3,8 +3,8 @@
 """
 newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS 
 feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided 
-feed, title, and optional topic. newsletter-generator currently processes prompts using GPT-J 6B and summarizes 
-with sshleifer/distilbart-cnn-12-6.
+feed, title, and optional topic. newsletter-generator currently processes prompts using tiiuae/falcon-7b-instruct 
+and summarizes with sshleifer/distilbart-cnn-12-6.
 
 Copyright (c) 2024-PRESENT Sam Estrin
 This script is licensed under the MIT License (see LICENSE for details)
@@ -18,10 +18,9 @@ import hashlib
 import os
 import time
 import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, pipeline
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, pipeline, AutoTokenizer
 from bs4 import BeautifulSoup
 from rich.progress import Progress
-
 
 class NewsletterGenerator:
     def __init__(self, feed_url, cache_timeout=3600):
@@ -32,11 +31,13 @@ class NewsletterGenerator:
             feed_url (str): URL of the feed to parse.
             cache_timeout (int): Timeout for the cache in seconds.
         """
+        torch.manual_seed(0)
+
         self.feed_url = feed_url
         self.cache = {}
-        self.tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-j-6B")
-        self.model = GPT2LMHeadModel.from_pretrained("EleutherAI/gpt-j-6B")
+        self.tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-7b-instruct")        
         self.cache_timeout = cache_timeout
+        self.text_generation = pipeline("text-generation", model="tiiuae/falcon-7b-instruct")
         self.summarizer = pipeline(
             "summarization", model="sshleifer/distilbart-cnn-12-6"
         )
@@ -92,15 +93,15 @@ class NewsletterGenerator:
 
     def generate_text(self, prompt):
         """
-        Generates text based on the provided prompt using GPT-J 6B and caches the result.
+        Generates text based on the provided prompt using tiiuae/falcon-7b-instruct and caches the result.
 
         Args:
-            prompt (str): Prompt to feed to the GPT-J 6B model.
+            prompt (str): Prompt to feed to the tiiuae/falcon-7b-instruct model.
 
         Returns:
             str: The generated text.
         """
-        print(prompt);
+        
         cache_dir = "./cache/"
         cache_file = os.path.join(
             cache_dir, f"{hashlib.md5(prompt.encode()).hexdigest()}.txt"
@@ -108,23 +109,8 @@ class NewsletterGenerator:
         if os.path.exists(cache_file):
             with open(cache_file, "r") as f:
                 return f.read()
-
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
-
-        attention_mask = torch.ones(
-            input_ids.shape, dtype=torch.long
-        )  # Ensure all tokens are attended to
-        pad_token_id = (
-            self.tokenizer.eos_token_id
-        )  # EOS token is used as pad token in GPT-J 6B
-        output = self.model.generate(
-            input_ids,
-            attention_mask=attention_mask,
-            pad_token_id=pad_token_id,
-            max_length=2048,
-            do_sample=True,
-        )
-        generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
+        
+        generated_text = self.text_generation(prompt, max_new_tokens=2046, do_sample=True)[0]["generated_text"]
 
         # Remove the original prompt from the generated text
         generated_text = generated_text.replace(prompt, "")       
@@ -154,7 +140,7 @@ class NewsletterGenerator:
 
     def generate_prompt(self, title, topic, row_titles, section, max_tokens=768):
         """
-        Generates a prompt for the GPT-J 6B model to create the introduction, story introductions, or closing of the newsletter.
+        Generates a prompt for the tiiuae/falcon-7b-instruct model to create the introduction, story introductions, or closing of the newsletter.
 
         Args:
             title (str): The title of the newsletter.
@@ -192,7 +178,7 @@ class NewsletterGenerator:
 
     def generate_prompt_for_item(self, item, topic, estimated_tokens=768):
         """
-        Generates a prompt for GPT-J 6B to write a story introduction based on a single news item.
+        Generates a prompt for tiiuae/falcon-7b-instruct to write a story introduction based on a single news item.
 
         Args:
             item (tuple): A news item containing title, description, and URL.
