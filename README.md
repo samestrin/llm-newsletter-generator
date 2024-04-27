@@ -17,7 +17,7 @@ newsletter-generator is a Python script designed to generate text-only newslette
 The Newsletter Generator relies on the following dependencies:
 
 - **argparse**: For parsing command-line arguments.
-- **beautifulsoup4**: Used to parse HTML content from RSS feeds.
+- **beautifulsoup4**: Used to strip HTML content from RSS feed items.
 - **feedparser**: Utilized for parsing RSS feed content.
 - **lxml**: HTML/XML parsing library for BeautifulSoup.
 - **requests**: Handles HTTP requests to fetch RSS feed content.
