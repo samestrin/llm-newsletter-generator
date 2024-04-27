@@ -7,25 +7,18 @@ import hashlib
 import os
 import time
 import torch
-from transformers import BigBirdTokenizer, BigBirdForCausalLM, BigBirdConfig
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
 class NewsletterGenerator:
     def __init__(self, feed_url, cache_timeout=3600):
         self.feed_url = feed_url
         self.cache = {}
-        self.tokenizer = BigBirdTokenizer.from_pretrained("google/bigbird-roberta-base")
-        
-        # Initialize model configuration
-        config = BigBirdConfig.from_pretrained("google/bigbird-roberta-base")
-        config.attention_type = "original_full"  # Set attention type to 'original_full'
-        
-        # Initialize BigBird model with modified configuration
-        self.model = BigBirdForCausalLM.from_pretrained("google/bigbird-roberta-base", config=config)
+        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        self.model = GPT2LMHeadModel.from_pretrained("gpt2")
         self.cache_timeout = cache_timeout
 
     def load_feed(self):
         """Loads the content of the provided feed URL with file caching.
-
         Returns:
             str: The content of the feed if successful, None otherwise.
         """
@@ -35,7 +28,7 @@ class NewsletterGenerator:
         # Check if cache directory exists, create it if not
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
-            
+        
         # Check if feed is cached and not expired
         if os.path.exists(cache_file):
             file_modified_time = os.path.getmtime(cache_file)
@@ -61,88 +54,38 @@ class NewsletterGenerator:
             print("Error loading feed:", str(e))
             return None
 
-    def get_items(self, feed_content, max_size=3000):
+    def get_items(self, feed_content):
         """Parses the feed content and retrieves its items.
-
         Args:
             feed_content (str): The content of the feed.
-            max_size (int): The maximum size of the CSV data.
-
         Returns:
             list: A list of items parsed from the feed.
         """
         parsed_feed = feedparser.parse(feed_content)
         items = parsed_feed.entries
-
-        # Truncate items to fit within the max_size limit
-        csv_items = []
-        current_size = 0
-        for item in items:
-            item_title = item.get('title', '')
-            item_description = item.get('description', '')
-            item_url = item.get('link', '')
-
-            # Calculate the size of the item
-            item_size = len(item_title) + len(item_description) + len(item_url)
-
-            # If adding the current item exceeds the max_size, stop adding more items
-            if current_size + item_size > max_size:
-                break
-
-            # Append the item to the CSV list
-            csv_items.append((item_title, item_description, item_url))
-            current_size += item_size
-
-        return csv_items
-
-    def extract_info(self, item):
-        """Extracts title, description, and URL from the given feed item.
-
-        Args:
-            item (dict): The feed item.
-
-        Returns:
-            tuple: A tuple containing title, description, and URL of the feed item.
-        """        
-        title = item['title']
-        description = item['description']
-        url = item['link']
-        return title, description, url
+        return [(item.get('title', ''), item.get('description', ''), item.get('link', '')) for item in items]
 
     def get_newsletter_text(self, items_csv, title, topic=None):
         """Generates text for the newsletter based on the provided items, title, and optional topic.
-
         Args:
             items_csv (str): A CSV formatted string containing item titles and links.
             title (str): The title of the newsletter.
             topic (str, optional): The topic of the newsletter.
-
         Returns:
             str: The generated text for the newsletter.
-        """        
+        """
         prompt = f'I\'d like to create a newsletter with the title "{title}"\n'
         if topic:
             prompt += f'The topic is "{topic}"\n'
         prompt += '\nHere are the stories to base the newsletter on.\n'
         prompt += items_csv
-        prompt += '\n\n'
-        prompt += ('When writing, two factors are crucial, “perplexity” and “burstiness.” '
-                   'Perplexity measures the complexity of the text. Separately, burstiness '
-                   'compares the variations of sentences. Humans tend to write with greater '
-                   'burstiness, for example, with some longer or more complex sentences alongside '
-                   'shorter ones. AI sentences tend to be more uniform. Therefore, when writing '
-                   'the following content I will ask you to create, I need it to have a good '
-                   'amount of perplexity and burstiness.\n\n'
-                   'Write in the business domain, intending to inform and describe and target a '
-                   'general audience while maintaining a formal formality. Keep a clear narrative '
-                   'flow, be natural-sounding narrative, and write at a college level.\n\n'
-                   'Write a creative newsletter following these directions.\n')
+        prompt += '\n\nWrite a creative newsletter following these directions.\n'
 
         # Tokenize the input prompt
         input_ids = self.tokenizer.encode(prompt, return_tensors='pt')
 
-        # Generate text using the BigBird model
-        output = self.model.generate(input_ids, max_length=4096, do_sample=True)
+        # Generate text using the GPT-2 model
+        output = self.model.generate(input_ids, max_length=1024, do_sample=True)
 
         # Decode the generated output
         generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
