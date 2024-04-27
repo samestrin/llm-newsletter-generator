@@ -137,6 +137,21 @@ class NewsletterGenerator:
 
         return generated_text
 
+    def load_template(self, template_path):
+        """
+        Load template content from a file and return it.
+
+        Args:
+            template_path (str): Path to the template file.
+
+        Returns:
+            str: Content of the template file.
+        """
+        with open(template_path, "r") as file:
+            template_content = file.read()
+                    
+        return template_content
+
     def generate_prompt(self, title, topic, row_titles, section, max_tokens=768):
         """
         Generates a prompt for the GPT-J 6B model to create the introduction, story introductions, or closing of the newsletter.
@@ -154,11 +169,16 @@ class NewsletterGenerator:
         if section not in ["introduction", "closing"]:
             raise ValueError("Section must be 'introduction' or 'closing'.")
 
-        # Initialize the row titles string and token count
+        # Load template content
+        template_path = os.path.join("prompts", f"{section}.md")
+        template_content = self.load_template(template_path)
+
+        # Interpolate variables into the template
+        prompt = template_content.replace("{{ title }}", title)
+        prompt = prompt.replace("{{ topic }}", topic)
+
         rowTitles = ""
         current_token_count = 0
-
-        # Loop through each title and append it if it doesn't exceed the token limit
         for title in row_titles:
             tokens = self.tokenizer.encode(title, add_special_tokens=True)
             if current_token_count + len(tokens) > max_tokens:
@@ -166,14 +186,7 @@ class NewsletterGenerator:
             rowTitles += title + "\n"
             current_token_count += len(tokens)
 
-        prompt = f"{section.capitalize()} for the newsletter titled '{title}' on the topic '{topic}'.\n"
-        prompt += "Featured articles include:\n" + rowTitles + "\n"
-        if section == "introduction":
-            prompt += "Please write an engaging single paragaph introduction that sets the stage for the following articles. Return only this paragraph."
-        else:
-            prompt += (
-                "In a single paragraph, please summarize the key points and conclude the newsletter elegantly. Return only this paragraph."
-            )
+        prompt = prompt.replace("{{ row_titles }}", rowTitles)
 
         return prompt
 
@@ -190,16 +203,12 @@ class NewsletterGenerator:
         """
         title, description, url = item
 
-        # Remove all tags from the description
         soup = BeautifulSoup(description, "html.parser")
         cleaned_description = str(soup.get_text())
 
-        # Tokenize the cleaned description to check its length
         tokens = self.tokenizer.encode(cleaned_description)
 
-        # Check if description is longer than estimated_tokens tokens, if so, summarize it
         if len(tokens) > estimated_tokens:
-            # Attempt to summarize to about estimated_tokens tokens (exact control of token length is hard in summarization)
             summary = self.summarizer(
                 cleaned_description, max_length=1024, min_length=800, do_sample=False
             )
@@ -209,9 +218,15 @@ class NewsletterGenerator:
         else:
             summary_description = cleaned_description
 
-        prompt = f"Title: '{title}'\n"
-        prompt += f"Description: {summary_description}\n\n"
-        prompt += f"Please write a single paragagraph, engaging '{topic}' story introduction that captures the essence of the title and description."
+        # Load item template
+        template_path = os.path.join("prompts", "item.md")
+        template_content = self.load_template(template_path)
+
+        # Interpolate variables into the template
+        prompt = template_content.replace("{{ item_title }}", title)
+        prompt = prompt.replace("{{ item_description }}", summary_description)
+        prompt = prompt.replace("{{ topic }}", topic)
+
         return prompt
 
     def create_newsletter(self, title, topic, items):
