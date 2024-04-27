@@ -6,16 +6,21 @@ import feedparser
 import hashlib
 import os
 import time
-from transformers import BigBirdTokenizer, BigBirdForCausalLM
-
-import tensorflow as tf
+import torch
+from transformers import BigBirdTokenizer, BigBirdForCausalLM, BigBirdConfig
 
 class NewsletterGenerator:
     def __init__(self, feed_url, cache_timeout=3600):
         self.feed_url = feed_url
         self.cache = {}
         self.tokenizer = BigBirdTokenizer.from_pretrained("google/bigbird-roberta-base")
-        self.model = BigBirdForCausalLM.from_pretrained("google/bigbird-roberta-base", is_decoder=True)
+        
+        # Initialize model configuration
+        config = BigBirdConfig.from_pretrained("google/bigbird-roberta-base")
+        config.attention_type = "original_full"  # Set attention type to 'original_full'
+        
+        # Initialize BigBird model with modified configuration
+        self.model = BigBirdForCausalLM.from_pretrained("google/bigbird-roberta-base", config=config)
         self.cache_timeout = cache_timeout
 
     def load_feed(self):
@@ -136,7 +141,7 @@ class NewsletterGenerator:
         # Tokenize the input prompt
         input_ids = self.tokenizer.encode(prompt, return_tensors='pt')
 
-        # Generate text using the Longformer model
+        # Generate text using the BigBird model
         output = self.model.generate(input_ids, max_length=4096, do_sample=True)
 
         # Decode the generated output
