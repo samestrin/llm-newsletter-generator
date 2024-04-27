@@ -4,7 +4,7 @@
 
 ![Version 0.0.1](https://img.shields.io/badge/Version-0.0.1-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
 
-The newsletter-generator is a Python script designed to generate text-only newsletters from RSS feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided feed, title, and optional topic.
+newsletter-generator is a Python script designed to generate text-only newsletters from RSS feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. newsletter-generator currently processes prompts with [GPT2](https://huggingface.co/openai-community/gpt2) and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
 
 ## Features
 
@@ -17,9 +17,12 @@ The newsletter-generator is a Python script designed to generate text-only newsl
 The Newsletter Generator relies on the following dependencies:
 
 - **argparse**: For parsing command-line arguments.
-- **requests**: For making HTTP requests to fetch RSS feed content.
-- **feedparser**: For parsing RSS feed content.
-- **transformers**: For tokenization and model-based text generation.
+- **beautifulsoup4**: Used to parse HTML content from RSS feeds.
+- **feedparser**: Utilized for parsing RSS feed content.
+- **lxml**: HTML/XML parsing library for BeautifulSoup.
+- **requests**: Handles HTTP requests to fetch RSS feed content.
+- **rich**: Used to display progress during command-line operations.
+- **transformers**: Employed for tokenization and model-based text generation.
 - **tensorflow**: For machine learning operations (e.g., model loading and inference).
 
 ### Installation
