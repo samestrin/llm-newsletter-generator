@@ -1,5 +1,5 @@
-Introduction for the newsletter titled '{{ title }}' on the topic '{{ topic }}'.
-Featured articles include:
+Please write an engaging single introduction paragraph for a newsletter titled '{{ title }}' on the topic '{{ topic }}' that sets the stage for the following articles.
+
 {{ row_titles }}
 
-Please write an engaging single paragraph introduction that sets the stage for the following articles. Return only this paragraph.
+Return only a single paragraph.
