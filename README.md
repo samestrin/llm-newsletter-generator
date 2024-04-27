@@ -4,7 +4,7 @@
 
 ![Version 0.0.2](https://img.shields.io/badge/Version-0.0.2-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
 
-newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. newsletter-generator currently processes prompts using [GPT-J 6B](https://huggingface.co/EleutherAI/gpt-j-6b) and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
+newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. newsletter-generator currently processes prompts using [tiiuae/falcon-7b-instruct](https://huggingface.co/tiiuae/falcon-7b-instruct) and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
 
 ## Features
 
