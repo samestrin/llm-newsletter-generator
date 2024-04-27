@@ -2,24 +2,47 @@ import argparse
 import hashlib
 import requests
 import feedparser
+import os
 from transformers import pipeline
 
 class NewsletterGenerator:
-    def __init__(self, feed_url):
+    def __init__(self, feed_url, cache_timeout=3600):
         self.feed_url = feed_url
         self.cache = {}
         self.text_generator = pipeline("text-generation", model="gpt2")
+        self.cache_timeout = cache_timeout
 
     def load_feed(self):
-        """Loads the content of the provided feed URL.
+        """Loads the content of the provided feed URL with file caching.
 
         Returns:
             str: The content of the feed if successful, None otherwise.
         """
+        cache_dir = "./cache/"
+        cache_file = os.path.join(cache_dir, f"{hashlib.md5(self.feed_url.encode()).hexdigest()}.txt")
+
+        # Check if cache directory exists, create it if not
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+            
+        # Check if feed is cached and not expired
+        if os.path.exists(cache_file):
+            file_modified_time = os.path.getmtime(cache_file)
+            if time.time() - file_modified_time < self.cache_timeout:
+                print("Using cached feed")
+                with open(cache_file, 'r') as f:
+                    return f.read()
+
         try:
             response = requests.get(self.feed_url)
             if response.status_code == 200:
-                return response.text
+                feed_content = response.text
+                # Cache the feed content to filesystem
+                if not os.path.exists(cache_dir):
+                    os.makedirs(cache_dir)
+                with open(cache_file, 'w') as f:
+                    f.write(feed_content)
+                return feed_content
             else:
                 print("Failed to load feed:", response.status_code)
                 return None
