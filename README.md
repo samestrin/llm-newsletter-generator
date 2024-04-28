@@ -24,13 +24,15 @@ newsletter-generator is an experimental Python script designed to generate text-
 The Newsletter Generator relies on the following dependencies:
 
 - **argparse**: For parsing command-line arguments.
-- **beautifulsoup4**: Used to strip HTML content from RSS feed items.
-- **feedparser**: Utilized for parsing RSS feed content.
-- **lxml**: HTML/XML parsing library for BeautifulSoup.
-- **requests**: Handles HTTP requests to fetch RSS feed content.
-- **rich**: Used to display progress during command-line operations.
-- **transformers**: Employed for tokenization and model-based text generation.
-- **tensorflow**: For machine learning operations (e.g., model loading and inference).
+- **requests**: To make HTTP requests to retrieve the RSS feeds.
+- **feedparser**: To parse the RSS feeds.
+- **hashlib**: For generating hash values, used in caching mechanisms.
+- **os**: To interact with the operating system, such as file path handling and checking file existence.
+- **time**: To handle time-based functions, like checking cache timeouts.
+- **torch**: PyTorch, used by the `transformers` library for managing deep learning models.
+- **transformers**: From Hugging Face, used to load pre-trained models and pipelines for natural language processing tasks.
+- **bs4 (BeautifulSoup)**: For parsing HTML content in descriptions to clean it.
+- **rich**: Used for creating progress bars and rich text formatting in the console.
 
 ### Installation
 
