@@ -61,7 +61,23 @@ pip install -r requirements.txt
 To run the script, you need to provide two mandatory arguments: the feed (`--feed`) and the title of the newsletter (`--title`).
 
 ```bash
-python newsletter_generator.py --feed <feed_url> --title <newsletter_title> [--topic <newsletter_topic>] [--max <max_items>] [--output <output_filename>] [--model <valid_model>]
+python newsletter_generator.py --feed-url <feed_url> --title <newsletter_title> [--topic <newsletter_topic>] [--max <max_items>] [--output-filename <output_filename>] [--model <valid_model>]
+```
+
+## Options
+
+```
+  -f, --feed-url feed_url   URL of the feed                 [string] [required]
+  -t, --title title         Title of the newsletter         [string] [required]
+  -to, --topic topic        Topic of the newsletter         [string]
+  --max                     Maximum number of items to      [number]
+                            process
+  -m, --model-name          Model to use for text           [string]
+                            generation (microsoft,
+                            meta-llama, snowflake,
+                            dolphin)
+  -o, --output-filename     Output filename                 [string]
+  -v, --version             Display the version number      [boolean]
 ```
 
 Replace <feed_url> with the URL of the RSS feed you want to generate the newsletter from. Specify <newsletter_title> as the desired title for the newsletter. Optionally, you can include <newsletter_topic> to define a specific topic for the newsletter, <max_items> to limit the number of items included in your newsletter, <output> to specify an output filename, or <valid_model>. Valid models are: `dolphin`, `meta-llama`, `microsoft`, and `snowflake`.
