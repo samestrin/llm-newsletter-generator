@@ -21,7 +21,7 @@ newsletter-generator is an experimental Python script designed to generate text-
 
 ## Dependencies
 
-The Newsletter Generator relies on the following dependencies:
+newsletter-generator relies on the following dependencies:
 
 - **argparse**: For parsing command-line arguments.
 - **requests**: To make HTTP requests to retrieve the RSS feeds.
