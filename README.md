@@ -1,10 +1,10 @@
-# newsletter-generator
+# ai-newsletter-generator
 
-[![Star on GitHub](https://img.shields.io/github/stars/samestrin/newsletter-generator?style=social)](https://github.com/samestrin/newsletter-generator/stargazers) [![Fork on GitHub](https://img.shields.io/github/forks/samestrin/newsletter-generator?style=social)](https://github.com/samestrin/newsletter-generator/network/members) [![Watch on GitHub](https://img.shields.io/github/watchers/samestrin/newsletter-generator?style=social)](https://github.com/samestrin/newsletter-generator/watchers)
+[![Star on GitHub](https://img.shields.io/github/stars/samestrin/ai-newsletter-generator?style=social)](https://github.com/samestrin/ai-newsletter-generator/stargazers) [![Fork on GitHub](https://img.shields.io/github/forks/samestrin/ai-newsletter-generator?style=social)](https://github.com/samestrin/ai-newsletter-generator/network/members) [![Watch on GitHub](https://img.shields.io/github/watchers/samestrin/ai-newsletter-generator?style=social)](https://github.com/samestrin/ai-newsletter-generator/watchers)
 
 ![Version 0.0.4](https://img.shields.io/badge/Version-0.0.4-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
 
-newsletter-generator is an _experimental_ Python script designed to generate text-only newsletters from RSS feeds using AI via PyTorch and Transformers. AI is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. newsletter-generator currently processes templated prompts using configurable LLMs and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
+ai-newsletter-generator is an _experimental_ Python script designed to generate text-only newsletters from RSS feeds using AI via PyTorch and Transformers. AI is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. ai-newsletter-generator currently processes templated prompts using configurable LLMs and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
 
 ## Features
 
@@ -21,7 +21,7 @@ newsletter-generator is an _experimental_ Python script designed to generate tex
 
 ## Dependencies
 
-newsletter-generator relies on the following dependencies:
+ai-newsletter-generator relies on the following dependencies:
 
 - **argparse**: For parsing command-line arguments.
 - **requests**: To make HTTP requests to retrieve the RSS feeds.
@@ -36,18 +36,18 @@ newsletter-generator relies on the following dependencies:
 
 ### Installation
 
-To install and use newsletter-generator, follow these steps:
+To install and use ai-newsletter-generator, follow these steps:
 
-Clone the Repository: Begin by cloning the repository containing the newsletter-generator to your local machine.
+Clone the Repository: Begin by cloning the repository containing the ai-newsletter-generator to your local machine.
 
 ```bash
-git clone https://github.com/samestrin/newsletter-generator/
+git clone https://github.com/samestrin/ai-newsletter-generator/
 ```
 
 Navigate to the project directory:
 
 ```bash
-cd newsletter-generator
+cd ai-newsletter-generator
 ```
 
 Install the required dependencies using pip:
@@ -58,7 +58,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-To run the script, you need to provide two mandatory arguments: the feed (`--feed`) and the title of the newsletter (`--title`).
+To run the script, you need to provide two mandatory arguments: the feed (`--feed-url`) and the title of the newsletter (`--title`).
 
 ```bash
 python newsletter_generator.py --feed-url <feed_url> --title <newsletter_title> [--topic <newsletter_topic>] [--max <max_items>] [--output-filename <output_filename>] [--model <valid_model>]
@@ -67,17 +67,18 @@ python newsletter_generator.py --feed-url <feed_url> --title <newsletter_title> 
 ## Options
 
 ```
-  -f, --feed-url feed_url   URL of the feed                 [string] [required]
-  -t, --title title         Title of the newsletter         [string] [required]
-  -to, --topic topic        Topic of the newsletter         [string]
-  --max                     Maximum number of items to      [number]
-                            process
-  -m, --model-name          Model to use for text           [string]
-                            generation (microsoft,
-                            meta-llama, snowflake,
-                            dolphin)
-  -o, --output-filename     Output filename                 [string]
-  -v, --version             Display the version number      [boolean]
+  -f, --feed-url feed_url         URL of the feed                 [string] [required]
+  -t, --title title               Title of the newsletter         [string] [required]
+  -to, --topic topic              Topic of the newsletter         [string]
+  --max                           Maximum number of items to      [number]
+                                  process
+  -m, --model-name model          Model to use for text           [string]
+                                  generation (microsoft,
+                                  meta-llama, snowflake,
+                                  dolphin)
+  -o, --output-filename filename  Output filename                 [string]
+
+  -v, --version                   Display the version number      [boolean]
 ```
 
 Replace <feed_url> with the URL of the RSS feed you want to generate the newsletter from. Specify <newsletter_title> as the desired title for the newsletter. Optionally, you can include <newsletter_topic> to define a specific topic for the newsletter, <max_items> to limit the number of items included in your newsletter, <output> to specify an output filename, or <valid_model>. Valid models are: `dolphin`, `meta-llama`, `microsoft`, and `snowflake`.
@@ -92,4 +93,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Share
 
-[![Twitter](https://img.shields.io/badge/X-Tweet-blue)](https://twitter.com/intent/tweet?text=Check%20out%20this%20awesome%20project!&url=https://github.com/samestrin/newsletter-generator) [![Facebook](https://img.shields.io/badge/Facebook-Share-blue)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/samestrin/newsletter-generator) [![LinkedIn](https://img.shields.io/badge/LinkedIn-Share-blue)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/samestrin/newsletter-generator)
+[![Twitter](https://img.shields.io/badge/X-Tweet-blue)](https://twitter.com/intent/tweet?text=Check%20out%20this%20awesome%20project!&url=https://github.com/samestrin/ai-newsletter-generator) [![Facebook](https://img.shields.io/badge/Facebook-Share-blue)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/samestrin/ai-newsletter-generator) [![LinkedIn](https://img.shields.io/badge/LinkedIn-Share-blue)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/samestrin/ai-newsletter-generator)
