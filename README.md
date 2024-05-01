@@ -1,10 +1,10 @@
-# ai-newsletter-generator
+# llm-newsletter-generator
 
-[![Star on GitHub](https://img.shields.io/github/stars/samestrin/ai-newsletter-generator?style=social)](https://github.com/samestrin/ai-newsletter-generator/stargazers) [![Fork on GitHub](https://img.shields.io/github/forks/samestrin/ai-newsletter-generator?style=social)](https://github.com/samestrin/ai-newsletter-generator/network/members) [![Watch on GitHub](https://img.shields.io/github/watchers/samestrin/ai-newsletter-generator?style=social)](https://github.com/samestrin/ai-newsletter-generator/watchers)
+[![Star on GitHub](https://img.shields.io/github/stars/samestrin/llm-newsletter-generator?style=social)](https://github.com/samestrin/llm-newsletter-generator/stargazers) [![Fork on GitHub](https://img.shields.io/github/forks/samestrin/llm-newsletter-generator?style=social)](https://github.com/samestrin/llm-newsletter-generator/network/members) [![Watch on GitHub](https://img.shields.io/github/watchers/samestrin/llm-newsletter-generator?style=social)](https://github.com/samestrin/llm-newsletter-generator/watchers)
 
 ![Version 0.0.4](https://img.shields.io/badge/Version-0.0.4-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
 
-ai-newsletter-generator is an _experimental_ Python script designed to generate text-only newsletters from RSS feeds using AI via PyTorch and Transformers. AI is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. ai-newsletter-generator currently processes templated prompts using configurable LLMs and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
+llm-newsletter-generator is an _experimental_ Python script designed to generate text-only newsletters from RSS feeds using AI via PyTorch and Transformers. AI is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. llm-newsletter-generator currently processes templated prompts using configurable LLMs and summarizes with [sshleifer/distilbart-cnn-12-6](https://huggingface.co/sshleifer/distilbart-cnn-12-6).
 
 ## Features
 
@@ -21,7 +21,7 @@ ai-newsletter-generator is an _experimental_ Python script designed to generate 
 
 ## Dependencies
 
-ai-newsletter-generator relies on the following dependencies:
+llm-newsletter-generator relies on the following dependencies:
 
 - **argparse**: For parsing command-line arguments.
 - **requests**: To make HTTP requests to retrieve the RSS feeds.
@@ -36,18 +36,18 @@ ai-newsletter-generator relies on the following dependencies:
 
 ### Installation
 
-To install and use ai-newsletter-generator, follow these steps:
+To install and use llm-newsletter-generator, follow these steps:
 
-Clone the Repository: Begin by cloning the repository containing the ai-newsletter-generator to your local machine.
+Clone the Repository: Begin by cloning the repository containing the llm-newsletter-generator to your local machine.
 
 ```bash
-git clone https://github.com/samestrin/ai-newsletter-generator/
+git clone https://github.com/samestrin/llm-newsletter-generator/
 ```
 
 Navigate to the project directory:
 
 ```bash
-cd ai-newsletter-generator
+cd llm-newsletter-generator
 ```
 
 Install the required dependencies using pip:
@@ -61,7 +61,7 @@ pip install -r requirements.txt
 To run the script, you need to provide two mandatory arguments: the feed (`--feed-url`) and the title of the newsletter (`--title`).
 
 ```bash
-python newsletter_generator.py --feed-url <feed_url> --title <newsletter_title> [--topic <newsletter_topic>] [--max <max_items>] [--output-filename <output_filename>] [--model <valid_model>]
+python llm_newsletter_generator.py --feed-url <feed_url> --title <newsletter_title> [--topic <newsletter_topic>] [--max <max_items>] [--output-filename <output_filename>] [--model <valid_model>]
 ```
 
 ## Options
@@ -93,4 +93,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Share
 
-[![Twitter](https://img.shields.io/badge/X-Tweet-blue)](https://twitter.com/intent/tweet?text=Check%20out%20this%20awesome%20project!&url=https://github.com/samestrin/ai-newsletter-generator) [![Facebook](https://img.shields.io/badge/Facebook-Share-blue)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/samestrin/ai-newsletter-generator) [![LinkedIn](https://img.shields.io/badge/LinkedIn-Share-blue)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/samestrin/ai-newsletter-generator)
+[![Twitter](https://img.shields.io/badge/X-Tweet-blue)](https://twitter.com/intent/tweet?text=Check%20out%20this%20awesome%20project!&url=https://github.com/samestrin/llm-newsletter-generator) [![Facebook](https://img.shields.io/badge/Facebook-Share-blue)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/samestrin/llm-newsletter-generator) [![LinkedIn](https://img.shields.io/badge/LinkedIn-Share-blue)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/samestrin/llm-newsletter-generator)
