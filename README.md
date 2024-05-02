@@ -81,7 +81,7 @@ python llm_newsletter_generator.py --feed-url <feed_url> --title <newsletter_tit
   -v, --version           Display the version number      [boolean]
 ```
 
-Replace <feed_url> with the URL of the RSS feed you want to generate the newsletter from. Specify <newsletter_title> as the desired title for the newsletter. Optionally, you can include <newsletter_topic> to define a specific topic for the newsletter, <max_items> to limit the number of items included in your newsletter, <output> to specify an output filename, or <valid_model>. Valid models are: `dolphin`, `meta-llama`, `microsoft`, and `snowflake`.
+Replace <feed_url> with the URL of the RSS feed you want to generate the newsletter from. Specify <newsletter_title> as the desired title for the newsletter. Optionally, you can include <newsletter_topic> to define a specific topic for the newsletter, <max_items> to limit the number of items included in your newsletter, <output> to specify an output filename, or <valid_model>. Valid models are: `dolphin`, `meta-llama`, `microsoft`, and `snowflake`; `microsoft` is the default.
 
 ## Contribute
 
