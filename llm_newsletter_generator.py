@@ -11,6 +11,7 @@ This script is licensed under the MIT License (see LICENSE for details)
 GitHub: https://github.com/samestrin/newsletter-generator
 """
 
+import logging
 import argparse
 import requests
 import feedparser
@@ -22,6 +23,13 @@ import torch
 from transformers import pipeline, AutoTokenizer
 from bs4 import BeautifulSoup
 from rich.progress import Progress
+
+# Set the logging level to ERROR to suppress warnings and info messages
+logger = logging.getLogger("transformers")
+logger.setLevel(logging.ERROR)
+
+logger_torch = logging.getLogger("torch")
+logger_torch.setLevel(logging.ERROR)
 
 class CustomHelpFormatter(argparse.HelpFormatter):
     """
@@ -191,6 +199,7 @@ class NewsletterGenerator:
         template_content = self.load_template(template_path)
 
         # Interpolate variables into the template
+        topic = topic or title
         prompt = template_content.replace("{{ title }}", title)
         prompt = prompt.replace("{{ topic }}", topic)
 
@@ -288,7 +297,7 @@ class NewsletterGenerator:
                     advance=1,
                     description=f"[cyan]Generating story {index}/{len(items)}..."
                 )
-                topic = topic or title
+                
                 story_prompt = self.generate_prompt_for_item(item, topic)
                 story = self.generate_text(story_prompt)
                 newsletter_output.append(story)
