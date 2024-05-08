@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 """
-newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS 
-feeds using AI. The Transformers library is used to create "compelling" newsletter content based on the provided 
-feed, title, and optional topic. newsletter-generator currently processes prompts using tiiuae/falcon-7b-instruct 
-and summarizes with sshleifer/distilbart-cnn-12-6.
+llm-newsletter-generator is an experimental Python script designed to generate text-only newsletters from RSS feeds using AI via 
+PyTorch and Transformers. AI is used to create "compelling" newsletter content based on the provided feed, title, and optional topic. 
+llm-newsletter-generator currently processes templated prompts using configurable LLMs and summarizes with 
+sshleifer/distilbart-cnn-12-6.
 
 Copyright (c) 2024-PRESENT Sam Estrin
 This script is licensed under the MIT License (see LICENSE for details)
