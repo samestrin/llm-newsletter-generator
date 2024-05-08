@@ -49,10 +49,12 @@ class NewsletterGenerator:
     def __init__(self, feed_url, cache_timeout=3600, model_name='default'):
         self.feed_url = feed_url
         self.cache_timeout = cache_timeout
-        self.model_configs = {
+        self.model_configs = {            
             'microsoft': ("microsoft/Phi-3-mini-128k-instruct", "microsoft/Phi-3-mini-128k-instruct"),
+            'mistral': ("mistralai/Mistral-7B-Instruct-v0.2", "mistralai/Mistral-7B-Instruct-v0.2"),
             'meta-llama': ("meta-llama/Meta-Llama-3-8B-Instruct", "meta-llama/Meta-Llama-3-8B-Instruct"),
             'snowflake': ("Snowflake/snowflake-arctic-instruct", "Snowflake/snowflake-arctic-instruct"),
+            'tenyxchat': ("tenyx/Llama3-TenyxChat-70B", "tenyx/Llama3-TenyxChat-70B"),
             'dolphin': ("cognitivecomputations/dolphin-2.9-llama3-8b", "cognitivecomputations/dolphin-2.9-llama3-8b")
         }
         model, tokenizer = self.model_configs.get(model_name, self.model_configs['microsoft'])
@@ -286,6 +288,7 @@ class NewsletterGenerator:
                     advance=1,
                     description=f"[cyan]Generating story {index}/{len(items)}..."
                 )
+                topic = topic or title
                 story_prompt = self.generate_prompt_for_item(item, topic)
                 story = self.generate_text(story_prompt)
                 newsletter_output.append(story)
