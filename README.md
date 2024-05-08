@@ -23,16 +23,17 @@
 
 llm-newsletter-generator relies on the following dependencies:
 
+- **Python**: The script runs in a Python3 environment.
 - **argparse**: For parsing command-line arguments.
-- **requests**: To make HTTP requests to retrieve the RSS feeds.
+- **bs4 (BeautifulSoup)**: For parsing HTML content in descriptions to clean it.
 - **feedparser**: To parse the RSS feeds.
 - **hashlib**: For generating hash values, used in caching mechanisms.
 - **os**: To interact with the operating system, such as file path handling and checking file existence.
+- **requests**: To make HTTP requests to retrieve the RSS feeds.
+- **rich**: Used for creating progress bars and rich text formatting in the console.
 - **time**: To handle time-based functions, like checking cache timeouts.
 - **torch**: PyTorch, used by the `transformers` library for managing deep learning models.
 - **transformers**: From Hugging Face, used to load pre-trained models and pipelines for natural language processing tasks.
-- **bs4 (BeautifulSoup)**: For parsing HTML content in descriptions to clean it.
-- **rich**: Used for creating progress bars and rich text formatting in the console.
 
 ### Installation
 
