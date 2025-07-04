@@ -161,4 +161,4 @@ cython_debug/
 cache
 __pycache__
 *.pyc
-venv
+venvplanning/
