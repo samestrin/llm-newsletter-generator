@@ -6,7 +6,7 @@ import tracemalloc
 import gc
 import threading
 import queue
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 from llm_newsletter_generator.llm_newsletter_generator import NewsletterGenerator
 
 
