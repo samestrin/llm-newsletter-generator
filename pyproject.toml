@@ -26,8 +26,19 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 pythonpath = "."
 
+[tool.black]
+line-length = 100
+
+[tool.mypy]
+ignore_missing_imports = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
 mypy = "^1.16.1"
 pytest-cov = "^6.2.1"
-
+pre-commit = "^4.2.0"
+black = "^25.1.0"
+types-requests = "^2.32.4.20250611"
