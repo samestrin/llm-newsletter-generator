@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from newsletter import __version__
 from newsletter.sources.cache import CachedFeed, FeedCache
 from newsletter.sources.feed import FeedError, Item, ParsedFeed, parse_feed
-from newsletter.sources.http import Fetch, FetchError, http_get
+from newsletter.sources.http import Fetch, FetchError, check_url, http_get
 from newsletter.sources.robots import RobotsPolicy
 
 DEFAULT_USER_AGENT = (
@@ -60,6 +60,7 @@ class RssSource:
         return result
 
     def _read(self, url: str) -> ParsedFeed:
+        check_url(url)
         cached = self.cache.get(url) if self.cache else None
         now = self.clock()
         if cached and cached.is_fresh(now):

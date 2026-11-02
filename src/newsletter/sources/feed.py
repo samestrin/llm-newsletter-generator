@@ -3,6 +3,7 @@
 import calendar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 import feedparser
 
@@ -40,7 +41,10 @@ class ParsedFeed:
 
 
 def parse_feed(body: bytes, url: str) -> ParsedFeed:
-    parsed = feedparser.parse(body)
+    # content-location lets feedparser resolve relative links against the feed's URL;
+    # application/xml with no charset leaves the encoding to the XML declaration.
+    headers = {"content-location": url, "content-type": "application/xml"}
+    parsed = feedparser.parse(body, response_headers=headers)
     if not parsed.get("version"):
         raise FeedError("not an RSS or Atom feed")
     if parsed.get("bozo") and not isinstance(
@@ -49,21 +53,22 @@ def parse_feed(body: bytes, url: str) -> ParsedFeed:
         raise FeedError(f"malformed feed: {parsed.get('bozo_exception')}")
 
     meta = parsed.feed
-    title = html_to_text(meta.get("title", "")) or url
+    title = _text(meta, "title") or url
     rights = meta.get("rights") or None
     items: list[Item] = []
     problems: list[str] = []
     for entry in parsed.entries:
-        entry_title = html_to_text(entry.get("title", ""))
-        link = entry.get("link")
-        if not link:
-            problems.append(f"entry {entry_title or '(untitled)'!r} has no link; left out")
+        entry_title = _text(entry, "title")
+        link = entry.get("link", "")
+        if urlsplit(link).scheme not in ("http", "https"):
+            # Every claim needs a source a reader can open.
+            problems.append(f"entry {entry_title or '(untitled)'!r} has no http(s) link; left out")
             continue
         items.append(
             Item(
                 title=entry_title or link,
                 link=link,
-                summary=html_to_text(_body_html(entry)),
+                summary=_summary(entry),
                 published=_published(entry),
                 feed_url=url,
                 feed_title=title,
@@ -73,12 +78,22 @@ def parse_feed(body: bytes, url: str) -> ParsedFeed:
     return ParsedFeed(title, items, rights, _ttl_minutes(meta), problems)
 
 
-def _body_html(entry) -> str:
+def _summary(entry) -> str:
     # Prefer the full content (content:encoded, Atom <content>) over the teaser.
     for content in entry.get("content", []):
         if content.get("value"):
-            return content["value"]
-    return entry.get("summary", "")
+            return _plain(content["value"], content.get("type"))
+    return _text(entry, "summary")
+
+
+def _text(node, key: str) -> str:
+    return _plain(node.get(key, ""), node.get(f"{key}_detail", {}).get("type"))
+
+
+def _plain(value: str, content_type: str | None) -> str:
+    if content_type == "text/plain":
+        return "\n".join(" ".join(line.split()) for line in value.splitlines() if line.strip())
+    return html_to_text(value)
 
 
 def _published(entry) -> datetime | None:
