@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:sy="http://purl.org/rss/1.0/modules/syndication/">
+  <title>Example Lab Blog</title>
+  <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+  <updated>2026-11-01T12:00:00Z</updated>
+  <rights>CC BY 4.0</rights>
+  <sy:updatePeriod>daily</sy:updatePeriod>
+  <sy:updateFrequency>2</sy:updateFrequency>
+  <entry>
+    <title>Scaling notes</title>
+    <link rel="alternate" href="https://lab.example.org/scaling"/>
+    <id>urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a</id>
+    <updated>2026-11-01T12:00:00Z</updated>
+    <summary type="html">&lt;p&gt;Notes on &lt;a href="https://lab.example.org/x"&gt;scaling&lt;/a&gt;.&lt;/p&gt;</summary>
+  </entry>
+</feed>

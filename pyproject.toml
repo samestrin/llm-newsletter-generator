@@ -5,7 +5,9 @@ description = "Generate text-only newsletters from RSS feeds using LLMs."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "feedparser>=6.0.14",
+]
 
 [project.scripts]
 newsletter = "newsletter.cli:main"
