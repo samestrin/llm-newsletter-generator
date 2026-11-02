@@ -54,7 +54,7 @@ cd llm-newsletter-generator
 Install the required dependencies using pip:
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 ## Usage

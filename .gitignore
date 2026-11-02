@@ -164,3 +164,7 @@ __pycache__
 venv
 # private plans (samestrin/llm-newsletter-generator-planning)
 .planning/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
