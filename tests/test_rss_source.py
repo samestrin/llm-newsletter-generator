@@ -78,7 +78,7 @@ def test_fixture_feeds_parse_and_a_bad_feed_is_reported():
 def test_problems_inside_a_good_feed_are_reported():
     result = RssSource(fetch=FakeWeb({RSS: ok(fixture("rss.xml"))})).collect([RSS])
     assert result.failures == [
-        FeedFailure(RSS, "entry 'An item with no link' has no link; left out")
+        FeedFailure(RSS, "entry 'An item with no link' has no http(s) link; left out")
     ]
     assert len(result.items) == 2
 
@@ -192,3 +192,9 @@ def test_works_without_a_cache():
     source.collect([RSS])
     source.collect([RSS])
     assert len(web.fetched(RSS)) == 2
+
+
+def test_a_malformed_url_is_reported():
+    result = RssSource(fetch=FakeWeb({})).collect(["http://[not-a-host/feed"])
+    assert [f.url for f in result.failures] == ["http://[not-a-host/feed"]
+    assert result.failures[0].reason.startswith("bad URL")

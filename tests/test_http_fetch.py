@@ -25,6 +25,13 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/not-modified":
             self.send_response(304)
             self.end_headers()
+        elif self.path == "/truncated":
+            self.send_response(200)
+            self.send_header("Content-Length", "100")
+            self.end_headers()
+            self.wfile.write(b"short")
+            self.wfile.flush()
+            self.close_connection = True
         elif self.path == "/slow":
             time.sleep(1)
             self.send_response(200)
@@ -72,6 +79,11 @@ def test_http_error_status_is_returned(server):
 def test_timeout_is_an_error(server):
     with pytest.raises(FetchError, match="timed out after 0.2s"):
         http_get(f"{server}/slow", {}, timeout=0.2)
+
+
+def test_truncated_body_is_an_error(server):
+    with pytest.raises(FetchError):
+        http_get(f"{server}/truncated", {}, timeout=5)
 
 
 def test_connection_refused_is_an_error():
