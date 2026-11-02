@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
 from newsletter.sources.feed import FeedError, parse_feed
 
 FIXTURES = Path(__file__).parent / "fixtures" / "feeds"

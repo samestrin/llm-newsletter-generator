@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/workspace/llm-newsletter-generator/.paperclip/worktrees/EST-4075-epic-01-t3-rss-and-atom-source-fetch-with-a-timeout-and-a-cache-parse-clean-html-respect-robots-txt-and/scripts/paperclip-issue-update.sh:*)",
+      "Bash(/workspace/llm-newsletter-generator/.paperclip/worktrees/EST-4075-epic-01-t3-rss-and-atom-source-fetch-with-a-timeout-and-a-cache-parse-clean-html-respect-robots-txt-and/scripts/paperclip:*)",
+      "Bash(curl:*)",
+      "Bash(env)",
+      "Bash(env:*)"
+    ],
+    "additionalDirectories": [
+      "/paperclip/instances/default/companies/ab4a737f-e940-4b26-862c-55e98110d9f9",
+      "/paperclip/instances/default/companies/ab4a737f-e940-4b26-862c-55e98110d9f9/acp-engine/agents/b35b8684-35ed-4e51-8301-fee260c3fe54",
+      "/paperclip/instances/default/workspaces/b35b8684-35ed-4e51-8301-fee260c3fe54"
+    ],
+    "defaultMode": "default"
+  }
+}

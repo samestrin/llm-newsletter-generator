@@ -3,6 +3,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+
 from newsletter.sources.http import FetchError, http_get
 
 
