@@ -184,9 +184,7 @@ def test_unknown_cost_is_not_reported_as_a_total():
         title="AI Weekly",
         topic="AI",
         source=fixture_source(),
-        llm=make_llm(
-            FakeModel(), NEWSLETTER_FAST_PRICE_INPUT="", NEWSLETTER_FAST_PRICE_OUTPUT=""
-        ),
+        llm=make_llm(FakeModel(), NEWSLETTER_FAST_PRICE_INPUT="", NEWSLETTER_FAST_PRICE_OUTPUT=""),
         issue_date=date(2026, 11, 3),
     )
     report = render_markdown(issue).split("## Run report", 1)[1]
