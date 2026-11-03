@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Example AI News</title>
+    <link>https://example.com/</link>
+    <description>News about models.</description>
+    <copyright>Copyright 2026 Example Media. Headlines and links only.</copyright>
+    <ttl>60</ttl>
+    <item>
+      <title>A new open model</title>
+      <link>https://example.com/posts/open-model</link>
+      <pubDate>Mon, 02 Nov 2026 09:30:00 GMT</pubDate>
+      <description><![CDATA[<p>The model is <b>open</b> &amp; small.</p><script>alert("x")</script><p>Second paragraph.</p>]]></description>
+    </item>
+    <item>
+      <title>Benchmarks revisited</title>
+      <link>https://example.com/posts/benchmarks</link>
+      <description>Plain text summary.</description>
+      <content:encoded><![CDATA[<div><h2>Full text</h2><p>Benchmarks are <i>hard</i>.</p><style>p{color:red}</style></div>]]></content:encoded>
+    </item>
+    <item>
+      <title>An item with no link</title>
+      <description>Nothing to cite.</description>
+    </item>
+  </channel>
+</rss>

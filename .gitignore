@@ -166,3 +166,6 @@ venv
 .planning/
 .venv/
 .ruff_cache/
+
+# Per-machine Claude Code settings
+.claude/settings.local.json
