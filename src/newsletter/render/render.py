@@ -29,7 +29,11 @@ FLAG_LABELS = {
     "unchecked": "Flagged: unchecked, this claim could not be checked",
 }
 
-_MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]<>#|~!])")
+_MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]<>#|~!@])")
+# What GFM turns into a link in plain text: `scheme://`, `www.` and an email address
+# (whose `@` is escaped above). An escaped `:` or `.` breaks the match and still shows
+# the same character.
+_AUTOLINK = re.compile(r"(?i)(:(?=//)|(?<=\bwww)\.)")
 
 
 @dataclass
@@ -203,8 +207,9 @@ class _Raw(str):
 
 
 def markdown_text(text: str) -> str:
-    """Plain text that Markdown shows as written, on one line."""
-    return _MARKDOWN_SPECIAL.sub(r"\\\1", " ".join(str(text).split()))
+    """Plain text that Markdown shows as written, on one line, with no link in it."""
+    text = _MARKDOWN_SPECIAL.sub(r"\\\1", " ".join(str(text).split()))
+    return _AUTOLINK.sub(r"\\\1", text)
 
 
 def _markdown_finalize(value: Any) -> str:
