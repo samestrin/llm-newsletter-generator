@@ -135,6 +135,20 @@ cd web && npm ci && npm run dev    # http://localhost:5173, /api goes to 127.0.0
 
 The page's origin must be in `NEWSLETTER_API_ORIGINS`, or the API refuses its writes. `NEWSLETTER_API_URL` points the dev server's `/api` somewhere else. `VITE_API_URL` at build time makes the built page call the API there directly instead of on its own origin.
 
+### Draft export
+
+`newsletter.export` sends an approved issue to email platforms as a draft, never as a send. `export_draft(text, title=..., approval=..., connectors=connectors_from_env())` checks the approval before any request: only a person's approval whose sha256 matches the text as it is now passes, so an unapproved draft, an edited one or an `automated-demo` one is refused. `export_stored_draft(draft, connectors=...)` does the same for a draft as the API stores it.
+
+Each connector is optional and is set up only when its key is set. Each makes one create call that asks for a draft, with no send call and no schedule:
+
+| Platform | Call | Settings |
+| --- | --- | --- |
+| Buttondown | `POST /v1/emails` with `status: draft` | `BUTTONDOWN_API_KEY` |
+| Beehiiv | `POST /v2/publications/{id}/posts` with `status: draft` | `BEEHIIV_API_KEY`, `BEEHIIV_PUBLICATION_ID` |
+| Resend | `POST /broadcasts` with `send: false`; `/broadcasts/{id}/send` is never called | `RESEND_API_KEY`, `RESEND_SEGMENT_ID`, `RESEND_FROM` |
+
+`NEWSLETTER_EXPORT_TIMEOUT` sets the seconds per request, default 30. The result lists each connector as exported, with its draft id, or failed, with the reason. An HTTP error, a timeout, a reply with no draft id or a reply with a status other than draft counts as failed, never as exported, and the others still run. There is no retry, since a repeated call could leave a second draft. A connector whose platform has no draft-only endpoint is dropped and listed. Keys are never logged or reported.
+
 ### Docker
 
 ```bash
