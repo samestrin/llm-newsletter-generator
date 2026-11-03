@@ -5,16 +5,16 @@ report. A failed feed, model call or rewrite is kept in the report, never raised
 """
 
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from datetime import date
 
 import httpx
 
-from newsletter.editor import Edition, check_claims, edit_issue, summarize_stories
+from newsletter.editor import check_claims, edit_issue, summarize_stories
 from newsletter.llm import LLMClient, Settings
 from newsletter.render import Newsletter, build_report, render_markdown
 from newsletter.sources import RssSource
-from newsletter.voice import VoiceRun, VoiceSettings, apply_voice
+from newsletter.voice import VoiceSettings, voice_edition
 
 
 @dataclass(frozen=True)
@@ -49,26 +49,6 @@ def run_issue(
         "flags": [asdict(flag) for flag in report.flagged_claims],
         "report": report.to_dict(),
     }
-
-
-def voice_edition(
-    edition: Edition,
-    llm: LLMClient,
-    settings: VoiceSettings,
-    *,
-    transport: httpx.BaseTransport | None = None,
-) -> VoiceRun:
-    """Rewrite the editor's prose in place: the intro and each why it matters. Claim ids
-    stay with their prose; the claims themselves are never rewritten."""
-    texts = {f"why-{story_id}": p.text for story_id, p in edition.why_it_matters.items()}
-    if edition.intro is not None:
-        texts = {"intro": edition.intro.text, **texts}
-    run = apply_voice(texts, llm, settings, transport=transport)
-    if edition.intro is not None:
-        edition.intro = replace(edition.intro, text=run.texts["intro"])
-    for story_id, prose in edition.why_it_matters.items():
-        edition.why_it_matters[story_id] = replace(prose, text=run.texts[f"why-{story_id}"])
-    return run
 
 
 def default_runner(env: Mapping[str, str]):

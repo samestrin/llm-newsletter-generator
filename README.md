@@ -6,7 +6,27 @@
 
 **llm-newsletter-generator** is a Python package that generates text-only newsletters from RSS feeds using LLMs. See [VISION.md](VISION.md) for the plan.
 
-The rebuild is in progress: `newsletter issue` drafts a plain issue from RSS and Atom feeds, in the writer's voice when a yourvoice.dev key is set; editing and grouping arrive with later work.
+## What it does
+
+It reads RSS and Atom feeds and drafts an issue that a person reviews before it goes anywhere:
+
+1. The fast model writes claims for each story, each one quoting the passage it came from.
+2. Each claim is checked against its passage. A claim the source does not support stays in the issue, marked as flagged; it is never quietly dropped or quietly passed.
+3. The reasoning model edits the issue (lead story, themes, intro, why each story matters) and may cite only supported claims. When a yourvoice.dev key is set, that prose is rewritten in the writer's own voice, with every link, quote and number kept as it was.
+4. The issue is rendered as Markdown and as an HTML email, with a run report: failed feeds, flagged and dropped claims, and each model call with its tokens and cost.
+5. A person reads the draft on the review page, edits it and approves it. Any edit clears the approval.
+
+The review page, showing a draft with its three flagged claims and its run report:
+
+![The review page: a draft's text, its flagged claims and its run report](docs/img/review-page.png)
+
+The same issue as the HTML email. The three claims the source does not support are flagged in red:
+
+![An issue rendered as the HTML email, with flagged claims marked](docs/img/issue.png)
+
+Both screenshots show the `open-models-week` eval case below, replayed from recorded model answers. The browser test (`cd web && npm run test:e2e`) saves them to `docs/img/` against a fake API.
+
+Grouping stories from several feeds is later work.
 
 ## Installation
 
@@ -25,17 +45,17 @@ Dependencies are declared in `pyproject.toml`, which is also where the version l
 ```bash
 uv run newsletter --help
 uv run newsletter --version
-NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_API_KEY=... \
-  uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" --topic AI -o issue.md
+NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_REASONING_MODEL=o4-mini NEWSLETTER_API_KEY=... \
+  uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" -o issue.md
 ```
 
-`newsletter issue` reads RSS or Atom feeds, summarizes each item with the fast model and writes the issue as Markdown with a link per item, then a run report listing any feed, entry or model call that failed and what each step cost. It exits 1 when anything failed, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs, `--date` to set the issue date and `--per-feed N` to summarize only the first N items of each feed (each item is one model call).
+`newsletter issue` reads RSS or Atom feeds, has the fast model extract claims that quote their source, checks each claim against its passage, and has the reasoning model edit the issue (lead, themes, intro and why it matters) from the supported claims only. It writes the issue as Markdown. Every claim links to its source; unsupported or unchecked claims stay visible and are marked as flagged. A run report lists failed feeds, dropped and flagged claims, a failed editor call, the writer's voice and the cost of each step. It exits 1 when anything failed or is flagged, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs, `--date` to set the issue date and `--per-feed N` to use only the first N items of each feed (each item costs several model calls).
 
 ```bash
 uv run newsletter archive --demo --site site --per-feed 5 https://example.com/feed.xml
 ```
 
-`newsletter archive` drafts the same issue (in the writer's voice too, when `YOURVOICE_API_KEY` is set; the daily workflow sets none) and builds it into a static site in `--site`: an index and one page per issue. Only demo mode exists so far, so `--demo` is required. A demo issue is approved by a record marked `automated-demo` instead of a person's sha256 of the text; that record is valid for archive pages only and export refuses it. Every demo page carries a visible "Automated demo" label, and every summary is marked as unchecked.
+`newsletter archive` drafts a plain issue, one fast-model summary and one link per item, with `--topic` given to the model (in the writer's voice too, when `YOURVOICE_API_KEY` is set; the daily workflow sets none) and builds it into a static site in `--site`: an index and one page per issue. Only demo mode exists so far, so `--demo` is required. A demo issue is approved by a record marked `automated-demo` instead of a person's sha256 of the text; that record is valid for archive pages only and export refuses it. Every demo page carries a visible "Automated demo" label, and every summary is marked as unchecked.
 
 ### Daily archive
 
@@ -49,8 +69,8 @@ The CLI talks to any OpenAI-compatible endpoint; all model settings come from th
 | --- | --- |
 | `NEWSLETTER_BASE_URL` | Endpoint, default `https://api.openai.com/v1` |
 | `NEWSLETTER_API_KEY` | API key (or `OPENAI_API_KEY`); optional for local endpoints |
-| `NEWSLETTER_FAST_MODEL` | Model for bulk work; required by `newsletter issue` |
-| `NEWSLETTER_REASONING_MODEL` | Model for editing; the writer's voice needs it |
+| `NEWSLETTER_FAST_MODEL` | Model for bulk work; required by both commands |
+| `NEWSLETTER_REASONING_MODEL` | Model for the editor pass and the writer's voice; required by `newsletter issue` |
 | `NEWSLETTER_EMBEDDING_MODEL` | Model for comparing stories (later work) |
 | `NEWSLETTER_<TIER>_PRICE_INPUT` / `NEWSLETTER_<TIER>_PRICE_OUTPUT` | USD per million tokens; without them the cost the server reports is used, else the cost is unknown |
 | `NEWSLETTER_TIMEOUT` | Seconds per request, default 60 |
@@ -60,7 +80,7 @@ A tier's model is required only when that tier is used. The API key is never log
 
 ### The writer's voice
 
-When `YOURVOICE_API_KEY` is set, each summary is rewritten in the writer's own voice. [yourvoice.dev](https://yourvoice.dev) builds a voice profile from samples of the writer's writing, and the reasoning model rewrites the summary to match it. Then a check compares every link, quoted string, number and claim id before and after the rewrite. If one is dropped, changed or added, or the profile or the rewrite fails or times out, the neutral summary is kept and the run report says which one and why. The command then exits 1. Without the key, the issue stays in a neutral voice, and the run report says so.
+When `YOURVOICE_API_KEY` is set, the editor's prose is rewritten in the writer's own voice: in `newsletter issue` and `newsletter serve` the intro, the theme names and each "why it matters" line, and in `newsletter archive` each summary. Claims, their quotes, numbers and source links, and the citations on the prose are never sent to the rewrite, so they stay exactly as they were. [yourvoice.dev](https://yourvoice.dev) builds a voice profile from samples of the writer's writing, and the reasoning model rewrites the prose to match it. Then a check compares every link, quoted string, number and claim id before and after the rewrite. If one is dropped, changed or added, or the profile or the rewrite fails or times out, the neutral text is kept and the run report says which one and why. The command then exits 1. Without the key, the issue stays in a neutral voice, and the run report says so.
 
 | Variable | Purpose |
 | --- | --- |
@@ -103,6 +123,18 @@ Every call but the health check needs `Authorization: Bearer $NEWSLETTER_API_TOK
 | `NEWSLETTER_DATA_DIR` | Where drafts and runs are kept, default `$XDG_DATA_HOME/newsletter` (`~/.local/share/newsletter`) |
 | `NEWSLETTER_RUN_TIMEOUT` | Seconds a run may take, default 900 |
 
+### The review page
+
+`web/` is a page (React and Vite) for reviewing drafts. Paste the API token, pick a draft, and read its text with its flagged claims and its run report: failed feeds, dropped stories and claims, editor and voice problems, and each model call with its tokens and cost. Edit the text and save it, which clears any approval, then approve. Approve is off while an edit is unsaved. It sends the sha256 of the text you read, so if the draft changed since, the API refuses it and the page says so; Reload fetches the new text. The draft text is always shown as text, never as HTML, and only http and https sources are links. The token stays in the page's memory, so a reload asks for it again.
+
+```bash
+export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
+NEWSLETTER_API_ORIGINS=http://localhost:5173 uv run newsletter serve
+cd web && npm ci && npm run dev    # http://localhost:5173, /api goes to 127.0.0.1:8000
+```
+
+The page's origin must be in `NEWSLETTER_API_ORIGINS`, or the API refuses its writes. `NEWSLETTER_API_URL` points the dev server's `/api` somewhere else. `VITE_API_URL` at build time makes the built page call the API there directly instead of on its own origin.
+
 ### Draft export
 
 `newsletter.export` sends an approved issue to email platforms as a draft, never as a send. `export_draft(text, title=..., approval=..., connectors=connectors_from_env())` checks the approval before any request: only a person's approval whose sha256 matches the text as it is now passes, so an unapproved draft, an edited one or an `automated-demo` one is refused. `export_stored_draft(draft, connectors=...)` does the same for a draft as the API stores it.
@@ -117,6 +149,29 @@ Each connector is optional and is set up only when its key is set. Each makes on
 
 `NEWSLETTER_EXPORT_TIMEOUT` sets the seconds per request, default 30. The result lists each connector as exported, with its draft id, or failed, with the reason. An HTTP error, a timeout, a reply with no draft id or a reply with a status other than draft counts as failed, never as exported, and the others still run. There is no retry, since a repeated call could leave a second draft. A connector whose platform has no draft-only endpoint is dropped and listed. Keys are never logged or reported.
 
+### Docker
+
+```bash
+export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
+docker compose up --build    # http://localhost:8080
+```
+
+Two services: `api` (`newsletter serve`, drafts kept in the `drafts` volume) and `web` (the built review page behind nginx, which forwards `/api` to `api`). Only the page is published, on `127.0.0.1:8080` (`WEB_PORT` changes it); the API is not reachable from outside the compose network, and it allows writes only from the page's origin. `NEWSLETTER_API_TOKEN` is required. `NEWSLETTER_BASE_URL`, `NEWSLETTER_API_KEY`, `NEWSLETTER_FAST_MODEL`, `NEWSLETTER_REASONING_MODEL` and `YOURVOICE_API_KEY` are passed through from your shell when set. CI's `compose` job builds both images, starts them and checks the page, the proxied API and the token.
+
+## Eval
+
+`uv run python -m newsletter.evals` runs two past feeds through the claims, check and edit steps and scores the result. Each feed comes with a reference issue and the model's answers as they were recorded, including planted false claims: true passages with a false claim written over them. A claim counts as caught only if it is on that planted list and the check flagged it, so the check does not grade itself. The command exits 1 if a planted claim gets through, and CI runs it.
+
+From [`evals/results.md`](evals/results.md):
+
+| Case | Faithfulness | Flag rate | Planted false claims flagged | Reference coverage | Cost per issue |
+| --- | --- | --- | --- | --- | --- |
+| open-models-week | 100.0% | 33.3% | 3/3 | 100.0% | $0.0072 |
+| science-weekly | 100.0% | 33.3% | 2/2 | 100.0% | $0.0128 |
+| Total | 100.0% | 33.3% | 5/5 | 100.0% | $0.0100 |
+
+These numbers are a replay of recorded responses, not a live run: they show that the scoring and the flagging work on known answers, not how often a given model makes things up. Faithfulness is the share of claims the check passed that are not planted false; the flag rate is flagged claims over all claims checked; reference coverage is the share of the reference issue's links that the issue's supported claims cite. `uv run python -m newsletter.evals --live -o evals/results.md` runs the same feeds against the models in your environment (and spends credit). A live run has no planted claims, so its faithfulness is n/a. `tests/test_readme.py` fails if this table and `evals/results.md` differ, or if `evals/results.md` is not what the replay prints.
+
 ## Development
 
 ```bash
@@ -124,9 +179,11 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run python -m newsletter.evals   # eval table from recorded responses, no network
+cd web && npm ci && npm run build && npm test   # the review page: build, unit tests with coverage
+npx playwright install chromium && npm run test:e2e   # browser test against a fake API, saves docs/img/
 ```
 
-The eval replays recorded model answers for past feeds that include planted false claims. `uv run python -m newsletter.evals --live -o evals/results.md` runs the same feeds against the models in your environment and spends credit.
+The screenshots' issue comes from fixtures in `web/e2e/fixtures/`, made from the `open-models-week` eval case. After a change to the renderer or the case, `uv run python tests/readme_issue.py` rewrites them; `uv run pytest` fails until it is run.
 
 ## Contribute
 
