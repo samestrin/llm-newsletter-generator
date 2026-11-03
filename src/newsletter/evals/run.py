@@ -18,6 +18,7 @@ The replay needs no network and no key. Live mode runs the same feeds against th
 in the environment; it has no planted claims, so its faithfulness is the check's own share.
 """
 
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -63,11 +64,15 @@ class CaseResult:
     edit_error: str | None = None
     edit_rejections: int = 0
     unflagged_planted: list[str] = field(default_factory=list)
+    story_errors: list[str] = field(default_factory=list)
+    """Stories whose claims or checks failed: their claims are missing from every count."""
+    labelled: bool = False
+    """True when planted claims give faithfulness a ground truth."""
 
     @property
     def faithfulness(self) -> float | None:
-        """Share of passed claims that are not planted false; None when none passed."""
-        if not self.supported:
+        """Share of passed claims that are not planted false; None without labels or passes."""
+        if not self.labelled or not self.supported:
             return None
         return 1 - self.planted_passed / self.supported
 
@@ -81,8 +86,6 @@ class CaseResult:
 
 
 def load_cases(directory: Path = CASES_DIR) -> list[Case]:
-    import json
-
     folders = sorted(p for p in directory.iterdir() if (p / "case.json").is_file())
     if not folders:
         raise FileNotFoundError(f"no eval cases in {directory}")
@@ -130,7 +133,10 @@ def _run_case(case: Case, live: Mapping[str, Any] | None) -> CaseResult:
     finally:
         llm.close()
 
-    result = CaseResult(case.name)
+    result = CaseResult(case.name, labelled=bool(planted))
+    result.story_errors = [
+        f"{s.story_id}: {s.error}" for s in [*claims.summaries, *checked.stories] if s.error
+    ]
     result.claims_dropped = sum(len(s.dropped) for s in claims.summaries)
     for story in checked.stories:
         for claim in story.claims:
@@ -194,7 +200,7 @@ def _row(name: str, r: CaseResult, cost: float | None | str = "") -> str:
 
 
 def _total(results: list[CaseResult]) -> CaseResult:
-    total = CaseResult("Total")
+    total = CaseResult("Total", labelled=any(r.labelled for r in results))
     for field_name in (
         "claims",
         "claims_dropped",
@@ -207,6 +213,7 @@ def _total(results: list[CaseResult]) -> CaseResult:
         "reference_found",
     ):
         setattr(total, field_name, sum(getattr(r, field_name) for r in results))
+    total.story_errors = [e for r in results for e in r.story_errors]
     return total
 
 

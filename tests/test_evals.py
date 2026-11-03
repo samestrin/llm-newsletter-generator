@@ -23,6 +23,8 @@ def test_bundled_cases_flag_every_planted_false_claim():
     assert planted >= 3
     assert sum(r.planted_flagged for r in results) == planted
     assert all(r.claims_dropped == 0 for r in results)
+    assert all(r.story_errors == [] for r in results)
+    assert [r.planted for r in results] == [len(c.planted_false) for c in load_cases()]
     assert all(r.faithfulness == 1.0 for r in results)
     assert all(0 < r.flag_rate < 1 for r in results)
     assert all(r.cost and r.cost > 0 for r in results)
@@ -117,7 +119,29 @@ def test_live_mode_runs_the_feeds_against_a_model(capsys):
     assert main(["--live"], env=env, llm_transport=httpx.MockTransport(handler)) == 0
     out = capsys.readouterr().out
     assert "live" in out
-    assert "| n/a |" in out or " n/a " in out
+    # No labels live: faithfulness is not computed, never reported as a self-graded 100%.
+    row = next(line for line in out.splitlines() if line.startswith("| open-models-week"))
+    assert row.split("|")[2].strip() == "n/a"
+    assert "no ground truth" in out
+
+
+def test_a_step_missing_from_the_recording_fails_the_eval(tmp_path, capsys):
+    cases = tmp_path / "cases"
+    shutil.copytree(CASES_DIR, cases)
+    case_dir = sorted(cases.iterdir())[0]
+    recorded = json.loads((case_dir / "recorded.json").read_text())
+    del recorded["responses"]["claims-s1"]
+    (case_dir / "recorded.json").write_text(json.dumps(recorded))
+    [bad, _] = run_cases(load_cases(cases))
+    assert bad.story_errors and "claims-s1" in bad.story_errors[0]
+    assert main(["--cases", str(cases)]) == 1
+    assert "claims-s1" in capsys.readouterr().err
+
+
+def test_output_creates_missing_folders(tmp_path):
+    out = tmp_path / "evals" / "results.md"
+    assert main(["-o", str(out)]) == 0
+    assert out.is_file()
 
 
 def test_load_cases_rejects_an_empty_folder(tmp_path):

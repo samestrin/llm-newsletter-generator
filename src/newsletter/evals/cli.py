@@ -50,11 +50,12 @@ def main(
     report = f"# Eval ({mode})\n\n{render_table(results)}"
     if live:
         report += (
-            "\nLive runs have no planted claims; faithfulness here is the check's own "
-            "share of passed claims.\n"
+            "\nLive runs have no planted claims and so no ground truth: faithfulness is "
+            "n/a, and the flag rate is only how often the check flagged.\n"
         )
     sys.stdout.write(report)
     if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(report, encoding="utf-8")
 
     missed = [(r, cid) for r in results for cid in r.unflagged_planted]
@@ -63,4 +64,7 @@ def main(
             f"newsletter-eval: planted false claim {claim_id} NOT flagged in {result.name}",
             file=sys.stderr,
         )
-    return 1 if missed else 0
+    errors = [(r, e) for r in results for e in r.story_errors]
+    for result, error in errors:
+        print(f"newsletter-eval: {result.name}: story failed, {error}", file=sys.stderr)
+    return 1 if missed or errors else 0
