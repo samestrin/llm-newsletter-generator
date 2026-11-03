@@ -174,7 +174,21 @@ def test_the_key_never_appears_in_a_log_or_report(tmp_path, samples, caplog):
     assert KEY not in json.dumps(result.report())
     assert KEY not in caplog.text
     assert KEY not in repr(settings)
-    assert caplog.text  # the failure is logged, just without the key
+    # The failure is logged, just without the key.
+    assert "kept neutral: voice profile failed: HTTP 402" in caplog.text
+
+
+def test_an_unreadable_sample_is_skipped_and_logged(tmp_path, samples, caplog):
+    (samples / "bad.md").write_bytes(b"\xff\xfe not utf-8")
+
+    result, api, _ = run(tmp_path, samples)
+
+    assert result.texts == {"1": VOICED}
+    assert json.loads(api.requests[0].content)["texts"] == [
+        "I write short. I like it.",
+        "Another post of mine.",
+    ]
+    assert "bad.md" in caplog.text
 
 
 def test_without_a_key_nothing_is_called_and_the_text_stays_neutral(tmp_path, samples):
