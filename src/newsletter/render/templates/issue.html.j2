@@ -1,0 +1,135 @@
+{#- Autoescaped: every {{ value }} is HTML-escaped. Links are only URLs safe_url accepted. -#}
+{% macro cites(list) %}{% for c in list %} <sup>{% if c.url %}<a href="{{ c.url }}" style="color:#1a56db;text-decoration:none;">[{{ c.number }}]</a>{% else %}[{{ c.number }}]{% endif %}</sup>{% endfor %}{% endmacro %}
+{% macro link(title, url) %}{% if url %}<a href="{{ url }}" style="color:#1a56db;">{{ title }}</a>{% else %}{{ title }}{% endif %}{% endmacro %}
+{% set cell = "padding:4px 6px;border-bottom:1px solid #e5e5e5;text-align:left;vertical-align:top;" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<title>{{ title }}</title>
+<style>
+  body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; }
+  .container { width: 600px; max-width: 600px; }
+  @media only screen and (max-width: 620px) {
+    .container { width: 100% !important; max-width: 100% !important; }
+    .pad { padding: 16px !important; }
+    .report { font-size: 12px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f4;">
+<tr>
+<td align="center" style="padding:16px 0;">
+<table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.5;color:#222222;">
+<tr>
+<td class="pad" style="padding:24px 32px;">
+<h1 style="margin:0 0 4px;font-size:26px;line-height:1.2;">{{ title }}</h1>
+<p style="margin:0 0 20px;color:#666666;font-style:italic;">{{ date }}</p>
+{% if editor_failed %}
+<p style="margin:0 0 16px;padding:8px 12px;background-color:#fff4e5;border-left:4px solid #b26a00;">The editor pass failed, so the stories are in their original order with no intro. See the run report.</p>
+{% endif %}
+{% if intro %}
+<p style="margin:0 0 16px;">{{ intro.text }}{{ cites(intro.cites) }}</p>
+{% endif %}
+{% if themes %}
+<p style="margin:0 0 4px;font-weight:bold;">Themes</p>
+<ul style="margin:0 0 20px;padding-left:20px;">
+{% for name, theme_cites in themes %}
+<li>{{ name }}{{ cites(theme_cites) }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if not stories %}
+<p style="margin:0 0 16px;">No stories this time. See the run report.</p>
+{% endif %}
+{% for story in stories %}
+<div style="margin:0 0 24px;padding-top:16px;border-top:1px solid #e5e5e5;">
+{% if story.lead %}
+<p style="margin:0 0 4px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#1a56db;font-weight:bold;">Lead story</p>
+{% endif %}
+<h2 style="margin:0 0 4px;font-size:20px;line-height:1.3;">{{ link(story.title, story.url) }}</h2>
+<p style="margin:0 0 12px;color:#666666;font-size:14px;font-style:italic;">{{ story.byline }}</p>
+{% if story.why %}
+<p style="margin:0 0 12px;"><strong>Why it matters:</strong> {{ story.why.text }}{{ cites(story.why.cites) }}</p>
+{% endif %}
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for claim in story.claims %}
+<li style="margin:0 0 6px;">[{{ claim.number }}] {% if claim.flag %}<strong style="color:#b00020;">{{ claim.flag }}.</strong> {% endif %}{{ claim.text }}{% if claim.url %} (<a href="{{ claim.url }}" style="color:#1a56db;">source</a>){% endif %}</li>
+{% endfor %}
+</ul>
+{% if story.also %}
+<p style="margin:0;font-size:14px;color:#444444;">Also covered by: {% for source in story.also %}{{ link(source.title, source.url) }} ({{ source.feed }}){% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
+</div>
+{% endfor %}
+<div class="report" style="margin:24px 0 0;padding-top:16px;border-top:2px solid #222222;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.4;color:#444444;">
+<h2 style="margin:0 0 8px;font-size:16px;">Run report</h2>
+{% if report.ok %}
+<p style="margin:0 0 12px;">Every feed was read, every story and claim was used, and every claim was supported.</p>
+{% endif %}
+{% if report.failed_sources %}
+<p style="margin:0 0 4px;font-weight:bold;">Feeds and entries left out</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for failure in report.failed_sources %}
+<li><code>{{ failure.url }}</code>: {{ failure.reason }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if report.editor_error %}
+<p style="margin:0 0 12px;"><strong>Editor pass failed:</strong> {{ report.editor_error }}</p>
+{% endif %}
+{% if report.editor_rejections %}
+<p style="margin:0 0 4px;font-weight:bold;">Editor replies rejected</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for rejection in report.editor_rejections %}
+<li>{{ rejection }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if dropped_stories %}
+<p style="margin:0 0 4px;font-weight:bold;">Stories dropped</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for story, url in dropped_stories %}
+<li>{{ link(story.title, url) }}: {{ story.reason }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if report.dropped_claims %}
+<p style="margin:0 0 4px;font-weight:bold;">Claims dropped</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for claim in report.dropped_claims %}
+<li><code>{{ claim.id }}</code> {{ claim.text }} ({{ claim.reason }})</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if report.flagged_claims %}
+<p style="margin:0 0 4px;font-weight:bold;">Claims flagged</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for claim in report.flagged_claims %}
+<li><code>{{ claim.id }}</code> {{ claim.status }}: {{ claim.text }} ({{ claim.reason }})</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if steps %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:12px;margin:0 0 8px;">
+<tr><th style="{{ cell }}">Step</th><th style="{{ cell }}">Tier</th><th style="{{ cell }}">Model</th><th style="{{ cell }}">Tokens in</th><th style="{{ cell }}">Tokens out</th><th style="{{ cell }}">Cost</th><th style="{{ cell }}">Result</th></tr>
+{% for step in steps %}
+<tr><td style="{{ cell }}">{{ step.step }}</td><td style="{{ cell }}">{{ step.tier }}</td><td style="{{ cell }}">{{ step.model }}</td><td style="{{ cell }}">{{ step.tokens_in }}</td><td style="{{ cell }}">{{ step.tokens_out }}</td><td style="{{ cell }}">{{ step.cost }}</td><td style="{{ cell }}">{{ step.result }}</td></tr>
+{% endfor %}
+</table>
+<p style="margin:0;">{{ total }}</p>
+{% else %}
+<p style="margin:0;">No model calls were made.</p>
+{% endif %}
+</div>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
