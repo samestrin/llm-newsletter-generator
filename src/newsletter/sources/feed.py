@@ -40,10 +40,12 @@ class ParsedFeed:
     """Things left out of `items`, for the run report."""
 
 
-def parse_feed(body: bytes, url: str) -> ParsedFeed:
+def parse_feed(body: bytes, url: str, base_url: str | None = None) -> ParsedFeed:
+    """Parse the feed listed as `url`; relative links resolve against `base_url` (default `url`),
+    the address it was actually served from."""
     # content-location lets feedparser resolve relative links against the feed's URL;
     # application/xml with no charset leaves the encoding to the XML declaration.
-    headers = {"content-location": url, "content-type": "application/xml"}
+    headers = {"content-location": base_url or url, "content-type": "application/xml"}
     parsed = feedparser.parse(body, response_headers=headers)
     if not parsed.get("version"):
         raise FeedError("not an RSS or Atom feed")

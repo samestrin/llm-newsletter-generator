@@ -275,3 +275,19 @@ def test_a_redirected_robots_txt_is_followed():
     )
     result = RssSource(fetch=web).collect([RSS])
     assert result.failures == [FeedFailure(RSS, "disallowed by robots.txt")]
+
+
+def test_a_cached_redirected_feed_still_resolves_links_against_the_final_url(tmp_path):
+    final = "https://cdn.example.net/feeds/main.xml"
+    body = (
+        b'<?xml version="1.0"?><rss version="2.0"><channel><title>T</title><ttl>60</ttl>'
+        b"<item><title>R</title><link>posts/r</link></item></channel></rss>"
+    )
+    web = FakeWeb({RSS: redirect(final), final: ok(body)})
+    RssSource(fetch=web, cache=FeedCache(tmp_path), clock=lambda: 1000.0).collect([RSS])
+    web.requests.clear()
+
+    result = RssSource(fetch=web, cache=FeedCache(tmp_path), clock=lambda: 1060.0).collect([RSS])
+
+    assert web.requests == []
+    assert [item.link for item in result.items] == ["https://cdn.example.net/feeds/posts/r"]

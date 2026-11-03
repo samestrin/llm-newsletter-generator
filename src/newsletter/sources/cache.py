@@ -14,6 +14,8 @@ class CachedFeed:
     last_modified: str | None = None
     ttl_minutes: int | None = None
     """How long the feed asks readers to wait before fetching it again."""
+    final_url: str | None = None
+    """Where the feed was served from after redirects; relative links resolve against it."""
 
     def is_fresh(self, now: float) -> bool:
         return self.ttl_minutes is not None and now - self.fetched_at < self.ttl_minutes * 60
@@ -44,6 +46,7 @@ class FeedCache:
             "etag": entry.etag,
             "last_modified": entry.last_modified,
             "ttl_minutes": entry.ttl_minutes,
+            "final_url": entry.final_url,
         }
         meta_path.write_text(json.dumps({"url": url, **meta}))
 

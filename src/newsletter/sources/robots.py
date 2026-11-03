@@ -3,7 +3,7 @@
 from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
-from newsletter.sources.http import Fetch, FetchError
+from newsletter.sources.http import Fetch, FetchError, follow_redirects
 
 
 class RobotsPolicy:
@@ -32,7 +32,10 @@ class RobotsPolicy:
     def _load(self, robots_url: str) -> RobotFileParser | str:
         rules = RobotFileParser(robots_url)
         try:
-            response = self.fetch(robots_url, {"User-Agent": self.user_agent}, self.timeout)
+            # RFC 9309 asks crawlers to follow at least five redirects for robots.txt.
+            _, response = follow_redirects(
+                self.fetch, robots_url, {"User-Agent": self.user_agent}, self.timeout
+            )
         except FetchError as error:
             # Unreachable: RFC 9309 says assume everything is disallowed.
             return f"robots.txt unavailable ({error})"

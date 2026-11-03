@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from newsletter import __version__
 from newsletter.sources.cache import CachedFeed, FeedCache
 from newsletter.sources.feed import FeedError, Item, ParsedFeed, parse_feed
-from newsletter.sources.http import Fetch, FetchError, check_url, http_get
+from newsletter.sources.http import Fetch, FetchError, check_url, follow_redirects, http_get
 from newsletter.sources.robots import RobotsPolicy
 
 DEFAULT_USER_AGENT = (
@@ -65,7 +65,7 @@ class RssSource:
         now = self.clock()
         if cached and cached.is_fresh(now):
             # The feed's own <ttl> or sy:updatePeriod says not to ask again yet.
-            return parse_feed(cached.body, url)
+            return parse_feed(cached.body, url, cached.final_url)
 
         if refusal := self.robots.refusal(url):
             raise FetchError(refusal)
@@ -75,16 +75,18 @@ class RssSource:
             headers["If-None-Match"] = cached.etag
         if cached and cached.last_modified:
             headers["If-Modified-Since"] = cached.last_modified
-        response = self.fetch(url, headers, self.timeout)
+        final_url, response = follow_redirects(
+            self.fetch, url, headers, self.timeout, before_hop=self._check_robots
+        )
 
         if response.status == 304 and cached:
             self._store(url, CachedFeed(**{**vars(cached), "fetched_at": now}))
-            return parse_feed(cached.body, url)
+            return parse_feed(cached.body, url, cached.final_url)
         if response.status != 200:
             raise FetchError(f"HTTP {response.status}")
 
         # Parse before caching so a broken body is never kept.
-        feed = parse_feed(response.body, url)
+        feed = parse_feed(response.body, url, final_url)
         self._store(
             url,
             CachedFeed(
@@ -93,9 +95,14 @@ class RssSource:
                 etag=response.headers.get("etag"),
                 last_modified=response.headers.get("last-modified"),
                 ttl_minutes=feed.ttl_minutes,
+                final_url=final_url,
             ),
         )
         return feed
+
+    def _check_robots(self, redirect_url: str) -> None:
+        if refusal := self.robots.refusal(redirect_url):
+            raise FetchError(f"{refusal} (redirected to {redirect_url})")
 
     def _store(self, url: str, entry: CachedFeed) -> None:
         if self.cache:
