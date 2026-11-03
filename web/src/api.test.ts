@@ -20,6 +20,15 @@ describe("sha256Hex", () => {
       "4a99557e4033c3539de2eb65472017cad5f9557f7a0625a09f1c3f6e2ba69c4c",
     );
   });
+
+  it("refuses with a clear reason when the page has no WebCrypto", async () => {
+    vi.stubGlobal("crypto", {});
+    const error = await sha256Hex("abc").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.message).toBe(
+      "approving needs a secure page: open it on https, localhost or 127.0.0.1",
+    );
+  });
 });
 
 describe("createApi", () => {

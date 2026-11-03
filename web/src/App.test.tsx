@@ -137,6 +137,15 @@ describe("flags", () => {
     expect(within(items[1]).queryByRole("link")).toBeNull();
   });
 
+  it("shows a source that is not a URL as text, without breaking the page", async () => {
+    const flag = { ...makeDraft().flags[0], id: "s4-c1", source_url: "not a url" };
+    await openDraft(fakeApi(makeDraft({ flags: [flag] })));
+    const item = within(screen.getByRole("region", { name: "Flags (1)" })).getByRole("listitem");
+    expect(item).toHaveTextContent("Source: not a url");
+    expect(within(item).queryByRole("link")).toBeNull();
+    expect(screen.getByRole("region", { name: "Run report" })).toBeInTheDocument();
+  });
+
   it("says when there are none", async () => {
     await openDraft(fakeApi(makeDraft({ flags: [] })));
     expect(screen.getByRole("region", { name: "Flags (0)" })).toHaveTextContent("No flagged claims.");
