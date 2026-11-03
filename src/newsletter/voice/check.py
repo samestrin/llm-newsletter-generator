@@ -13,9 +13,16 @@ from dataclasses import dataclass
 _URL = re.compile(r"https?://[^\s<>()\[\]\"“”]+")
 _URL_TRAILING = ".,;:!?'"
 _CLAIM_ID = re.compile(r"\b[A-Za-z][\w-]*\.c\d+\b")
-_QUOTE = re.compile(r"\"([^\"\n]+)\"|“([^”\n]+)”")
-# Digits joined by . , : - or / are one number, so "1,000" and "2026-11-02" stay whole.
-_NUMBER = re.compile(r"(?<![\w.])\d+(?:[.,:/-]\d+)*%?")
+# Double or single, straight or curly. A single quote must open after a non-letter and
+# close before one, so the apostrophes in "it's" and "writers'" do not pair up.
+_QUOTE = re.compile(r"\"([^\"\n]+)\"|“([^”\n]+)”|(?<!\w)'([^\n]+?)'(?!\w)|‘([^\n]+?)’(?!\w)")
+# One number is everything that changes its meaning: a sign (not the hyphen in "GPT-4"),
+# a currency, digits joined by . , : - or / (so "1,000" and "2026-11-02" stay whole),
+# a % or a unit written onto it ("3B"), and a magnitude word after it ("5 million").
+_NUMBER = re.compile(
+    r"(?<![\w.])(?:[$€£¥][-+−]?|[-+−][$€£¥]?)?(?:\d+(?:[.,:/-]\d+)*|\.\d+)"
+    r"(?:%|[A-Za-z]+\b)?(?:\s(?:thousand|million|billion|trillion)\b)?"
+)
 
 
 @dataclass(frozen=True)
@@ -29,13 +36,14 @@ class Facts:
 
 
 def extract_facts(text: str) -> Facts:
+    # Quotes are read whole from the text as written, links and all.
+    quotes = tuple(next(filter(None, match.groups())) for match in _QUOTE.finditer(text))
     urls = tuple(match.group().rstrip(_URL_TRAILING) for match in _URL.finditer(text))
-    # Each kind is cut out before the next is read, so the 42 in a URL or the 1 in
-    # `s1.c1` is not counted again as a number.
+    # Links and claim ids are cut out before numbers are read, so the 42 in a URL or the
+    # 1 in `s1.c1` is not counted again as a number.
     rest = _URL.sub(" ", text)
     claim_ids = tuple(_CLAIM_ID.findall(rest))
     rest = _CLAIM_ID.sub(" ", rest)
-    quotes = tuple(match.group(1) or match.group(2) for match in _QUOTE.finditer(rest))
     numbers = tuple(_NUMBER.findall(rest))
     return Facts(urls, quotes, numbers, claim_ids)
 
