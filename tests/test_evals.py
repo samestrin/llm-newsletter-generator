@@ -7,6 +7,7 @@ import pytest
 
 from newsletter.evals import (
     CASES_DIR,
+    CaseResult,
     ReplayClient,
     load_cases,
     main,
@@ -147,3 +148,10 @@ def test_output_creates_missing_folders(tmp_path):
 def test_load_cases_rejects_an_empty_folder(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_cases(Path(tmp_path))
+
+
+def test_faithfulness_needs_labels_even_when_claims_passed():
+    unlabelled = CaseResult("x", claims=4, supported=4, labelled=False)
+    assert unlabelled.faithfulness is None
+    labelled = CaseResult("x", claims=4, supported=4, planted=1, planted_passed=1, labelled=True)
+    assert labelled.faithfulness == 0.75

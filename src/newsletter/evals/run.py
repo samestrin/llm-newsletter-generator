@@ -15,7 +15,7 @@ Per case:
 - reference coverage: the reference issue's links the edition's supported claims cite
 
 The replay needs no network and no key. Live mode runs the same feeds against the models
-in the environment; it has no planted claims, so its faithfulness is the check's own share.
+in the environment; it has no planted claims, so its faithfulness is n/a.
 """
 
 import json
