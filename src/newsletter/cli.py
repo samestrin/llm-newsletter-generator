@@ -36,7 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Read RSS or Atom feeds, summarize each item with the fast model "
             "(NEWSLETTER_FAST_MODEL) and write the issue as Markdown, with a link per item "
-            "and a run report of anything that failed."
+            "and a run report of anything that failed. When YOURVOICE_API_KEY is set, the "
+            "summaries are rewritten in the writer's voice (see the README)."
         ),
     )
     issue.add_argument("feeds", nargs="+", metavar="FEED_URL", help="RSS or Atom feed URL")
