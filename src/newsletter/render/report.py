@@ -1,8 +1,9 @@
 """The run report: everything that failed, was left out or is in doubt, and what it cost.
 
 It is built from the feeds' failures, the edited issue (dropped claims, flagged claims,
-stories with nothing to show, the editor's own failure) and `LLMClient.report()`, whose
-steps and costs are used as they are, never recomputed. An unknown cost stays unknown.
+stories with nothing to show, the editor's own failure), the voice pass's
+`VoiceRun.report()` when there was one, and `LLMClient.report()`, whose steps and costs
+are used as they are, never recomputed. An unknown cost stays unknown.
 """
 
 from collections.abc import Mapping
@@ -52,6 +53,9 @@ class RunReport:
     """The sum of the known costs only."""
     cost_complete: bool = True
     failed_steps: list[str] = field(default_factory=list)
+    voice: dict[str, Any] = field(default_factory=dict)
+    """`VoiceRun.report()`: which texts are in the writer's voice and why the others are
+    not. Empty when no voice pass ran."""
 
     @property
     def unknown_costs(self) -> int:
@@ -67,6 +71,7 @@ class RunReport:
             or self.flagged_claims
             or self.editor_error
             or self.failed_steps
+            or not self.voice.get("ok", True)
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -78,9 +83,10 @@ def build_report(
     edition: Edition,
     stories: Mapping[str, list[Item]],
     usage: Mapping[str, Any],
+    voice: Mapping[str, Any] | None = None,
 ) -> RunReport:
-    """The report of one run. `stories` maps each story id to its source items, and
-    `usage` is `LLMClient.report()`."""
+    """The report of one run. `stories` maps each story id to its source items, `usage`
+    is `LLMClient.report()` and `voice` is `VoiceRun.report()`."""
     report = RunReport(
         failed_sources=list(failures),
         editor_error=edition.error,
@@ -89,6 +95,7 @@ def build_report(
         total_cost=usage.get("total_cost", 0.0),
         cost_complete=usage.get("cost_complete", True),
         failed_steps=list(usage.get("failed_steps", [])),
+        voice=dict(voice or {}),
     )
     for story in edition.stories:
         report.dropped_claims += story.dropped
