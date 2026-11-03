@@ -1,0 +1,10 @@
+{
+  "title": "Science weekly",
+  "topic": "science",
+  "date": "2026-11-03",
+  "feed_url": "https://space.example.org/feed.xml",
+  "planted_false": [
+    "s1.c3",
+    "s2.c3"
+  ]
+}

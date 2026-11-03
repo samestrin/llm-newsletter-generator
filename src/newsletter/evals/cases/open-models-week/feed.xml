@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Models Wire</title>
+    <link>https://models.example.org/</link>
+    <description>Example Models Wire</description>
+    <copyright>Copyright 2026 Example Models Wire. Headlines and links only.</copyright>
+    <item>
+      <title>Lab releases small open model</title>
+      <link>https://models.example.org/posts/tiny-3b</link>
+      <pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate>
+      <description>Example Lab released Tiny-3B, a 3 billion parameter language model, on Tuesday. The model is licensed under Apache 2.0. It scores 71 on the MMLU benchmark and runs on a laptop with 16 GB of memory.</description>
+    </item>
+    <item>
+      <title>Regulator opens consultation on model reporting</title>
+      <link>https://regulator.example.gov/news/model-reporting</link>
+      <pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate>
+      <description>The Digital Authority opened a public consultation on Monday about incident reporting for large AI models. Responses are due by 15 December. The proposal would apply to models trained with more than 10^26 operations.</description>
+    </item>
+    <item>
+      <title>Chipmaker announces inference accelerator</title>
+      <link>https://northwind.example.com/n200</link>
+      <pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate>
+      <description>Northwind announced the N200 inference accelerator on Wednesday. The company says it delivers twice the throughput of its previous chip at the same power. Shipping is planned for the second quarter of next year.</description>
+    </item>
+  </channel>
+</rss>
