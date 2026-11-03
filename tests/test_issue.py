@@ -342,3 +342,18 @@ def test_a_neutral_voice_says_why_and_is_ok_when_no_key_is_set():
 
     assert r"Neutral voice: YOURVOICE\_API\_KEY is not set." in report
     assert issue.ok
+
+
+def test_an_issue_with_nothing_to_voice_has_no_voice_line():
+    issue = Issue(
+        title="AI Weekly",
+        topic="AI",
+        issue_date=date(2026, 11, 3),
+        stories=[Story(item(), summary="")],
+        voice={"enabled": True, "skipped": None, "voiced": [], "kept_neutral": [], "ok": True},
+    )
+
+    report = render_markdown(issue).split("## Run report", 1)[1]
+
+    assert "Writer's voice" not in report
+    assert "Kept neutral" not in report

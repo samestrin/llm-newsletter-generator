@@ -281,6 +281,60 @@ def test_a_profile_with_no_usable_style_is_a_failure(tmp_path, samples, reply):
     assert model.requests == []
 
 
+def test_a_default_profile_sent_with_an_error_is_a_failure(tmp_path, samples):
+    # The API answers a failed profile with a default one plus an `error`; never use it.
+    reply = {
+        "document_count": 1,
+        "results": [{"style_prompt": "A generic default voice.", "error": "input too large"}],
+    }
+    result, _, model = run(tmp_path, samples, api=FakeYourVoice(reply))
+
+    assert result.texts == {"1": NEUTRAL}
+    [kept] = result.report()["kept_neutral"]
+    assert kept["reason"].startswith("voice profile failed: ")
+    assert model.requests == []
+
+
+def test_a_style_shared_by_several_samples_is_sent_once(tmp_path, samples):
+    _, api, model = run(tmp_path, samples)
+
+    assert len(json.loads(api.requests[0].content)["texts"]) == 2
+    [call] = model.requests
+    prompt = "\n".join(m["content"] for m in call["messages"])
+    assert prompt.count(STYLE) == 1
+
+
+@pytest.mark.parametrize("cached", [{"style": 5}, {"style": ""}, {"style": "  "}])
+def test_a_cache_without_a_usable_style_is_rebuilt(tmp_path, samples, cached):
+    api = FakeYourVoice()
+    run(tmp_path, samples, api=api)
+    for path in (tmp_path / "cache").iterdir():
+        path.write_text(json.dumps(cached), encoding="utf-8")
+
+    result, _, _ = run(tmp_path, samples, api=api)
+
+    assert len(api.requests) == 2
+    assert result.texts == {"1": VOICED}
+
+
+def test_a_blank_sample_file_is_not_sent(tmp_path, samples):
+    (samples / "blank.md").write_text("  \n\t\n", encoding="utf-8")
+
+    _, api, _ = run(tmp_path, samples)
+
+    assert json.loads(api.requests[0].content) == {
+        "texts": ["I write short. I like it.", "Another post of mine."]
+    }
+
+
+def test_a_blank_text_is_not_rewritten(tmp_path, samples):
+    result, _, model = run(tmp_path, samples, texts={"1": "  \n"})
+
+    assert result.texts == {"1": "  \n"}
+    assert model.requests == []
+    assert result.report()["voiced"] == [] and result.report()["kept_neutral"] == []
+
+
 def test_a_failed_rewrite_of_one_text_keeps_the_others(tmp_path, samples):
     texts = {"1": NEUTRAL, "2": "It costs $5."}
     model = FakeModel(VOICED)
