@@ -6,12 +6,13 @@
 - Every image the README shows is committed.
 """
 
+import json
 import re
 from pathlib import Path
 
 import readme_issue
-
 from newsletter.evals.cli import main as eval_main
+from newsletter.evals.run import CASES_DIR
 
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
@@ -41,12 +42,16 @@ def test_the_readme_eval_table_is_the_one_in_results_md():
 
 
 def test_the_screenshotted_issue_is_what_the_renderer_makes():
-    assert readme_issue.FIXTURE.read_text(encoding="utf-8") == readme_issue.render()
+    for name, text in readme_issue.render().items():
+        assert (readme_issue.FIXTURES / name).read_text(encoding="utf-8") == text, name
 
 
-def test_the_screenshotted_issue_shows_a_flagged_planted_claim():
-    html = readme_issue.render()
-    assert "Flagged: unsupported" in html
+def test_the_screenshotted_issue_shows_its_planted_claims_flagged():
+    fixtures = readme_issue.render()
+    assert "Flagged: unsupported" in fixtures["issue.html"]
+    flagged = {flag["id"] for flag in json.loads(fixtures["draft.json"])["flags"]}
+    planted = json.loads((CASES_DIR / readme_issue.CASE / "case.json").read_text())
+    assert flagged == set(planted["planted_false"])
 
 
 def test_every_readme_image_is_committed():
