@@ -20,6 +20,7 @@ from newsletter.render import (
     Newsletter,
     RunReport,
     build_report,
+    markdown_text,
     render_html,
     render_markdown,
     safe_url,
@@ -171,8 +172,82 @@ def test_markdown_links_are_all_story_sources():
     hrefs = re.findall(r"\]\(<([^>]*)>\)", markdown)
     assert hrefs
     assert set(hrefs) <= source_links()
-    # No link outside the `[text](<url>)` form slips past the check above.
+    # No inline link outside the `[text](<url>)` form slips past the check above. Bare
+    # URLs, which a GFM viewer would also link, are covered by the autolink tests below.
     assert markdown.count("](") == len(hrefs)
+
+
+def text_outside_links_and_code(markdown):
+    """The Markdown with link destinations and code spans taken out."""
+    markdown = re.sub(r"\]\(<[^>]*>\)", "]()", markdown)
+    return re.sub(r"(`+).*?\1", "", markdown)
+
+
+# What a GFM viewer turns into a link when it is not escaped.
+AUTOLINKS = [
+    re.compile(r"(?<!\\):(?=//)"),
+    re.compile(r"(?i)\bwww(?=\.)"),
+    re.compile(r"(?<!\\)@"),
+]
+
+URL_TEXT = "See https://evil.example/one, www.evil.example and me@evil.example."
+
+
+def test_a_url_in_feed_or_model_text_is_not_turned_into_a_link_in_markdown():
+    s1 = CheckedStory("s1", [checked("s1.c1", URL_TEXT, S1_LINK)])
+    the_edition = Edition(
+        [s1],
+        lead="s1",
+        themes=[Theme(f"Theme: {URL_TEXT}", ["s1.c1"])],
+        intro=Prose(f"Intro: {URL_TEXT}", ["s1.c1"]),
+        why_it_matters={"s1": Prose(f"Why: {URL_TEXT}", ["s1.c1"])},
+    )
+    failures = [FeedFailure("https://broken.example/feed.xml", f"Failure: {URL_TEXT}")]
+    markdown = render_markdown(newsletter(the_edition, failures))
+    for prefix in ("Theme", "Intro", "Why", "Failure"):
+        assert f"{prefix}: See https" in markdown
+    text = text_outside_links_and_code(markdown)
+    for autolink in AUTOLINKS:
+        assert not autolink.search(text), autolink.pattern
+    assert "https\\://evil.example/one" in markdown
+
+
+@pytest.mark.parametrize(
+    "text, escaped",
+    [
+        ("https://a.example/x", "https\\://a.example/x"),
+        ("ftp://a.example", "ftp\\://a.example"),
+        ("WWW.a.example", "WWW\\.a.example"),
+        ("mailto:me@a.example", "mailto:me\\@a.example"),
+        ("a: b // c", "a: b // c"),
+        ("awww.a.example", "awww.a.example"),
+    ],
+)
+def test_markdown_text_breaks_autolinks(text, escaped):
+    assert markdown_text(text) == escaped
+
+
+def test_a_pipe_in_a_failure_reason_does_not_break_the_report():
+    failures = [FeedFailure("https://broken.example/feed.xml", "HTTP 503 | retry later")]
+    markdown = render_markdown(newsletter(failures=failures))
+    assert "HTTP 503 \\| retry later" in markdown
+
+
+def test_angle_brackets_in_a_link_are_encoded_and_the_link_kept():
+    url = "https://ok.example/a<b>c"
+    stories = {"s1": [item(url, "Odd link")]}
+    the_edition = Edition([CheckedStory("s1", [checked("s1.c1", "A claim.", url)])])
+    report = build_report([], the_edition, stories, {})
+    markdown = render_markdown(Newsletter("T", date(2026, 11, 3), the_edition, stories, report))
+    assert "(<https://ok.example/a%3Cb%3Ec>)" in markdown
+    assert "a<b>c" not in markdown
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_a_story_with_no_claims_left_is_not_shown_in_the_body(render):
+    out = render(newsletter())
+    body = out[: out.index("Run report")]
+    assert "A story that failed" not in body
 
 
 @pytest.mark.parametrize("render", [render_html, render_markdown])
