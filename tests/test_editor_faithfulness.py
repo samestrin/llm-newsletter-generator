@@ -13,7 +13,7 @@ from newsletter.editor import (
     check_claims,
     parse_check,
 )
-from newsletter.llm import LLMClient, Settings
+from newsletter.llm import ConfigError, LLMClient, Settings
 
 TRUE = Claim(
     id="s1.c1",
@@ -251,3 +251,11 @@ def test_a_story_keeps_its_dropped_claims_and_error_from_the_summary_step():
     assert second.error == "HTTP 500"
     assert second.claims == []
     assert len(model.requests) == 1
+
+
+def test_a_missing_fast_model_is_a_config_error_not_an_unparsable_reply():
+    settings = Settings.from_env({"NEWSLETTER_BASE_URL": "http://model.test/v1"})
+    llm = LLMClient(settings, transport=httpx.MockTransport(FakeModel()))
+
+    with pytest.raises(ConfigError, match="no fast model"):
+        check_claim(TRUE, llm)
