@@ -1,0 +1,106 @@
+{#- Every {{ value }} is Markdown-escaped unless a filter (url, code, markdown) built it. -#}
+{% macro cites(list) %}{% for c in list %} {% if c.url %}[{{ c.number }}]({{ c.url|url }}){% else %}\[{{ c.number }}\]{% endif %}{% endfor %}{% endmacro %}
+{% macro link(title, url) %}{% if url %}[{{ title }}]({{ url|url }}){% else %}{{ title }}{% endif %}{% endmacro %}
+# {{ title }}
+
+*{{ date }}*
+
+{% if editor_failed %}
+*The editor pass failed, so the stories are in their original order with no intro. See the run report.*
+
+{% endif %}
+{% if intro %}
+{{ intro.text }}{{ cites(intro.cites)|markdown }}
+
+{% endif %}
+{% if themes %}
+**Themes**
+
+{% for name, theme_cites in themes %}
+- {{ name }}{{ cites(theme_cites)|markdown }}
+{% endfor %}
+
+{% endif %}
+{% if not stories %}
+No stories this time. See the run report.
+
+{% endif %}
+{% for story in stories %}
+## {% if story.lead %}Lead story: {% endif %}{{ link(story.title, story.url)|markdown }}
+
+*{{ story.byline }}*
+
+{% if story.why %}
+**Why it matters:** {{ story.why.text }}{{ cites(story.why.cites)|markdown }}
+
+{% endif %}
+{% for claim in story.claims %}
+- \[{{ claim.number }}\] {% if claim.flag %}**{{ claim.flag }}.** {% endif %}{{ claim.text }}{% if claim.url %} ([source]({{ claim.url|url }})){% endif +%}
+{% endfor %}
+
+{% if story.also %}
+Also covered by: {% for source in story.also %}{{ link(source.title, source.url)|markdown }} ({{ source.feed }}){% if not loop.last %}, {% endif %}{% endfor +%}
+
+{% endif %}
+{% endfor %}
+## Run report
+
+{% if report.ok %}
+Every feed was read, every story and claim was used, and every claim was supported.
+
+{% endif %}
+{% if report.failed_sources %}
+**Feeds and entries left out**
+
+{% for failure in report.failed_sources %}
+- {{ failure.url|code }}: {{ failure.reason }}
+{% endfor %}
+
+{% endif %}
+{% if report.editor_error %}
+**Editor pass failed:** {{ report.editor_error }}
+
+{% endif %}
+{% if report.editor_rejections %}
+**Editor replies rejected**
+
+{% for rejection in report.editor_rejections %}
+- {{ rejection }}
+{% endfor %}
+
+{% endif %}
+{% if dropped_stories %}
+**Stories dropped**
+
+{% for story, url in dropped_stories %}
+- {{ link(story.title, url)|markdown }}: {{ story.reason }}
+{% endfor %}
+
+{% endif %}
+{% if report.dropped_claims %}
+**Claims dropped**
+
+{% for claim in report.dropped_claims %}
+- {{ claim.id|code }} {{ claim.text }} ({{ claim.reason }})
+{% endfor %}
+
+{% endif %}
+{% if report.flagged_claims %}
+**Claims flagged**
+
+{% for claim in report.flagged_claims %}
+- {{ claim.id|code }} {{ claim.status }}: {{ claim.text }} ({{ claim.reason }})
+{% endfor %}
+
+{% endif %}
+{% if steps %}
+| Step | Tier | Model | Tokens in | Tokens out | Cost | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+{% for step in steps %}
+| {{ step.step }} | {{ step.tier }} | {{ step.model }} | {{ step.tokens_in }} | {{ step.tokens_out }} | {{ step.cost }} | {{ step.result }} |
+{% endfor %}
+
+{{ total }}
+{% else %}
+No model calls were made.
+{% endif %}
