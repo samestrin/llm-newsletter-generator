@@ -110,7 +110,9 @@ def fake_llm():
         models={"fast": "fast-model-1", "reasoning": "think-model-2"},
         max_retries=0,
     )
-    llm = LLMClient(settings, retry_backoff=0, transport=httpx.MockTransport(lambda r: next(replies)))
+    llm = LLMClient(
+        settings, retry_backoff=0, transport=httpx.MockTransport(lambda r: next(replies))
+    )
     message = [{"role": "user", "content": "x"}]
     llm.complete("claims-s1", message, tier="fast")
     llm.complete("check-s1.c1", message, tier="fast")
@@ -262,6 +264,7 @@ def test_a_quote_in_a_safe_url_cannot_break_out_of_the_attribute():
         "https://",
         "https://ok.example/a b",
         "https://ok.example/a\nb",
+        "http://[::1",
         "",
     ],
 )
@@ -284,7 +287,9 @@ def test_a_flagged_claim_is_marked_in_markdown():
     lines = markdown.splitlines()
 
     def line_of(claim):
-        return next(line for line in lines if claim.claim.text[:20] in line)
+        # The text before any markup, which the Markdown escapes.
+        start = claim.claim.text.split("<")[0]
+        return next(line for line in lines if start in line)
 
     assert "Flagged: unsupported" in line_of(S1_FALSE)
     assert "Flagged: unchecked" in line_of(S2_UNCHECKED)
@@ -412,3 +417,44 @@ def test_an_issue_with_nothing_to_show_says_so(render):
     assert "No stories this time" in out
     assert "No model calls were made." in out
     assert "HTTP 503" in out
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_a_status_with_no_label_is_still_flagged(render):
+    odd = CheckedClaim(Claim("s2.c1", "An odd claim.", "p", S2_LINK), "disputed", "r")
+    story = Edition([CheckedStory("s2", [odd])])
+    out = render(Newsletter("T", date(2026, 11, 3), story, STORIES, RunReport()))
+    line = next(line for line in out.splitlines() if "An odd claim." in line)
+    assert "Flagged: disputed" in line
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_a_story_with_no_source_items_is_shown_by_id_with_no_link(render):
+    story = Edition([CheckedStory("s9", [checked("s9.c1", "A claim.", S1_LINK)])])
+    out = render(Newsletter("T", date(2026, 11, 3), story, {}, RunReport()))
+    assert "s9" in out
+    assert out.count(S1_LINK) == 1
+
+
+def test_markdown_code_spans_survive_backticks():
+    failure = FeedFailure("https://x.example/`a``b", "HTTP 404")
+    report = build_report([failure], Edition([]), {}, {})
+    markdown = render_markdown(Newsletter("T", date(2026, 11, 3), Edition([]), {}, report))
+    assert "``` https://x.example/`a``b ```" in markdown
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_rejected_editor_replies_are_in_the_rendered_report(render):
+    the_edition = edition()
+    the_edition.rejections.append("edit: unknown claim id 'zz'")
+    out = render(newsletter(the_edition))
+    assert "unknown claim id" in out[out.index("Run report") :]
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_a_clean_run_says_so(render):
+    story = Edition([CheckedStory("s2", [S2_TRUE])])
+    report = build_report([], story, STORIES, {})
+    out = render(Newsletter("T", date(2026, 11, 3), story, STORIES, report))
+    assert "Every feed was read" in out
+    assert "Flagged" not in out
