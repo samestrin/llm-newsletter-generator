@@ -5,8 +5,18 @@ from pathlib import Path
 import pytest
 
 import newsletter.archive.site as site_module
-from newsletter.archive import ArchiveError, build_site, issue_path
+from newsletter.archive import (
+    Approval,
+    ApprovalError,
+    ArchiveError,
+    build_site,
+    demo_approval,
+    human_approval,
+    issue_path,
+)
+from newsletter.archive.site import _text
 from newsletter.issue import Issue, Story
+from newsletter.render import FLAG_LABELS
 from newsletter.sources import FeedFailure, Item
 
 API_KEY = "sk-test-SECRET-archive-0123456789"
@@ -212,10 +222,10 @@ def test_a_failed_build_leaves_the_previous_site_untouched(tmp_path, monkeypatch
 
     real = site_module.render_issue
 
-    def boom(issue):
+    def boom(issue, **options):
         if issue.issue_date == date(2026, 11, 4):
             raise RuntimeError("disk full")
-        return real(issue)
+        return real(issue, **options)
 
     monkeypatch.setattr(site_module, "render_issue", boom)
     with pytest.raises(RuntimeError, match="disk full"):
@@ -311,3 +321,53 @@ def test_a_page_path_outside_the_site_fails_the_build(tmp_path):
     assert {p: p.read_bytes() for p in pages(out)} == before
     assert sorted(p.name for p in tmp_path.iterdir()) == ["site"]
     assert not list(tmp_path.parent.glob("escape*"))
+
+
+DEMO_LABEL = "Automated demo"
+
+
+def test_every_page_of_a_demo_build_carries_a_visible_automated_demo_label(tmp_path):
+    out = tmp_path / "site"
+    build_site([fixture_issue(), seeded_issue()], out, approval=demo_approval())
+
+    for path in pages(out):
+        text = path.read_text(encoding="utf-8")
+        body = text[text.index("<body>") :]
+        assert body.index(DEMO_LABEL) < body.index("<h1>"), f"label first on {path}"
+        assert "no human" in body
+
+
+def test_a_demo_build_flags_every_summary_as_unchecked(tmp_path):
+    out = tmp_path / "site"
+    build_site([fixture_issue()], out, approval=demo_approval())
+
+    text = (out / "issues/2026-11-03/index.html").read_text(encoding="utf-8")
+    articles = text.split("<article>")[1:]
+    assert len(articles) == 2
+    flag = _text(FLAG_LABELS["unchecked"])
+    for article, summary in zip(articles, ("First summary.", "Second."), strict=True):
+        assert flag in article and article.index(flag) < article.index(summary)
+
+
+def test_a_demo_build_still_reports_a_failed_summary(tmp_path):
+    out = tmp_path / "site"
+    build_site([seeded_issue()], out, approval=demo_approval())
+
+    text = (out / "issues/2026-11-04/index.html").read_text(encoding="utf-8")
+    assert "Summary failed" in text
+    assert "feeds.example.net: 3 problems" in text
+
+
+def test_a_human_approved_build_has_no_demo_label(tmp_path):
+    out = tmp_path / "site"
+    build_site([fixture_issue()], out, approval=human_approval("the text"))
+
+    for path in pages(out):
+        assert DEMO_LABEL not in path.read_text(encoding="utf-8")
+
+
+def test_a_build_with_an_unknown_approval_fails_and_writes_nothing(tmp_path):
+    out = tmp_path / "site"
+    with pytest.raises(ApprovalError):
+        build_site([fixture_issue()], out, approval=Approval(kind="auto", sha256=None))
+    assert not out.exists()
