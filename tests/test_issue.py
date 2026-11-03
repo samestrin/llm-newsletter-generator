@@ -106,8 +106,10 @@ def test_an_issue_from_fixture_feeds_links_every_item():
 
     assert markdown.startswith("# AI Weekly\n")
     assert "2026-11-03" in markdown
-    links = LINK.findall(markdown)
-    assert links == [
+    stories = markdown.split("## Sources", 1)[0]
+    headings = [line for line in stories.splitlines() if line.startswith("## ")]
+    assert all(LINK.fullmatch(h.removeprefix("## ")) for h in headings)
+    assert LINK.findall(stories) == [
         "https://example.com/posts/open-model",
         "https://example.com/posts/benchmarks",
         "https://lab.example.org/scaling",
@@ -204,7 +206,9 @@ def test_feed_rights_are_credited():
     )
     markdown = render_markdown(issue)
 
-    assert "Example AI News" in markdown and "Example Lab Blog" in markdown
+    sources = markdown.split("## Sources", 1)[1].split("## Run report", 1)[0]
+    assert LINK.findall(sources) == [RSS, ATOM]
+    assert "Example AI News" in sources and "Example Lab Blog" in sources
     assert "Copyright 2026 Example Media. Headlines and links only." in markdown
     assert "CC BY 4.0" in markdown
 
