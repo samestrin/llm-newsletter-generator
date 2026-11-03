@@ -75,8 +75,12 @@ class Issue:
 
 
 def summarize(items: list[Item], llm: LLMClient, *, topic: str) -> list[Story]:
-    """One `fast` model call per item. A failed call is kept on the story, not raised."""
-    template = load_prompt("item")
+    """One `fast` model call per item. A failed call is kept on the story, not raised.
+
+    The prompt lives in `prompts/summary.md` while this legacy writer is still the one the
+    `newsletter issue` command runs; the editor pass replaces it in epic 03 T6.
+    """
+    template = load_prompt("summary")
     stories = []
     for number, item in enumerate(items, start=1):
         story = Story(item)

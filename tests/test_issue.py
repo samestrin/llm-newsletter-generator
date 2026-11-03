@@ -294,8 +294,8 @@ def test_fill_rejects_a_missing_value():
         fill("about {{ topic }}")
 
 
-def test_the_item_prompt_ships_with_the_package():
-    prompt = load_prompt("item")
+def test_the_summary_prompt_ships_with_the_package():
+    prompt = load_prompt("summary")
     assert {"topic", "item_title", "item_description"} <= set(
         re.findall(r"\{\{\s*(\w+)\s*\}\}", prompt)
     )
