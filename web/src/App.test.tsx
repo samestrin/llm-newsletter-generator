@@ -229,6 +229,21 @@ describe("edit and approve", () => {
     expect(screen.getByTestId("approval")).toHaveTextContent("Not approved");
   });
 
+  it("reloads the draft after a conflict, then approves the new text", async () => {
+    const { api, user } = await openDraft();
+    api.change("someone else's text");
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: "Reload" }));
+    expect(await screen.findByTestId("draft-text")).toHaveTextContent("someone else's text");
+    expect(screen.queryByRole("alert")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    expect(await screen.findByTestId("approval")).toHaveTextContent(/^Approved/);
+    expect(api.calls.filter((c) => c.method === "POST").at(-1)?.body).toEqual({
+      sha256: await sha("someone else's text"),
+    });
+  });
+
   it("shows a failed save and keeps the edit", async () => {
     const api = fakeApi(makeDraft());
     const { user } = await openDraft(api);

@@ -36,22 +36,35 @@ test("flags and the run report are visible", async ({ page }) => {
 });
 
 test("edit, then approve, and both are kept by the API", async ({ page }) => {
+  const approve = page.getByRole("button", { name: "Approve", exact: true });
   await openDraft(page);
-  await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByTestId("approval")).toHaveText(/^Approved/);
 
   await page.getByRole("button", { name: "Edit" }).click();
   await page.getByLabel("Draft text").fill("# AI Weekly\n\nEdited by the reviewer.");
-  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+  await expect(approve).toBeDisabled();
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("draft-text")).toContainText("Edited by the reviewer.");
   await expect(page.getByTestId("approval")).toHaveText("Not approved");
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await approve.click();
   await expect(page.getByTestId("approval")).toHaveText(/^Approved/);
 
   // A fresh load reads it back from the API: the edit and the approval were stored.
   await openDraft(page);
   await expect(page.getByTestId("draft-text")).toContainText("Edited by the reviewer.");
   await expect(page.getByTestId("approval")).toHaveText(/^Approved/);
+});
+
+test("an edit after approval clears it", async ({ page }) => {
+  await openDraft(page);
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByTestId("approval")).toHaveText(/^Approved/);
+
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByLabel("Draft text").fill("Changed after approval.");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("approval")).toHaveText("Not approved");
+
+  await openDraft(page);
+  await expect(page.getByTestId("approval")).toHaveText("Not approved");
 });
