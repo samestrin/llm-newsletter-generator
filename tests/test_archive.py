@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -21,7 +21,7 @@ def item(title="A story", link="https://example.com/a", feed="https://example.co
         title=title,
         link=link,
         summary="Some text.",
-        published=datetime(2026, 11, 2, 9, 0, tzinfo=timezone.utc),
+        published=datetime(2026, 11, 2, 9, 0, tzinfo=UTC),
         feed_url=feed,
         feed_title="Example News",
         rights="CC BY 4.0",
@@ -158,7 +158,9 @@ def test_markup_and_dot_dot_slug_render_as_text_inside_the_site(tmp_path):
     page = out / "issues/2026-11-04/index.html"
     text = page.read_text(encoding="utf-8")
     assert "<script" not in text and "<b>" not in text
-    assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&lt;b&gt;Bold&lt;/b&gt; &amp; co" in text
+    assert (
+        "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&lt;b&gt;Bold&lt;/b&gt; &amp; co" in text
+    )
     assert "../../escape" in text
     assert "script" not in parse(page).tags and "b" not in parse(page).tags
 
@@ -181,7 +183,14 @@ def test_secrets_do_not_appear_in_any_page(tmp_path):
 
     for path in pages(out):
         text = path.read_text(encoding="utf-8")
-        for secret in (API_KEY, "SECRET", "bad request", SECRET_PATH, "secret.json", "model.internal"):
+        for secret in (
+            API_KEY,
+            "SECRET",
+            "bad request",
+            SECRET_PATH,
+            "secret.json",
+            "model.internal",
+        ):
             assert secret not in text, (path, secret)
 
 
@@ -242,3 +251,45 @@ def test_an_empty_archive_has_an_index(tmp_path):
     build_site([], out)
 
     assert "No issues yet" in (out / "index.html").read_text(encoding="utf-8")
+
+
+def test_a_malformed_link_is_left_out_without_failing_the_build(tmp_path):
+    out = tmp_path / "site"
+    bad = [
+        Story(item("Bad port", link="https://example.com:99999/x"), summary="ok"),
+        Story(item("Bad host", link="http://[::1/x", feed="https://[::1/feed"), summary="ok"),
+        Story(item("IPv6", link="http://[::1]:8080/x", feed="http://[::1]:8080/f"), summary="ok"),
+    ]
+    build_site([fixture_issue(stories=bad)], out)
+
+    hrefs = parse(out / "issues/2026-11-03/index.html").hrefs
+    assert "https://example.com:99999/x" not in hrefs
+    assert "http://[::1]:8080/x" in hrefs
+    assert "http://[::1]:8080/" in hrefs
+
+
+def test_a_failed_swap_puts_the_previous_site_back(tmp_path, monkeypatch):
+    out = tmp_path / "site"
+    build_site([fixture_issue()], out)
+    before = {p: p.read_bytes() for p in pages(out)}
+
+    real = site_module.os.rename
+
+    def rename(src, dst):
+        if Path(src).name.startswith(".site-build-"):
+            raise OSError("rename failed")
+        real(src, dst)
+
+    monkeypatch.setattr(site_module.os, "rename", rename)
+    with pytest.raises(OSError, match="rename failed"):
+        build_site([fixture_issue(date(2026, 11, 5))], out)
+
+    assert {p: p.read_bytes() for p in pages(out)} == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["site"]
+
+
+def test_a_story_with_no_text_says_so(tmp_path):
+    out = tmp_path / "site"
+    build_site([fixture_issue(stories=[Story(item("Quiet"))])], out)
+
+    assert "no text" in (out / "issues/2026-11-03/index.html").read_text(encoding="utf-8")

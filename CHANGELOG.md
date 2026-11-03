@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `newsletter.archive.build_site(issues, site_dir)` renders approved issues to a static site: an index and one page per issue at `issues/YYYY-MM-DD/index.html`. All feed and model text is HTML-escaped, only http and https links are rendered, the run report shows problems by feed host and count only, and the site is built in a temp dir and swapped in only when complete.
 - Rewrote `README.md` for the new package: install with `uv`, the `newsletter` CLI, and the `NEWSLETTER_*` environment settings; dropped the version badge.
 - `newsletter issue FEED_URL...` drafts a plain issue: one fast-model summary and one link per feed item, credits each feed, and ends with a run report of failed feeds, dropped entries and model calls with their tokens and cost. It exits 1 when anything failed.
 - The prompt templates moved from `prompts/` to `src/newsletter/prompts/` so they ship with the package.
