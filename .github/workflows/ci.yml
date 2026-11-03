@@ -43,3 +43,25 @@ jobs:
             web/playwright-report
             web/test-results
           retention-days: 7
+
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      NEWSLETTER_API_TOKEN: smoke-test-token
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up --build --wait --wait-timeout 300
+      - name: The page is served
+        run: curl -fsS http://localhost:8080/ | grep -q '<div id="root">'
+      - name: The page reaches the API through its own origin
+        run: curl -fsS http://localhost:8080/api/health | grep -q '"ok"'
+      - name: The API refuses a call without the token
+        run: test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/drafts)" = 401
+      - name: The API answers with the token
+        run: |
+          curl -fsS -H "Authorization: Bearer $NEWSLETTER_API_TOKEN" http://localhost:8080/api/drafts
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+      - run: docker compose down --volumes
+        if: always()

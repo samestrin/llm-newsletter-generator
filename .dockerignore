@@ -1,0 +1,13 @@
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+.git
+.venv
+.planning
+.claude
+__pycache__
+*.pyc
+.ruff_cache
+.pytest_cache
+.env
