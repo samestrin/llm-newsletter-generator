@@ -8,6 +8,7 @@ is fetched.
 
 import argparse
 import logging
+import os
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import date
@@ -78,6 +79,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="approve with an automated-demo record and label every page; required",
     )
+
+    serve = commands.add_parser(
+        "serve",
+        help="run the API that drafts issues for review",
+        description=(
+            "Serve the HTTP API: run an issue as a background job, list, edit and approve "
+            "drafts. Needs NEWSLETTER_API_TOKEN; binds 127.0.0.1:8000 unless told otherwise "
+            "(see the README)."
+        ),
+    )
+    serve.add_argument("--host", help="bind address (NEWSLETTER_API_HOST, default 127.0.0.1)")
+    serve.add_argument("--port", type=int, help="port (NEWSLETTER_API_PORT, default 8000)")
     return parser
 
 
@@ -97,7 +110,31 @@ def main(
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     if args.command == "archive":
         return _archive(args, env, fetch, llm_transport, voice_transport)
+    if args.command == "serve":
+        return _serve(args, env)
     return _issue(args, env, fetch, llm_transport, voice_transport)
+
+
+def _serve(args, env) -> int:
+    import uvicorn
+
+    from newsletter.api import ApiSettings, create_app
+
+    env = dict(os.environ if env is None else env)
+    if args.host:
+        env["NEWSLETTER_API_HOST"] = args.host
+    if args.port is not None:
+        env["NEWSLETTER_API_PORT"] = str(args.port)
+    try:
+        settings = ApiSettings.from_env(env)
+    except ConfigError as error:
+        print(f"newsletter: {error}", file=sys.stderr)
+        return 2
+    if not settings.token:
+        print("newsletter: set NEWSLETTER_API_TOKEN before serving the API", file=sys.stderr)
+        return 2
+    uvicorn.run(create_app(settings), host=settings.host, port=settings.port)
+    return 0
 
 
 def _issue(args, env, fetch, llm_transport, voice_transport) -> int:
