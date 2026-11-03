@@ -79,7 +79,7 @@ def summarize(items: list[Item], llm: LLMClient, *, topic: str) -> list[Story]:
     """One `fast` model call per item. A failed call is kept on the story, not raised.
 
     The prompt lives in `prompts/summary.md` while this legacy writer is still the one the
-    `newsletter issue` command runs; the editor pass replaces it in epic 03 T6.
+    `newsletter archive` command runs; `newsletter issue` runs the editor pass.
     """
     template = load_prompt("summary")
     stories = []
@@ -106,6 +106,19 @@ def summarize(items: list[Item], llm: LLMClient, *, topic: str) -> list[Story]:
     return stories
 
 
+def first_per_feed(items: list[Item], per_feed: int | None) -> list[Item]:
+    """The first `per_feed` items of each feed, in their order; all of them when None."""
+    if per_feed is None:
+        return list(items)
+    kept: Counter[str] = Counter()
+    first = []
+    for item in items:
+        kept[item.feed_url] += 1
+        if kept[item.feed_url] <= per_feed:
+            first.append(item)
+    return first
+
+
 def make_issue(
     urls: list[str],
     *,
@@ -123,14 +136,7 @@ def make_issue(
     if per_feed is not None and per_feed < 1:
         raise ValueError(f"per_feed must be at least 1, got {per_feed}")
     collected = source.collect(urls)
-    items = collected.items
-    if per_feed is not None:
-        kept = Counter()
-        items = []
-        for item in collected.items:
-            kept[item.feed_url] += 1
-            if kept[item.feed_url] <= per_feed:
-                items.append(item)
+    items = first_per_feed(collected.items, per_feed)
     stories = summarize(items, llm, topic=topic)
     return Issue(
         title=title,

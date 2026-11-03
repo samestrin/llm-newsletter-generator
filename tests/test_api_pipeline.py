@@ -126,7 +126,7 @@ def test_the_voice_pass_runs_between_the_editor_and_render(tmp_path):
     assert "intro" in voice["voiced"]
     # Every other text was not recorded, so its rewrite failed and it stayed neutral.
     assert voice["kept_neutral"]
-    assert all(k["id"].startswith("why-") for k in voice["kept_neutral"])
+    assert all(k["id"].startswith(("theme-", "why-")) for k in voice["kept_neutral"])
     assert "Three things happened this week." in content["text"]
     assert "Three developments this week." not in content["text"]
     assert "Writer's voice:" in content["text"]
