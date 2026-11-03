@@ -141,17 +141,22 @@ def parse_claims(reply: str) -> list[Any]:
 
     Each claim is checked separately by the caller, so one bad claim drops only itself.
     """
+    data = read_json(reply)
+    if not isinstance(data, dict) or not isinstance(data.get("claims"), list):
+        raise ValueError("no list of claims")
+    return data["claims"]
+
+
+def read_json(reply: str) -> Any:
+    """The JSON value of a model reply, which may be wrapped in a code fence."""
     text = reply.strip()
     fenced = _FENCE.match(text)
     if fenced:
         text = fenced.group(1)
     try:
-        data = json.loads(text)
+        return json.loads(text)
     except json.JSONDecodeError as error:
         raise ValueError(f"not JSON ({error.msg})") from None
-    if not isinstance(data, dict) or not isinstance(data.get("claims"), list):
-        raise ValueError("no list of claims")
-    return data["claims"]
 
 
 def _fields(raw: Any) -> tuple[str, str, str | None]:
