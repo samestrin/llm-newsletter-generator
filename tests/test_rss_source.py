@@ -198,3 +198,80 @@ def test_a_malformed_url_is_reported():
     result = RssSource(fetch=FakeWeb({})).collect(["http://[not-a-host/feed"])
     assert [f.url for f in result.failures] == ["http://[not-a-host/feed"]
     assert result.failures[0].reason.startswith("bad URL")
+
+
+def redirect(location: str, code: int = 302) -> HttpResponse:
+    return HttpResponse(status=code, headers={"location": location}, body=b"")
+
+
+def test_a_redirect_is_followed_and_links_resolve_against_the_final_url():
+    final = "https://cdn.example.net/feeds/main.xml"
+    body = (
+        b'<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>'
+        b"<item><title>R</title><link>posts/r</link></item></channel></rss>"
+    )
+    web = FakeWeb({RSS: redirect(final, 301), final: ok(body)})
+    result = RssSource(fetch=web).collect([RSS])
+    assert result.failures == []
+    assert [item.link for item in result.items] == ["https://cdn.example.net/feeds/posts/r"]
+    assert [item.feed_url for item in result.items] == [RSS]
+
+
+def test_a_redirect_to_a_host_whose_robots_disallows_it_is_refused():
+    final = "https://other.example/feed.xml"
+    web = FakeWeb(
+        {
+            RSS: redirect(final),
+            "https://other.example/robots.txt": ok(b"User-agent: *\nDisallow: /\n"),
+            final: ok(fixture("atom.xml")),
+        }
+    )
+    result = RssSource(fetch=web).collect([RSS])
+    assert result.failures == [
+        FeedFailure(RSS, f"disallowed by robots.txt (redirected to {final})")
+    ]
+    assert web.fetched(final) == []
+
+
+def test_a_relative_redirect_resolves_against_the_current_url():
+    web = FakeWeb(
+        {
+            RSS: redirect("/new-feed.xml"),
+            "https://example.com/new-feed.xml": ok(fixture("atom.xml")),
+        }
+    )
+    result = RssSource(fetch=web).collect([RSS])
+    assert result.failures == []
+    assert len(result.items) == 1
+
+
+def test_a_redirect_to_another_scheme_is_refused():
+    web = FakeWeb({RSS: redirect("ftp://example.com/feed.xml")})
+    result = RssSource(fetch=web).collect([RSS])
+    assert len(result.failures) == 1
+    assert "only http and https" in result.failures[0].reason
+
+
+def test_a_redirect_loop_is_reported():
+    loop = "https://example.com/loop.xml"
+    web = FakeWeb({RSS: redirect(loop), loop: redirect(RSS)})
+    result = RssSource(fetch=web).collect([RSS])
+    assert result.failures == [FeedFailure(RSS, "too many redirects")]
+
+
+def test_a_redirect_without_a_location_is_reported():
+    web = FakeWeb({RSS: status(302)})
+    result = RssSource(fetch=web).collect([RSS])
+    assert result.failures == [FeedFailure(RSS, "HTTP 302")]
+
+
+def test_a_redirected_robots_txt_is_followed():
+    web = FakeWeb(
+        {
+            "https://example.com/robots.txt": redirect("https://www.example.com/robots.txt"),
+            "https://www.example.com/robots.txt": ok(b"User-agent: *\nDisallow: /\n"),
+            RSS: ok(fixture("atom.xml")),
+        }
+    )
+    result = RssSource(fetch=web).collect([RSS])
+    assert result.failures == [FeedFailure(RSS, "disallowed by robots.txt")]

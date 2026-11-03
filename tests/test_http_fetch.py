@@ -25,6 +25,11 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/not-modified":
             self.send_response(304)
             self.end_headers()
+        elif self.path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", "/feed")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
         elif self.path == "/truncated":
             self.send_response(200)
             self.send_header("Content-Length", "100")
@@ -70,6 +75,13 @@ def test_sends_request_headers(server):
 
 def test_not_modified_is_a_response_not_an_error(server):
     assert http_get(f"{server}/not-modified", {}, timeout=5).status == 304
+
+
+def test_redirects_are_returned_not_followed(server):
+    # The caller follows them, so it can check each hop's scheme and robots.txt.
+    response = http_get(f"{server}/redirect", {}, timeout=5)
+    assert response.status == 302
+    assert response.headers["location"] == "/feed"
 
 
 def test_http_error_status_is_returned(server):
