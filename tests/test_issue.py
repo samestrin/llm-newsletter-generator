@@ -357,3 +357,36 @@ def test_an_issue_with_nothing_to_voice_has_no_voice_line():
 
     assert "Writer's voice" not in report
     assert "Kept neutral" not in report
+
+
+def test_per_feed_keeps_the_first_items_of_each_feed_and_summarizes_only_those():
+    model = FakeModel()
+    issue = make_issue(
+        [RSS, ATOM],
+        title="AI Weekly",
+        topic="AI",
+        source=fixture_source(),
+        llm=make_llm(model),
+        issue_date=date(2026, 11, 3),
+        per_feed=1,
+    )
+
+    assert [story.item.link for story in issue.stories] == [
+        "https://example.com/posts/open-model",
+        "https://lab.example.org/scaling",
+    ]
+    assert len(model.requests) == 2
+
+
+@pytest.mark.parametrize("per_feed", [0, -1])
+def test_per_feed_must_be_positive(per_feed):
+    with pytest.raises(ValueError, match="per_feed"):
+        make_issue(
+            [ATOM],
+            title="AI Weekly",
+            topic="AI",
+            source=fixture_source(),
+            llm=make_llm(FakeModel()),
+            issue_date=date(2026, 11, 3),
+            per_feed=per_feed,
+        )

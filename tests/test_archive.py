@@ -222,10 +222,10 @@ def test_a_failed_build_leaves_the_previous_site_untouched(tmp_path, monkeypatch
 
     real = site_module.render_issue
 
-    def boom(issue):
+    def boom(issue, **options):
         if issue.issue_date == date(2026, 11, 4):
             raise RuntimeError("disk full")
-        return real(issue)
+        return real(issue, **options)
 
     monkeypatch.setattr(site_module, "render_issue", boom)
     with pytest.raises(RuntimeError, match="disk full"):

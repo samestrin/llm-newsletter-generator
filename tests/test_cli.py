@@ -213,7 +213,7 @@ def test_issue_command_rejects_a_bad_voice_setting(capsys):
 
 def test_archive_command_builds_a_labeled_demo_site(tmp_path, capsys):
     site = tmp_path / "site"
-    code = run(["archive", RSS, ATOM, "--demo", "--site", str(site), "--date", "2026-11-03"])
+    code = run(["archive", ATOM, "--demo", "--site", str(site), "--date", "2026-11-03"])
 
     assert code == 0
     page = (site / "issues/2026-11-03/index.html").read_text(encoding="utf-8")
@@ -257,4 +257,20 @@ def test_archive_command_needs_a_fast_model_before_fetching_anything(tmp_path, c
 def test_archive_command_needs_a_site_dir():
     with pytest.raises(SystemExit) as exc:
         run(["archive", ATOM, "--demo"])
+    assert exc.value.code == 2
+
+
+def test_archive_command_caps_the_items_per_feed(tmp_path):
+    site = tmp_path / "site"
+    code = run(["archive", ATOM, RSS, "--demo", "--site", str(site), "--per-feed", "1"])
+
+    (page,) = (site / "issues").glob("*/index.html")
+    assert page.read_text(encoding="utf-8").count("<article>") == 2
+    assert code == 1, "the RSS fixture's entry with no link is still reported"
+
+
+@pytest.mark.parametrize("value", ["0", "-2", "many"])
+def test_per_feed_must_be_a_positive_number(value):
+    with pytest.raises(SystemExit) as exc:
+        run(["issue", ATOM, "--per-feed", value])
     assert exc.value.code == 2

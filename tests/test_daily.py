@@ -13,7 +13,7 @@ from newsletter.sources.http import HttpResponse
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github" / "workflows" / "daily.yml"
-RSS = (Path(__file__).parent / "fixtures" / "feeds" / "rss.xml").read_bytes()
+ATOM = (Path(__file__).parent / "fixtures" / "feeds" / "atom.xml").read_bytes()
 MODEL_HOST = "model.test"
 ENV = {
     "NEWSLETTER_BASE_URL": f"http://{MODEL_HOST}/v1",
@@ -117,7 +117,7 @@ def test_the_same_build_runs_with_a_fake_model_and_publishes_nothing(
     def fetch(url, headers, timeout):
         fetched.append(url)
         if url in feeds:
-            return HttpResponse(200, {}, RSS)
+            return HttpResponse(200, {}, ATOM)
         return HttpResponse(404)
 
     def model(request):
@@ -140,3 +140,10 @@ def test_the_same_build_runs_with_a_fake_model_and_publishes_nothing(
     assert {urlsplit(url).hostname for url in fetched} <= {urlsplit(f).hostname for f in feeds}
     assert set(called) == {MODEL_HOST}
     assert sorted(p.name for p in tmp_path.iterdir()) == [site.name]
+
+
+def test_the_daily_build_caps_its_model_calls(workflow):
+    argv = build_argv(workflow)
+    feeds = [arg for arg in argv if "://" in arg]
+    per_feed = int(argv[argv.index("--per-feed") + 1])
+    assert len(feeds) * per_feed <= 50
