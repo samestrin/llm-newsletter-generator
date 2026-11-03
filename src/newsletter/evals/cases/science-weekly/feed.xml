@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Science Desk</title>
+    <link>https://space.example.org/</link>
+    <description>Example Science Desk</description>
+    <copyright>Copyright 2026 Example Science Desk. Headlines and links only.</copyright>
+    <item>
+      <title>Telescope finds water vapour on a distant planet</title>
+      <link>https://space.example.org/k2-vapour</link>
+      <pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate>
+      <description>Astronomers using the Orbiter telescope detected water vapour in the atmosphere of the planet K2-18c. The planet orbits a red dwarf star 120 light years away. The team published the result in a peer reviewed journal on Thursday.</description>
+    </item>
+    <item>
+      <title>University trial shortens battery charging</title>
+      <link>https://science.example.edu/fast-charge</link>
+      <pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate>
+      <description>Researchers at Northfield University tested a new electrode coating in a lab trial. Cells with the coating reached 80 percent charge in 12 minutes. The coating has not yet been tested in full size batteries.</description>
+    </item>
+  </channel>
+</rss>

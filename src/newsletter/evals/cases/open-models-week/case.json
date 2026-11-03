@@ -1,0 +1,11 @@
+{
+  "title": "Open models week",
+  "topic": "AI models",
+  "date": "2026-11-02",
+  "feed_url": "https://models.example.org/feed.xml",
+  "planted_false": [
+    "s1.c3",
+    "s2.c2",
+    "s3.c2"
+  ]
+}
