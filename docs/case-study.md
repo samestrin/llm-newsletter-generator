@@ -37,9 +37,9 @@ Three numbers carry the argument:
 
 One honest caveat, kept from the README: these numbers are a replay of recorded responses, not a live run. They show that the scoring and the flagging work on known answers, not how often a given model makes things up.
 
-## The 33.3% flag rate, and why it is a feature
+## Reading the 33.3% flag rate
 
-A third of all claims checked were flagged. In a naive pipeline those claims would have shipped silently. Here they stay in the draft, marked, where the reviewer can see them and decide. The flag rate is not a quality score to minimize; it is evidence the check is doing the job it exists for.
+The 33.3% is exactly the planted share: the fixtures plant a false claim in a third of all claims (5 planted out of 15 checked), and every flagged claim was a planted one. So the rate is set by the fixtures, not by the model — it does not mean a live model invents a third of its claims. What it does show is the check's precision on real claims: no genuine, source-supported claim was flagged, so the mechanism catches the planted lies without false positives on the real ones. Flagged claims stay in the draft, marked, where the reviewer can see them and decide.
 
 ## What this cost to build around
 
