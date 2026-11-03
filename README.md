@@ -6,7 +6,7 @@
 
 **llm-newsletter-generator** is a Python package that generates text-only newsletters from RSS feeds using LLMs. See [VISION.md](VISION.md) for the plan.
 
-The rebuild is in progress: `newsletter issue` drafts a plain issue from RSS and Atom feeds, in the writer's voice when a yourvoice.dev key is set; editing and grouping arrive with later work.
+The rebuild is in progress: `newsletter issue` drafts an edited issue from RSS and Atom feeds, with the editor's prose in the writer's voice when a yourvoice.dev key is set; grouping and HTML output arrive with later work.
 
 ## Installation
 
@@ -25,17 +25,17 @@ Dependencies are declared in `pyproject.toml`, which is also where the version l
 ```bash
 uv run newsletter --help
 uv run newsletter --version
-NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_API_KEY=... \
-  uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" --topic AI -o issue.md
+NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_REASONING_MODEL=o4-mini NEWSLETTER_API_KEY=... \
+  uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" -o issue.md
 ```
 
-`newsletter issue` reads RSS or Atom feeds, summarizes each item with the fast model and writes the issue as Markdown with a link per item, then a run report listing any feed, entry or model call that failed and what each step cost. It exits 1 when anything failed, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs, `--date` to set the issue date and `--per-feed N` to summarize only the first N items of each feed (each item is one model call).
+`newsletter issue` reads RSS or Atom feeds, has the fast model extract claims that quote their source, checks each claim against its passage, and has the reasoning model edit the issue (lead, themes, intro and why it matters) from the supported claims only. It writes the issue as Markdown. Every claim links to its source; unsupported or unchecked claims stay visible and are marked as flagged. A run report lists failed feeds, dropped and flagged claims, a failed editor call, the writer's voice and the cost of each step. It exits 1 when anything failed or is flagged, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs, `--date` to set the issue date and `--per-feed N` to use only the first N items of each feed (each item costs several model calls).
 
 ```bash
 uv run newsletter archive --demo --site site --per-feed 5 https://example.com/feed.xml
 ```
 
-`newsletter archive` drafts the same issue (in the writer's voice too, when `YOURVOICE_API_KEY` is set; the daily workflow sets none) and builds it into a static site in `--site`: an index and one page per issue. Only demo mode exists so far, so `--demo` is required. A demo issue is approved by a record marked `automated-demo` instead of a person's sha256 of the text; that record is valid for archive pages only and export refuses it. Every demo page carries a visible "Automated demo" label, and every summary is marked as unchecked.
+`newsletter archive` drafts a plain issue, one fast-model summary and one link per item, with `--topic` given to the model (in the writer's voice too, when `YOURVOICE_API_KEY` is set; the daily workflow sets none) and builds it into a static site in `--site`: an index and one page per issue. Only demo mode exists so far, so `--demo` is required. A demo issue is approved by a record marked `automated-demo` instead of a person's sha256 of the text; that record is valid for archive pages only and export refuses it. Every demo page carries a visible "Automated demo" label, and every summary is marked as unchecked.
 
 ### Daily archive
 
@@ -49,8 +49,8 @@ The CLI talks to any OpenAI-compatible endpoint; all model settings come from th
 | --- | --- |
 | `NEWSLETTER_BASE_URL` | Endpoint, default `https://api.openai.com/v1` |
 | `NEWSLETTER_API_KEY` | API key (or `OPENAI_API_KEY`); optional for local endpoints |
-| `NEWSLETTER_FAST_MODEL` | Model for bulk work; required by `newsletter issue` |
-| `NEWSLETTER_REASONING_MODEL` | Model for editing; the writer's voice needs it |
+| `NEWSLETTER_FAST_MODEL` | Model for bulk work; required by both commands |
+| `NEWSLETTER_REASONING_MODEL` | Model for the editor pass and the writer's voice; required by `newsletter issue` |
 | `NEWSLETTER_EMBEDDING_MODEL` | Model for comparing stories (later work) |
 | `NEWSLETTER_<TIER>_PRICE_INPUT` / `NEWSLETTER_<TIER>_PRICE_OUTPUT` | USD per million tokens; without them the cost the server reports is used, else the cost is unknown |
 | `NEWSLETTER_TIMEOUT` | Seconds per request, default 60 |
@@ -60,7 +60,7 @@ A tier's model is required only when that tier is used. The API key is never log
 
 ### The writer's voice
 
-When `YOURVOICE_API_KEY` is set, each summary is rewritten in the writer's own voice. [yourvoice.dev](https://yourvoice.dev) builds a voice profile from samples of the writer's writing, and the reasoning model rewrites the summary to match it. Then a check compares every link, quoted string, number and claim id before and after the rewrite. If one is dropped, changed or added, or the profile or the rewrite fails or times out, the neutral summary is kept and the run report says which one and why. The command then exits 1. Without the key, the issue stays in a neutral voice, and the run report says so.
+When `YOURVOICE_API_KEY` is set, the editor's prose is rewritten in the writer's own voice: in `newsletter issue` the intro, the theme names and each "why it matters" line, and in `newsletter archive` each summary. Claims, their quotes, numbers and source links, and the citations on the prose are never sent to the rewrite, so they stay exactly as they were. [yourvoice.dev](https://yourvoice.dev) builds a voice profile from samples of the writer's writing, and the reasoning model rewrites the prose to match it. Then a check compares every link, quoted string, number and claim id before and after the rewrite. If one is dropped, changed or added, or the profile or the rewrite fails or times out, the neutral text is kept and the run report says which one and why. The command then exits 1. Without the key, the issue stays in a neutral voice, and the run report says so.
 
 | Variable | Purpose |
 | --- | --- |

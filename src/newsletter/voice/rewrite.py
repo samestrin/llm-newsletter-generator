@@ -8,11 +8,12 @@ could not be built keeps the neutral text, and each is listed for the run report
 
 import logging
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 import httpx
 
+from newsletter.editor import Edition
 from newsletter.issue import Issue, fill, load_prompt
 from newsletter.llm import LLMClient, LLMError
 from newsletter.voice.check import compare_facts
@@ -134,6 +135,41 @@ def voice_issue(
             story.summary = run.texts[str(number)]
     issue.voice = run.report()
     issue.usage = llm.report()
+    return run
+
+
+def voice_edition(
+    edition: Edition,
+    llm: LLMClient,
+    settings: VoiceSettings,
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> VoiceRun:
+    """Rewrite the editor's prose in place: the intro, each theme name and each "why it
+    matters" line, by ids `intro`, `theme-<n>` and `why-<story id>`.
+
+    Only the text of the prose changes. Its claim ids, and the stories with their claims,
+    quotes, numbers and source links, are never given to the rewrite and stay as they are.
+    """
+    texts: dict[str, str] = {}
+    if edition.intro is not None:
+        texts["intro"] = edition.intro.text
+    for number, theme in enumerate(edition.themes, start=1):
+        texts[f"theme-{number}"] = theme.name
+    for story_id, why in edition.why_it_matters.items():
+        texts[f"why-{story_id}"] = why.text
+
+    run = apply_voice(texts, llm, settings, transport=transport)
+    if edition.intro is not None:
+        edition.intro = replace(edition.intro, text=run.texts["intro"])
+    edition.themes = [
+        replace(theme, name=run.texts[f"theme-{number}"])
+        for number, theme in enumerate(edition.themes, start=1)
+    ]
+    edition.why_it_matters = {
+        story_id: replace(why, text=run.texts[f"why-{story_id}"])
+        for story_id, why in edition.why_it_matters.items()
+    }
     return run
 
 
