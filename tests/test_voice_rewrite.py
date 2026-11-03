@@ -201,9 +201,7 @@ def test_without_a_key_nothing_is_called_and_the_text_stays_neutral(tmp_path, sa
 
 
 @pytest.mark.parametrize("folder", [None, "missing", "empty"])
-def test_with_a_key_but_no_samples_the_text_stays_neutral_and_is_reported(
-    tmp_path, folder
-):
+def test_with_a_key_but_no_samples_the_text_stays_neutral_and_is_reported(tmp_path, folder):
     if folder == "empty":
         (tmp_path / "empty").mkdir()
     samples = None if folder is None else tmp_path / folder
