@@ -1,11 +1,14 @@
 import json
 import logging
+from datetime import date
 
 import httpx
 import pytest
 
+from newsletter.issue import Issue, Story
 from newsletter.llm import ConfigError, LLMClient, Settings
-from newsletter.voice import VoiceSettings, apply_voice
+from newsletter.sources import Item
+from newsletter.voice import VoiceSettings, apply_voice, voice_issue
 
 KEY = "yv-secret-key-123"
 STYLE = "Short sentences. First person. Dry humor."
@@ -305,3 +308,23 @@ def test_settings_defaults_and_a_bad_timeout(tmp_path):
 
     with pytest.raises(ConfigError, match="YOURVOICE_TIMEOUT"):
         VoiceSettings.from_env({"YOURVOICE_TIMEOUT": "0"})
+
+
+def test_voice_issue_rewrites_the_summaries_and_adds_the_steps_to_the_report(tmp_path, samples):
+    stories = [
+        Story(Item("A", "https://a.example/", NEUTRAL, None, "f", "Feed", None), NEUTRAL),
+        Story(Item("B", "https://b.example/", "", None, "f", "Feed", None)),
+    ]
+    issue = Issue("Weekly", "AI", date(2026, 11, 3), stories)
+    llm = make_llm(FakeModel())
+
+    voice_issue(
+        issue,
+        llm,
+        voice_settings(tmp_path, samples),
+        transport=httpx.MockTransport(FakeYourVoice()),
+    )
+
+    assert [s.summary for s in issue.stories] == [VOICED, None]
+    assert issue.voice["voiced"] == ["1"]
+    assert [step["step"] for step in issue.usage["steps"]] == ["voice-1"]

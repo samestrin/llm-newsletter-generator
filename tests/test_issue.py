@@ -6,7 +6,15 @@ from pathlib import Path
 import httpx
 import pytest
 
-from newsletter.issue import fill, load_prompt, make_issue, render_markdown, summarize
+from newsletter.issue import (
+    Issue,
+    Story,
+    fill,
+    load_prompt,
+    make_issue,
+    render_markdown,
+    summarize,
+)
 from newsletter.llm import LLMClient, Settings
 from newsletter.sources import FeedFailure, Item, RssSource
 from newsletter.sources.http import FetchError, HttpResponse
@@ -291,3 +299,46 @@ def test_the_item_prompt_ships_with_the_package():
     assert {"topic", "item_title", "item_description"} <= set(
         re.findall(r"\{\{\s*(\w+)\s*\}\}", prompt)
     )
+
+
+def test_texts_kept_neutral_are_listed_in_the_run_report():
+    issue = Issue(
+        title="AI Weekly",
+        topic="AI",
+        issue_date=date(2026, 11, 3),
+        stories=[Story(item(), summary="One."), Story(item(), summary="Two.")],
+        voice={
+            "enabled": True,
+            "skipped": None,
+            "voiced": ["1"],
+            "kept_neutral": [{"id": "2", "reason": "rewrite changed facts: number 71 was dropped"}],
+            "ok": False,
+        },
+    )
+
+    report = render_markdown(issue).split("## Run report", 1)[1]
+
+    assert "Writer's voice: 1 of 2 summaries rewritten." in report
+    assert "- summary 2: rewrite changed facts: number 71 was dropped" in report
+    assert not issue.ok
+
+
+def test_a_neutral_voice_says_why_and_is_ok_when_no_key_is_set():
+    issue = Issue(
+        title="AI Weekly",
+        topic="AI",
+        issue_date=date(2026, 11, 3),
+        stories=[Story(item(), summary="One.")],
+        voice={
+            "enabled": False,
+            "skipped": "YOURVOICE_API_KEY is not set",
+            "voiced": [],
+            "kept_neutral": [],
+            "ok": True,
+        },
+    )
+
+    report = render_markdown(issue).split("## Run report", 1)[1]
+
+    assert r"Neutral voice: YOURVOICE\_API\_KEY is not set." in report
+    assert issue.ok
