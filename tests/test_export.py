@@ -38,7 +38,8 @@ class FakePlatforms:
 
     `fail` maps a host to a reply that replaces the normal one: an int is sent as that
     HTTP status with the caller's key echoed in the body, an exception is raised as the
-    transport error, a dict is sent as the JSON body with status 200.
+    transport error, a dict is sent as the JSON body with status 200, and bytes as a
+    non-JSON body with status 200.
     """
 
     def __init__(self, fail=None):
@@ -55,6 +56,8 @@ class FakePlatforms:
             return httpx.Response(reply, json={"detail": f"rejected {echoed}"})
         if isinstance(reply, dict):
             return httpx.Response(200, json=reply)
+        if isinstance(reply, bytes):
+            return httpx.Response(200, content=reply)
         body = json.loads(request.content)
         if request.url.host == "api.buttondown.com":
             return httpx.Response(201, json={"id": "em_1", "status": body.get("status")})
@@ -264,6 +267,8 @@ def test_a_connector_with_no_draft_only_endpoint_is_dropped_and_listed():
         (httpx.ReadTimeout("slow"), "timed out after 7s"),
         (httpx.ConnectError("refused"), "request failed"),
         ({"no": "id"}, "no draft id"),
+        (b"<html>ok</html>", "not JSON"),
+        (302, "HTTP 302"),
     ],
 )
 def test_a_failing_api_ends_in_a_reported_error(reply, expected):
