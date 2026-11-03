@@ -115,6 +115,15 @@ cd web && npm ci && npm run dev    # http://localhost:5173, /api goes to 127.0.0
 
 The page's origin must be in `NEWSLETTER_API_ORIGINS`, or the API refuses its writes. `NEWSLETTER_API_URL` points the dev server's `/api` somewhere else. `VITE_API_URL` at build time makes the built page call the API there directly instead of on its own origin.
 
+### Docker
+
+```bash
+export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
+docker compose up --build    # http://localhost:8080
+```
+
+Two services: `api` (`newsletter serve`, drafts kept in the `drafts` volume) and `web` (the built review page behind nginx, which forwards `/api` to `api`). Only the page is published, on `127.0.0.1:8080` (`WEB_PORT` changes it); the API is not reachable from outside the compose network, and it allows writes only from the page's origin. `NEWSLETTER_API_TOKEN` is required. `NEWSLETTER_BASE_URL`, `NEWSLETTER_API_KEY`, `NEWSLETTER_FAST_MODEL`, `NEWSLETTER_REASONING_MODEL` and `YOURVOICE_API_KEY` are passed through from your shell when set. CI's `compose` job builds both images, starts them and checks the page, the proxied API and the token.
+
 ## Development
 
 ```bash

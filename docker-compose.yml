@@ -1,0 +1,43 @@
+# `NEWSLETTER_API_TOKEN=$(openssl rand -hex 32) docker compose up --build`, then open
+# http://localhost:8080. Only the page is published, and only on this machine; it forwards
+# /api to the api service.
+services:
+  api:
+    build:
+      context: .
+      target: api
+    environment:
+      NEWSLETTER_API_TOKEN: ${NEWSLETTER_API_TOKEN:?set NEWSLETTER_API_TOKEN}
+      NEWSLETTER_API_ORIGINS: http://localhost:${WEB_PORT:-8080},http://127.0.0.1:${WEB_PORT:-8080}
+      # Set on the host, passed through; unset ones stay unset in the container.
+      NEWSLETTER_BASE_URL:
+      NEWSLETTER_API_KEY:
+      NEWSLETTER_FAST_MODEL:
+      NEWSLETTER_REASONING_MODEL:
+      YOURVOICE_API_KEY:
+    volumes:
+      - drafts:/data
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  drafts:
