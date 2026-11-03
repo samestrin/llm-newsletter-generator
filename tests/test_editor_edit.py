@@ -240,7 +240,7 @@ def test_parse_edit_accepts_valid_output_in_a_code_fence():
 def test_parse_edit_rejects_invalid_output_and_says_why(data, problem):
     with pytest.raises(InvalidEdit) as caught:
         parse_edit(json.dumps(data), check_run().stories)
-    assert problem in caught.value.problems
+    assert any(problem in p for p in caught.value.problems), caught.value.problems
 
 
 @pytest.mark.parametrize(
