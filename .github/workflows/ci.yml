@@ -58,7 +58,8 @@ jobs:
       - name: The API refuses a call without the token
         run: test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/drafts)" = 401
       - name: The API answers with the token
-        run: curl -fsS -H "Authorization: Bearer $NEWSLETTER_API_TOKEN" http://localhost:8080/api/drafts
+        run: |
+          curl -fsS -H "Authorization: Bearer $NEWSLETTER_API_TOKEN" http://localhost:8080/api/drafts
       - name: Logs on failure
         if: failure()
         run: docker compose logs
