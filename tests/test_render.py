@@ -1,3 +1,4 @@
+import html
 import json
 import re
 from datetime import UTC, date, datetime
@@ -533,3 +534,68 @@ def test_a_clean_run_says_so(render):
     out = render(Newsletter("T", date(2026, 11, 3), story, STORIES, report))
     assert "Every feed was read" in out
     assert "Flagged" not in out
+
+
+def plain(out):
+    """The text a reader sees: HTML tags, entities and Markdown escapes removed."""
+    return html.unescape(re.sub(r"<[^>]+>|`|\\(?=\S)", "", out))
+
+
+VOICE_KEPT = {
+    "enabled": True,
+    "skipped": None,
+    "voiced": ["intro"],
+    "kept_neutral": [{"id": "s1", "reason": "rewrite changed facts: number 3B -> 3M"}],
+    "ok": False,
+}
+
+
+def test_the_report_carries_the_voice_pass_and_a_kept_neutral_text_is_not_ok():
+    story = Edition([CheckedStory("s2", [S2_TRUE])])
+    report = build_report([], story, STORIES, {}, voice=VOICE_KEPT)
+    assert report.voice == VOICE_KEPT
+    assert report.ok is False
+    assert report.to_dict()["voice"] == VOICE_KEPT
+
+
+def test_a_voice_pass_with_every_text_voiced_is_ok():
+    story = Edition([CheckedStory("s2", [S2_TRUE])])
+    voice = {"enabled": True, "skipped": None, "voiced": ["intro"], "kept_neutral": [], "ok": True}
+    assert build_report([], story, STORIES, {}, voice=voice).ok is True
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_the_rendered_report_lists_texts_kept_neutral(render):
+    story = Edition([CheckedStory("s2", [S2_TRUE])])
+    report = build_report([], story, STORIES, {}, voice=VOICE_KEPT)
+    out = render(Newsletter("T", date(2026, 11, 3), story, STORIES, report))
+    tail = plain(out[out.index("Run report") :])
+    assert "Writer's voice: 1 of 2 texts rewritten." in tail
+    assert "Kept neutral" in tail
+    assert "s1: rewrite changed facts: number 3B -> 3M" in tail
+    assert "Every feed was read" not in tail
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_the_rendered_report_says_why_the_voice_is_neutral(render):
+    story = Edition([CheckedStory("s2", [S2_TRUE])])
+    voice = {
+        "enabled": False,
+        "skipped": "YOURVOICE_API_KEY is not set",
+        "voiced": [],
+        "kept_neutral": [],
+        "ok": True,
+    }
+    report = build_report([], story, STORIES, {}, voice=voice)
+    out = render(Newsletter("T", date(2026, 11, 3), story, STORIES, report))
+    assert "Neutral voice: YOURVOICE_API_KEY is not set." in plain(out)
+
+
+@pytest.mark.parametrize("render", [render_html, render_markdown])
+def test_no_voice_pass_or_nothing_to_voice_adds_no_voice_line(render):
+    story = Edition([CheckedStory("s2", [S2_TRUE])])
+    empty = {"enabled": True, "skipped": None, "voiced": [], "kept_neutral": [], "ok": True}
+    for voice in (None, empty):
+        report = build_report([], story, STORIES, {}, voice=voice)
+        out = render(Newsletter("T", date(2026, 11, 3), story, STORIES, report))
+        assert "voice" not in out.lower() and "Kept neutral" not in out
