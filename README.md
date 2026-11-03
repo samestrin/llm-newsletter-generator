@@ -6,7 +6,7 @@
 
 **llm-newsletter-generator** is being rebuilt as a Python package that generates text-only newsletters from RSS feeds using LLMs. See [VISION.md](VISION.md) for the plan.
 
-The package is currently a skeleton: the `newsletter` command exists, but the feed, title and model options arrive with the rebuild.
+The rebuild is in progress: `newsletter issue` drafts a plain issue from RSS and Atom feeds; editing, grouping and the writer's voice arrive with later work.
 
 ## Installation
 
@@ -25,7 +25,11 @@ Dependencies are declared in `pyproject.toml`, which is also where the version l
 ```bash
 uv run newsletter --help
 uv run newsletter --version
+NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_API_KEY=... \
+  uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" --topic AI -o issue.md
 ```
+
+`newsletter issue` summarizes each feed item with the fast model and writes Markdown with a link per item, then a run report listing any feed, entry or model call that failed and what each step cost. It exits 1 when anything failed, so a partial issue is never reported as a success.
 
 ## Development
 
