@@ -1,0 +1,224 @@
+{
+  "models": {
+    "fast": "recorded-fast",
+    "reasoning": "recorded-reasoning"
+  },
+  "responses": {
+    "claims-s1": {
+      "content": {
+        "claims": [
+          {
+            "text": "Astronomers detected water vapour in the atmosphere of K2-18c.",
+            "passage": "Astronomers using the Orbiter telescope detected water vapour in the atmosphere of the planet K2-18c."
+          },
+          {
+            "text": "K2-18c orbits a red dwarf star 120 light years away.",
+            "passage": "The planet orbits a red dwarf star 120 light years away."
+          },
+          {
+            "text": "The result proves the planet is habitable.",
+            "passage": "The team published the result in a peer reviewed journal on Thursday."
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225
+      }
+    },
+    "check-s1.c1": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s1.c2": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s1.c3": {
+      "content": {
+        "supported": false,
+        "reason": "The passage says nothing about habitability."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "claims-s2": {
+      "content": {
+        "claims": [
+          {
+            "text": "Researchers at Northfield University tested a new electrode coating.",
+            "passage": "Researchers at Northfield University tested a new electrode coating in a lab trial."
+          },
+          {
+            "text": "Cells with the coating reached 80 percent charge in 12 minutes.",
+            "passage": "Cells with the coating reached 80 percent charge in 12 minutes."
+          },
+          {
+            "text": "The coating works in full size batteries.",
+            "passage": "The coating has not yet been tested in full size batteries."
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225
+      }
+    },
+    "check-s2.c1": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s2.c2": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s2.c3": {
+      "content": {
+        "supported": false,
+        "reason": "The passage says it has not been tested."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "edit": {
+      "content": {
+        "lead": "s1",
+        "order": [
+          "s1",
+          "s2"
+        ],
+        "themes": [
+          {
+            "name": "Space",
+            "claim_ids": [
+              "s1.c1",
+              "s1.c3"
+            ]
+          },
+          {
+            "name": "Energy",
+            "claim_ids": [
+              "s2.c2"
+            ]
+          }
+        ],
+        "intro": {
+          "text": "Three developments this week.",
+          "claim_ids": [
+            "s1.c1",
+            "s2.c2"
+          ]
+        },
+        "why_it_matters": [
+          {
+            "story_id": "s1",
+            "text": "Why story s1 matters.",
+            "claim_ids": [
+              "s1.c1"
+            ]
+          },
+          {
+            "story_id": "s2",
+            "text": "Why story s2 matters.",
+            "claim_ids": [
+              "s2.c1"
+            ]
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 800,
+        "completion_tokens": 400,
+        "cost": 0.006
+      }
+    },
+    "edit-retry": {
+      "content": {
+        "lead": "s1",
+        "order": [
+          "s1",
+          "s2"
+        ],
+        "themes": [
+          {
+            "name": "Space",
+            "claim_ids": [
+              "s1.c1",
+              "s1.c2"
+            ]
+          },
+          {
+            "name": "Energy",
+            "claim_ids": [
+              "s2.c2"
+            ]
+          }
+        ],
+        "intro": {
+          "text": "Three developments this week.",
+          "claim_ids": [
+            "s1.c1",
+            "s2.c2"
+          ]
+        },
+        "why_it_matters": [
+          {
+            "story_id": "s1",
+            "text": "Why story s1 matters.",
+            "claim_ids": [
+              "s1.c1"
+            ]
+          },
+          {
+            "story_id": "s2",
+            "text": "Why story s2 matters.",
+            "claim_ids": [
+              "s2.c1"
+            ]
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 800,
+        "completion_tokens": 400,
+        "cost": 0.006
+      }
+    }
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "models": {
+    "fast": "recorded-fast",
+    "reasoning": "recorded-reasoning"
+  },
+  "responses": {
+    "claims-s1": {
+      "content": {
+        "claims": [
+          {
+            "text": "Example Lab released Tiny-3B, a 3 billion parameter model.",
+            "passage": "Example Lab released Tiny-3B, a 3 billion parameter language model, on Tuesday."
+          },
+          {
+            "text": "The model is licensed under Apache 2.0.",
+            "passage": "The model is licensed under Apache 2.0."
+          },
+          {
+            "text": "Tiny-3B scores 95 on the MMLU benchmark.",
+            "passage": "It scores 71 on the MMLU benchmark and runs on a laptop with 16 GB of memory."
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225
+      }
+    },
+    "check-s1.c1": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s1.c2": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s1.c3": {
+      "content": {
+        "supported": false,
+        "reason": "The passage gives 71, not 95."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "claims-s2": {
+      "content": {
+        "claims": [
+          {
+            "text": "The Digital Authority opened a consultation on incident reporting for large AI models.",
+            "passage": "The Digital Authority opened a public consultation on Monday about incident reporting for large AI models."
+          },
+          {
+            "text": "Responses are due by 15 January.",
+            "passage": "Responses are due by 15 December."
+          },
+          {
+            "text": "The proposal would apply to models trained with more than 10^26 operations.",
+            "passage": "The proposal would apply to models trained with more than 10^26 operations."
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225
+      }
+    },
+    "check-s2.c1": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s2.c2": {
+      "content": {
+        "supported": false,
+        "reason": "The passage gives 15 December."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s2.c3": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "claims-s3": {
+      "content": {
+        "claims": [
+          {
+            "text": "Northwind announced the N200 inference accelerator.",
+            "passage": "Northwind announced the N200 inference accelerator on Wednesday."
+          },
+          {
+            "text": "Northwind says the N200 delivers ten times the throughput of its previous chip.",
+            "passage": "The company says it delivers twice the throughput of its previous chip at the same power."
+          },
+          {
+            "text": "Shipping is planned for the second quarter of next year.",
+            "passage": "Shipping is planned for the second quarter of next year."
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225
+      }
+    },
+    "check-s3.c1": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s3.c2": {
+      "content": {
+        "supported": false,
+        "reason": "The passage says twice, not ten times."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "check-s3.c3": {
+      "content": {
+        "supported": true,
+        "reason": "The passage says so."
+      },
+      "usage": {
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05
+      }
+    },
+    "edit": {
+      "content": {
+        "lead": "s1",
+        "order": [
+          "s1",
+          "s2",
+          "s3"
+        ],
+        "themes": [
+          {
+            "name": "Open models get smaller",
+            "claim_ids": [
+              "s1.c1",
+              "s1.c2"
+            ]
+          },
+          {
+            "name": "Rules and hardware catch up",
+            "claim_ids": [
+              "s2.c1",
+              "s3.c1"
+            ]
+          }
+        ],
+        "intro": {
+          "text": "Three developments this week.",
+          "claim_ids": [
+            "s1.c1",
+            "s2.c1",
+            "s3.c1"
+          ]
+        },
+        "why_it_matters": [
+          {
+            "story_id": "s1",
+            "text": "Why story s1 matters.",
+            "claim_ids": [
+              "s1.c1"
+            ]
+          },
+          {
+            "story_id": "s2",
+            "text": "Why story s2 matters.",
+            "claim_ids": [
+              "s2.c1"
+            ]
+          },
+          {
+            "story_id": "s3",
+            "text": "Why story s3 matters.",
+            "claim_ids": [
+              "s3.c1"
+            ]
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 800,
+        "completion_tokens": 400,
+        "cost": 0.006
+      }
+    }
+  }
+}

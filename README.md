@@ -66,7 +66,10 @@ When `YOURVOICE_API_KEY` is set, each summary is rewritten in the writer's own v
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run python -m newsletter.evals   # eval table from recorded responses, no network
 ```
+
+The eval replays recorded model answers for past feeds that include planted false claims. `uv run python -m newsletter.evals --live -o evals/results.md` runs the same feeds against the models in your environment and spends credit.
 
 ## Contribute
 
