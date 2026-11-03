@@ -293,3 +293,21 @@ def test_a_story_with_no_text_says_so(tmp_path):
     build_site([fixture_issue(stories=[Story(item("Quiet"))])], out)
 
     assert "no text" in (out / "issues/2026-11-03/index.html").read_text(encoding="utf-8")
+
+
+class EscapingDate(date):
+    def isoformat(self):
+        return "../../../escape"
+
+
+def test_a_page_path_outside_the_site_fails_the_build(tmp_path):
+    out = tmp_path / "site"
+    build_site([fixture_issue()], out)
+    before = {p: p.read_bytes() for p in pages(out)}
+
+    with pytest.raises(ArchiveError, match="outside the site"):
+        build_site([fixture_issue(day=EscapingDate(2026, 11, 4))], out)
+
+    assert {p: p.read_bytes() for p in pages(out)} == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["site"]
+    assert not list(tmp_path.parent.glob("escape*"))
