@@ -70,6 +70,39 @@ When `YOURVOICE_API_KEY` is set, each summary is rewritten in the writer's own v
 | `YOURVOICE_BASE_URL` | Default `https://api.yourvoice.dev` |
 | `YOURVOICE_TIMEOUT` | Seconds per request, default 60 |
 
+### The API
+
+`newsletter serve` runs an HTTP API for drafting and reviewing issues. A run reads the feeds, then the editor checks each claim against its source and writes the issue, then the voice pass rewrites the editor's prose, then the issue is rendered. Each run is a background job with a status and a timeout. Its result is a draft: the rendered Markdown, the flagged claims and the run report, kept as a JSON file in the data dir, so it survives a restart. Approving a draft stores the sha256 of its text. Any edit clears the approval.
+
+```bash
+export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
+uv run newsletter serve            # http://127.0.0.1:8000
+curl -X POST http://127.0.0.1:8000/api/runs \
+  -H "Authorization: Bearer $NEWSLETTER_API_TOKEN" -H "Origin: http://127.0.0.1:8000" \
+  -H "Content-Type: application/json" -d '{"feeds": ["https://example.com/feed.xml"]}'
+```
+
+| Endpoint | Does |
+| --- | --- |
+| `GET /api/health` | `{"ok": true}`; the only call without the token |
+| `POST /api/runs` | Starts a run from `{"feeds": [...], "title", "topic", "date"}`; 202 with the run, 409 while another run is going |
+| `GET /api/runs/{id}` | The run: `queued`, `running`, `done` with its `draft_id`, or `error` with why. A run past its timeout, or cut off by a restart, ends as an `error` and leaves no draft |
+| `GET /api/drafts` | Every draft, newest first, without its text |
+| `GET /api/drafts/{id}` | The draft: `text`, `flags`, `report`, `approval` and `approved` |
+| `PUT /api/drafts/{id}` | Replaces the text from `{"text": "..."}` and clears the approval |
+| `POST /api/drafts/{id}/approve` | Approves the text as it is now. Send `{}`, or `{"sha256": "..."}` of the text you read to get a 409 if it changed since |
+
+Every call but the health check needs `Authorization: Bearer $NEWSLETTER_API_TOKEN`. A write also needs an `Origin` from `NEWSLETTER_API_ORIGINS` and a JSON object sent as `application/json`; anything else is refused with 401, 403, 415 or 400. Without a token, the server will not start. The token and the model and voice keys never appear in a response, an error body, a stored file or a log.
+
+| Variable | Purpose |
+| --- | --- |
+| `NEWSLETTER_API_TOKEN` | The token every call must send; required |
+| `NEWSLETTER_API_HOST` | Bind address, default `127.0.0.1` (this machine only). `--host` overrides it |
+| `NEWSLETTER_API_PORT` | Port, default 8000. `--port` overrides it |
+| `NEWSLETTER_API_ORIGINS` | Comma-separated origins allowed to write, default `http://127.0.0.1:<port>,http://localhost:<port>` |
+| `NEWSLETTER_DATA_DIR` | Where drafts and runs are kept, default `$XDG_DATA_HOME/newsletter` (`~/.local/share/newsletter`) |
+| `NEWSLETTER_RUN_TIMEOUT` | Seconds a run may take, default 900 |
+
 ## Development
 
 ```bash

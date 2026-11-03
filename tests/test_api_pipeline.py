@@ -131,3 +131,16 @@ def test_the_voice_pass_runs_between_the_editor_and_render(tmp_path):
     assert "Three developments this week." not in content["text"]
     assert "Writer's voice:" in content["text"]
     assert VOICE_KEY not in json.dumps(content)
+
+
+def test_the_default_runner_reads_its_settings_from_the_environment():
+    from newsletter.api.pipeline import default_runner
+
+    run = default_runner({"NEWSLETTER_MAX_RETRIES": "0"})
+    # Nothing listens on port 9, so the feed fails without leaving this machine.
+    content = run(request(feeds=["http://127.0.0.1:9/feed.xml"]))
+    assert [f["url"] for f in content["report"]["failed_sources"]] == [
+        "http://127.0.0.1:9/feed.xml"
+    ]
+    assert content["report"]["editor_error"] == "no supported claims to edit from"
+    assert content["report"]["voice"]["skipped"] == "YOURVOICE_API_KEY is not set"

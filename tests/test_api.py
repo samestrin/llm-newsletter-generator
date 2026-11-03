@@ -366,7 +366,7 @@ def test_a_run_that_exceeds_its_timeout_ends_as_a_reported_error(tmp_path):
     with TestClient(create_app(settings, runner=runner)) as client:
         run = run_and_wait(client)
         assert run["status"] == "error"
-        assert run["error"] == "the run took longer than 0.2 seconds and was stopped"
+        assert run["error"] == "the run took longer than 0.2 seconds; its result is not used"
         assert run["draft_id"] is None
 
         # The late result is thrown away: no draft appears for a run reported as failed.
@@ -482,7 +482,7 @@ def test_serve_binds_127_0_0_1_by_default(tmp_path, monkeypatch):
     monkeypatch.setattr(uvicorn, "run", lambda app, **kw: calls.append((app, kw)))
     env = {"NEWSLETTER_API_TOKEN": TOKEN, "NEWSLETTER_DATA_DIR": str(tmp_path)}
     assert main(["serve"], env=env) == 0
-    (app, kwargs), = calls
+    ((app, kwargs),) = calls
     assert kwargs["host"] == "127.0.0.1"
     assert kwargs["port"] == 8000
     assert app.state.settings.host == "127.0.0.1"
@@ -515,3 +515,38 @@ def test_serve_refuses_to_start_without_good_settings(monkeypatch, capsys, env, 
     monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: pytest.fail("started"))
     assert main(["serve"], env=env) == 2
     assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_the_token_is_checked_before_the_origin_and_the_body(client, method, path, body):
+    draft = make_draft(client)
+    response = client.request(
+        method,
+        path.format(id=draft["id"]),
+        content="not json",
+        headers={"Origin": "https://evil.example", "Content-Type": "text/plain"},
+    )
+    assert response.status_code == 401
+    response = client.request(
+        method,
+        path.format(id=draft["id"]),
+        content="not json",
+        headers={"Authorization": f"Bearer {TOKEN}", "Content-Type": "text/plain"},
+    )
+    assert response.status_code == 403
+
+
+def test_a_run_that_fails_after_its_timeout_keeps_the_timeout_error(tmp_path, caplog):
+    release = threading.Event()
+    runner = FakeRunner(RuntimeError(f"late {LLM_KEY}"), block=release)
+    settings = make_settings(tmp_path, NEWSLETTER_RUN_TIMEOUT="0.1")
+    with caplog.at_level(logging.WARNING):
+        with TestClient(create_app(settings, runner=runner)) as client:
+            run = run_and_wait(client)
+            release.set()
+            assert client.app.state.jobs.wait_idle(5)
+            after = client.get(f"/api/runs/{run['id']}", headers=headers()).json()
+    assert after == run
+    assert after["error"] == "the run took longer than 0.1 seconds; its result is not used"
+    assert "failed after its timeout" in caplog.text
+    assert LLM_KEY not in caplog.text
