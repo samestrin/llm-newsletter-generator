@@ -140,7 +140,12 @@ def test_claims_with_verbatim_passages_are_kept_with_their_source_link():
     assert summary.error is None
     assert summary.dropped == []
     assert [(c.id, c.text, c.passage, c.source_url) for c in summary.claims] == [
-        ("s1.c1", "The lab released a 3B model.", "released a 3B parameter model on Tuesday", FIRST.link),
+        (
+            "s1.c1",
+            "The lab released a 3B model.",
+            "released a 3B parameter model on Tuesday",
+            FIRST.link,
+        ),
         ("s1.c2", "It uses the Apache license.", "licensed under Apache 2.0", SECOND.link),
     ]
 
