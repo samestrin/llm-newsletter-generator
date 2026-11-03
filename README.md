@@ -6,7 +6,7 @@
 
 **llm-newsletter-generator** is a Python package that generates text-only newsletters from RSS feeds using LLMs. See [VISION.md](VISION.md) for the plan.
 
-The rebuild is in progress: `newsletter issue` drafts a plain issue from RSS and Atom feeds; editing, grouping and the writer's voice arrive with later work.
+The rebuild is in progress: `newsletter issue` drafts a plain issue from RSS and Atom feeds, in the writer's voice when a yourvoice.dev key is set; editing and grouping arrive with later work.
 
 ## Installation
 
@@ -40,13 +40,25 @@ The CLI talks to any OpenAI-compatible endpoint; all model settings come from th
 | `NEWSLETTER_BASE_URL` | Endpoint, default `https://api.openai.com/v1` |
 | `NEWSLETTER_API_KEY` | API key (or `OPENAI_API_KEY`); optional for local endpoints |
 | `NEWSLETTER_FAST_MODEL` | Model for bulk work; required by `newsletter issue` |
-| `NEWSLETTER_REASONING_MODEL` | Model for editing (later work) |
+| `NEWSLETTER_REASONING_MODEL` | Model for editing; the writer's voice needs it |
 | `NEWSLETTER_EMBEDDING_MODEL` | Model for comparing stories (later work) |
 | `NEWSLETTER_<TIER>_PRICE_INPUT` / `NEWSLETTER_<TIER>_PRICE_OUTPUT` | USD per million tokens; without them the cost the server reports is used, else the cost is unknown |
 | `NEWSLETTER_TIMEOUT` | Seconds per request, default 60 |
 | `NEWSLETTER_MAX_RETRIES` | Retries after a timeout, connection error, 408, 409, 429 or 5xx, default 2 |
 
 A tier's model is required only when that tier is used. The API key is never logged or reported.
+
+### The writer's voice
+
+When `YOURVOICE_API_KEY` is set, each summary is rewritten in the writer's own voice. [yourvoice.dev](https://yourvoice.dev) builds a voice profile from samples of the writer's writing, and the reasoning model rewrites the summary to match it. Then a check compares every link, quoted string, number and claim id before and after the rewrite. If one is dropped, changed or added, or the profile or the rewrite fails or times out, the neutral summary is kept and the run report says which one and why. The command then exits 1. Without the key, the issue stays in a neutral voice, and the run report says so.
+
+| Variable | Purpose |
+| --- | --- |
+| `YOURVOICE_API_KEY` | yourvoice.dev API key; turns the voice on. Sent as `X-API-Key`, never logged or reported |
+| `NEWSLETTER_VOICE_SAMPLES` | Folder of the writer's own `.md` and `.txt` files to build the profile from |
+| `NEWSLETTER_VOICE_CACHE_DIR` | Where the profile is cached, default `$XDG_CACHE_HOME/newsletter/voice` (`~/.cache/newsletter/voice`). A run builds a new profile only when the samples change; each build costs yourvoice.dev credits |
+| `YOURVOICE_BASE_URL` | Default `https://api.yourvoice.dev` |
+| `YOURVOICE_TIMEOUT` | Seconds per request, default 60 |
 
 ## Development
 

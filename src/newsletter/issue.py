@@ -60,6 +60,8 @@ class Issue:
     failures: list[FeedFailure] = field(default_factory=list)
     usage: dict[str, Any] = field(default_factory=dict)
     """`LLMClient.report()`: the model, tokens and cost of every step."""
+    voice: dict[str, Any] = field(default_factory=dict)
+    """`VoiceRun.report()`: which summaries are in the writer's voice, and why not."""
 
     @property
     def ok(self) -> bool:
@@ -68,6 +70,7 @@ class Issue:
             bool(self.stories)
             and not self.failures
             and not any(story.error for story in self.stories)
+            and self.voice.get("ok", True)
         )
 
 
@@ -169,6 +172,7 @@ def _run_report(issue: Issue) -> list[str]:
     else:
         lines.append("Every feed was read and every entry was used.")
     lines.append("")
+    lines += _voice_report(issue.voice)
 
     steps = issue.usage.get("steps", [])
     if steps:
@@ -191,6 +195,23 @@ def _run_report(issue: Issue) -> list[str]:
         lines += [total, ""]
     else:
         lines += ["No model calls were made.", ""]
+    return lines
+
+
+def _voice_report(voice: dict[str, Any]) -> list[str]:
+    if not voice:
+        return []
+    if voice["skipped"]:
+        return [f"Neutral voice: {_escape(voice['skipped'])}.", ""]
+    kept = voice["kept_neutral"]
+    if not voice["voiced"] and not kept:
+        return []
+    total = len(voice["voiced"]) + len(kept)
+    lines = [f"Writer's voice: {len(voice['voiced'])} of {total} summaries rewritten.", ""]
+    if kept:
+        lines += ["Kept neutral:", ""]
+        lines += [f"- summary {k['id']}: {_escape(k['reason'])}" for k in kept]
+        lines.append("")
     return lines
 
 

@@ -93,6 +93,21 @@ Every feed was read, every story and claim was used, and every claim was support
 {% endfor %}
 
 {% endif %}
+{% if voice and voice.skipped %}
+Neutral voice: {{ voice.skipped }}.
+
+{% elif voice %}
+Writer's voice: {{ voice.voiced }} of {{ voice.total }} texts rewritten.
+
+{% if voice.kept %}
+**Kept neutral**
+
+{% for kept in voice.kept %}
+- {{ kept.id|code }}: {{ kept.reason }}
+{% endfor %}
+
+{% endif %}
+{% endif %}
 {% if steps %}
 | Step | Tier | Model | Tokens in | Tokens out | Cost | Result |
 | --- | --- | --- | --- | --- | --- | --- |

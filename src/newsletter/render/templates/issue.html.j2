@@ -113,6 +113,19 @@
 {% endfor %}
 </ul>
 {% endif %}
+{% if voice and voice.skipped %}
+<p style="margin:0 0 12px;">Neutral voice: {{ voice.skipped }}.</p>
+{% elif voice %}
+<p style="margin:0 0 12px;">Writer's voice: {{ voice.voiced }} of {{ voice.total }} texts rewritten.</p>
+{% if voice.kept %}
+<p style="margin:0 0 4px;font-weight:bold;">Kept neutral</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for kept in voice.kept %}
+<li><code>{{ kept.id }}</code>: {{ kept.reason }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endif %}
 {% if steps %}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:12px;margin:0 0 8px;">
 <tr><th style="{{ cell }}">Step</th><th style="{{ cell }}">Tier</th><th style="{{ cell }}">Model</th><th style="{{ cell }}">Tokens in</th><th style="{{ cell }}">Tokens out</th><th style="{{ cell }}">Cost</th><th style="{{ cell }}">Result</th></tr>

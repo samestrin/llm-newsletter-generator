@@ -164,7 +164,19 @@ def _context(newsletter: Newsletter) -> dict[str, Any]:
         "dropped_stories": [(d, safe_url(d.link)) for d in report.dropped_stories],
         "steps": [_step_row(step) for step in report.steps],
         "total": _total(report),
+        "voice": _voice(report.voice),
     }
+
+
+def _voice(voice: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The voice lines of the report, or None when no voice pass ran or it had nothing
+    to rewrite."""
+    if voice.get("skipped"):
+        return {"skipped": voice["skipped"]}
+    voiced, kept = voice.get("voiced", []), voice.get("kept_neutral", [])
+    if not voiced and not kept:
+        return None
+    return {"skipped": None, "voiced": len(voiced), "total": len(voiced) + len(kept), "kept": kept}
 
 
 def _byline(items: list[Item]) -> str:

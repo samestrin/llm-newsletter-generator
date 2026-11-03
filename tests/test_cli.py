@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import httpx
@@ -129,3 +130,82 @@ def test_issue_command_needs_a_feed():
     with pytest.raises(SystemExit) as exc:
         run(["issue"])
     assert exc.value.code == 2
+
+
+def voiced_model():
+    """The fast model summarizes; the reasoning model answers in the writer's voice."""
+
+    def reply(request):
+        body = json.loads(request.content)
+        text = "In my voice." if body["model"] == "reason-1" else "A summary."
+        return httpx.Response(200, json={"choices": [{"message": {"content": text}}]})
+
+    return httpx.MockTransport(reply)
+
+
+def yourvoice(status=200):
+    def reply(request):
+        if status != 200:
+            return httpx.Response(status, json={"error": "down"})
+        texts = json.loads(request.content)["texts"]
+        return httpx.Response(200, json={"results": [{"style_prompt": "Terse."} for _ in texts]})
+
+    return httpx.MockTransport(reply)
+
+
+def voice_env(tmp_path):
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    (samples / "post.md").write_text("My own words.", encoding="utf-8")
+    return {
+        **ENV,
+        "NEWSLETTER_REASONING_MODEL": "reason-1",
+        "YOURVOICE_API_KEY": "yv-key",
+        "NEWSLETTER_VOICE_SAMPLES": str(samples),
+        "NEWSLETTER_VOICE_CACHE_DIR": str(tmp_path / "cache"),
+    }
+
+
+def test_issue_command_is_neutral_without_a_voice_key(capsys):
+    code = run(["issue", ATOM])
+
+    assert code == 0
+    assert r"Neutral voice: YOURVOICE\_API\_KEY is not set." in capsys.readouterr().out
+
+
+def test_issue_command_writes_in_the_writers_voice_when_a_key_is_set(tmp_path, capsys):
+    code = main(
+        ["issue", ATOM],
+        env=voice_env(tmp_path),
+        fetch=fixture_web,
+        llm_transport=voiced_model(),
+        voice_transport=yourvoice(),
+    )
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "In my voice." in out and "A summary." not in out.split("## Sources")[0]
+    assert "Writer's voice: 1 of 1 summaries rewritten." in out
+
+
+def test_issue_command_fails_when_the_voice_fails(tmp_path, capsys):
+    code = main(
+        ["issue", ATOM],
+        env=voice_env(tmp_path),
+        fetch=fixture_web,
+        llm_transport=voiced_model(),
+        voice_transport=yourvoice(status=500),
+    )
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "A summary." in out
+    assert "voice profile failed: HTTP 500" in out
+    assert "yv-key" not in out
+
+
+def test_issue_command_rejects_a_bad_voice_setting(capsys):
+    code = run(["issue", ATOM], env={**ENV, "YOURVOICE_TIMEOUT": "soon"})
+
+    assert code == 2
+    assert "YOURVOICE_TIMEOUT" in capsys.readouterr().err
