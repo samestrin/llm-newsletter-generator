@@ -2,9 +2,9 @@
 
 [![Star on GitHub](https://img.shields.io/github/stars/samestrin/llm-newsletter-generator?style=social)](https://github.com/samestrin/llm-newsletter-generator/stargazers) [![Fork on GitHub](https://img.shields.io/github/forks/samestrin/llm-newsletter-generator?style=social)](https://github.com/samestrin/llm-newsletter-generator/network/members) [![Watch on GitHub](https://img.shields.io/github/watchers/samestrin/llm-newsletter-generator?style=social)](https://github.com/samestrin/llm-newsletter-generator/watchers)
 
-![Version 0.0.4](https://img.shields.io/badge/Version-0.0.4-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Built with Python](https://img.shields.io/badge/Built%20with-Python-green)](https://www.python.org/)
 
-**llm-newsletter-generator** is being rebuilt as a Python package that generates text-only newsletters from RSS feeds using LLMs. See [VISION.md](VISION.md) for the plan.
+**llm-newsletter-generator** is a Python package that generates text-only newsletters from RSS feeds using LLMs. See [VISION.md](VISION.md) for the plan.
 
 The rebuild is in progress: `newsletter issue` drafts a plain issue from RSS and Atom feeds; editing, grouping and the writer's voice arrive with later work.
 
@@ -29,7 +29,24 @@ NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_API_KEY=... \
   uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" --topic AI -o issue.md
 ```
 
-`newsletter issue` summarizes each feed item with the fast model and writes Markdown with a link per item, then a run report listing any feed, entry or model call that failed and what each step cost. It exits 1 when anything failed, so a partial issue is never reported as a success.
+`newsletter issue` reads RSS or Atom feeds, summarizes each item with the fast model and writes the issue as Markdown with a link per item, then a run report listing any feed, entry or model call that failed and what each step cost. It exits 1 when anything failed, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs and `--date` to set the issue date.
+
+## Configuration
+
+The CLI talks to any OpenAI-compatible endpoint; all model settings come from the environment:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEWSLETTER_BASE_URL` | Endpoint, default `https://api.openai.com/v1` |
+| `NEWSLETTER_API_KEY` | API key (or `OPENAI_API_KEY`); optional for local endpoints |
+| `NEWSLETTER_FAST_MODEL` | Model for bulk work; required by `newsletter issue` |
+| `NEWSLETTER_REASONING_MODEL` | Model for editing (later work) |
+| `NEWSLETTER_EMBEDDING_MODEL` | Model for comparing stories (later work) |
+| `NEWSLETTER_<TIER>_PRICE_INPUT` / `NEWSLETTER_<TIER>_PRICE_OUTPUT` | USD per million tokens; without them the cost the server reports is used, else the cost is unknown |
+| `NEWSLETTER_TIMEOUT` | Seconds per request, default 60 |
+| `NEWSLETTER_MAX_RETRIES` | Retries after a timeout, connection error, 408, 409, 429 or 5xx, default 2 |
+
+A tier's model is required only when that tier is used. The API key is never logged or reported.
 
 ## Development
 
