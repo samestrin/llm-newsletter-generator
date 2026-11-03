@@ -274,3 +274,19 @@ def test_per_feed_must_be_a_positive_number(value):
     with pytest.raises(SystemExit) as exc:
         run(["issue", ATOM, "--per-feed", value])
     assert exc.value.code == 2
+
+
+def test_archive_command_drafts_the_same_voiced_issue_as_the_issue_command(tmp_path):
+    site = tmp_path / "site"
+    code = main(
+        ["archive", ATOM, "--demo", "--site", str(site)],
+        env=voice_env(tmp_path),
+        fetch=fixture_web,
+        llm_transport=voiced_model(),
+        voice_transport=yourvoice(),
+    )
+
+    (page,) = (site / "issues").glob("*/index.html")
+    text = page.read_text(encoding="utf-8")
+    assert code == 0
+    assert "In my voice." in text and "Flagged: unchecked" in text

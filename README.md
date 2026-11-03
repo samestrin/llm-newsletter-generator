@@ -29,7 +29,17 @@ NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_API_KEY=... \
   uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" --topic AI -o issue.md
 ```
 
-`newsletter issue` reads RSS or Atom feeds, summarizes each item with the fast model and writes the issue as Markdown with a link per item, then a run report listing any feed, entry or model call that failed and what each step cost. It exits 1 when anything failed, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs and `--date` to set the issue date.
+`newsletter issue` reads RSS or Atom feeds, summarizes each item with the fast model and writes the issue as Markdown with a link per item, then a run report listing any feed, entry or model call that failed and what each step cost. It exits 1 when anything failed, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs, `--date` to set the issue date and `--per-feed N` to summarize only the first N items of each feed (each item is one model call).
+
+```bash
+uv run newsletter archive --demo --site site --per-feed 5 https://example.com/feed.xml
+```
+
+`newsletter archive` drafts the same issue (in the writer's voice too, when `YOURVOICE_API_KEY` is set; the daily workflow sets none) and builds it into a static site in `--site`: an index and one page per issue. Only demo mode exists so far, so `--demo` is required. A demo issue is approved by a record marked `automated-demo` instead of a person's sha256 of the text; that record is valid for archive pages only and export refuses it. Every demo page carries a visible "Automated demo" label, and every summary is marked as unchecked.
+
+### Daily archive
+
+`.github/workflows/daily.yml` runs `newsletter archive --demo` every day (and by hand from the Actions tab) on five public AI news feeds, five items each, and uploads the site as the `archive-site` workflow artifact. It has no deploy step and never runs on pull requests. To turn it on, set the secret `NEWSLETTER_API_KEY` and the repository variable `NEWSLETTER_FAST_MODEL` (and `NEWSLETTER_BASE_URL` for a non-OpenAI endpoint).
 
 ## Configuration
 

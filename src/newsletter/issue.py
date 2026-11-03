@@ -6,6 +6,7 @@ and the run report at the end lists every failed feed, dropped entry and model c
 """
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
 from importlib.resources import files
@@ -113,10 +114,24 @@ def make_issue(
     source: RssSource,
     llm: LLMClient,
     issue_date: date,
+    per_feed: int | None = None,
 ) -> Issue:
-    """Read the feeds, summarize every item and return the issue with its run report."""
+    """Read the feeds, summarize every item and return the issue with its run report.
+
+    With `per_feed`, only the first that many items of each feed are kept and summarized.
+    """
+    if per_feed is not None and per_feed < 1:
+        raise ValueError(f"per_feed must be at least 1, got {per_feed}")
     collected = source.collect(urls)
-    stories = summarize(collected.items, llm, topic=topic)
+    items = collected.items
+    if per_feed is not None:
+        kept = Counter()
+        items = []
+        for item in collected.items:
+            kept[item.feed_url] += 1
+            if kept[item.feed_url] <= per_feed:
+                items.append(item)
+    stories = summarize(items, llm, topic=topic)
     return Issue(
         title=title,
         topic=topic,

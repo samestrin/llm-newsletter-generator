@@ -9,6 +9,10 @@ The site is public, so it is built to show nothing it should not:
   path, key or model URL. Feeds are credited by title and host, because a feed URL
   can carry a key in its query.
 
+A site built with an `automated-demo` approval (the daily demo build, which no person
+reviews) carries a visible "Automated demo" label at the top of every page, and every
+summary is marked unchecked, because the plain issue checks no claim.
+
 The site is written to a temp dir beside the target and swapped in only when every
 page is written, so a failed build leaves the previous site as it was.
 """
@@ -22,10 +26,17 @@ from html import escape
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from newsletter.archive.approval import Approval, require_archive
 from newsletter.issue import Issue, Story
+from newsletter.render import FLAG_LABELS
 
 LINK_SCHEMES = ("http", "https")
 LOCAL_SOURCE = "a local file"
+DEMO_LABEL = (
+    '<p role="note" style="border:2px solid #b45309;padding:.5rem 1rem">'
+    "<strong>Automated demo.</strong> A scheduled job drafted this from public AI news "
+    "feeds with no human review. Flagged claims are marked as flagged.</p>"
+)
 
 _PAGE = """<!doctype html>
 <html lang="en">
@@ -53,8 +64,16 @@ def issue_path(issue: Issue) -> str:
     return f"issues/{issue.issue_date.isoformat()}/index.html"
 
 
-def build_site(issues: Iterable[Issue], site_dir: Path) -> None:
-    """Build the site for `issues` into `site_dir`, replacing it only when complete."""
+def build_site(
+    issues: Iterable[Issue], site_dir: Path, *, approval: Approval | None = None
+) -> None:
+    """Build the site for `issues` into `site_dir`, replacing it only when complete.
+
+    With an `approval`, it is checked first; an `automated-demo` one labels every page.
+    """
+    if approval is not None:
+        require_archive(approval)
+    demo = approval is not None and approval.automated
     issues = sorted(issues, key=lambda issue: issue.issue_date, reverse=True)
     dates = Counter(issue.issue_date for issue in issues)
     repeated = sorted(day.isoformat() for day, count in dates.items() if count > 1)
@@ -65,9 +84,9 @@ def build_site(issues: Iterable[Issue], site_dir: Path) -> None:
     site_dir.parent.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=f".{site_dir.name}-build-", dir=site_dir.parent))
     try:
-        _write(work, "index.html", render_index(issues))
+        _write(work, "index.html", render_index(issues, demo=demo))
         for issue in issues:
-            _write(work, issue_path(issue), render_issue(issue))
+            _write(work, issue_path(issue), render_issue(issue, demo=demo))
         work.chmod(0o755)
         _swap(work, site_dir)
     except BaseException:
@@ -75,8 +94,9 @@ def build_site(issues: Iterable[Issue], site_dir: Path) -> None:
         raise
 
 
-def render_index(issues: list[Issue]) -> str:
-    lines = ["<h1>Archive</h1>"]
+def render_index(issues: list[Issue], *, demo: bool = False) -> str:
+    lines = [DEMO_LABEL] if demo else []
+    lines.append("<h1>Archive</h1>")
     if not issues:
         lines.append("<p>No issues yet.</p>")
     else:
@@ -92,8 +112,9 @@ def render_index(issues: list[Issue]) -> str:
     return _PAGE.format(title="Archive", body="\n".join(lines))
 
 
-def render_issue(issue: Issue) -> str:
-    lines = [
+def render_issue(issue: Issue, *, demo: bool = False) -> str:
+    lines = [DEMO_LABEL] if demo else []
+    lines += [
         '<p><a href="../../index.html">Archive</a></p>',
         f"<h1>{_text(issue.title)}</h1>",
         f"<p><time>{issue.issue_date.isoformat()}</time></p>",
@@ -101,13 +122,13 @@ def render_issue(issue: Issue) -> str:
     if not issue.stories:
         lines.append("<p>No stories this time: no feed returned an item.</p>")
     for story in issue.stories:
-        lines += _story(story)
+        lines += _story(story, unchecked=demo)
     lines += _sources(issue.stories)
     lines += _run_report(issue)
     return _PAGE.format(title=_text(issue.title), body="\n".join(lines))
 
 
-def _story(story: Story) -> list[str]:
+def _story(story: Story, *, unchecked: bool = False) -> list[str]:
     item = story.item
     title = _text(item.title)
     href = _href(item.link)
@@ -119,6 +140,8 @@ def _story(story: Story) -> list[str]:
     if story.error:
         lines.append("<p><em>Summary failed; see the run report.</em></p>")
     elif story.summary:
+        if unchecked:
+            lines.append(f"<p><strong>{_text(FLAG_LABELS['unchecked'])}</strong></p>")
         lines += [f"<p>{_text(part)}</p>" for part in story.summary.splitlines() if part.strip()]
     else:
         lines.append("<p><em>The feed gave no text for this story.</em></p>")
