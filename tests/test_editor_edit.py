@@ -244,21 +244,32 @@ def test_parse_edit_rejects_invalid_output_and_says_why(data, problem):
 
 
 @pytest.mark.parametrize(
-    "reply",
+    ("reply", "problem"),
     [
-        "Here is the issue.",
-        "[]",
-        json.dumps({k: v for k, v in VALID.items() if k != "intro"}),
-        json.dumps(edit(themes="Small models")),
-        json.dumps(edit(intro="text")),
-        json.dumps(edit(why_it_matters=["s1"])),
-        json.dumps(edit(lead=None)),
-        json.dumps(edit(order="s2,s1")),
+        ("Here is the issue.", "not JSON"),
+        ("[]", "reply is not an object"),
+        ("null", "reply is not an object"),
+        ("12", "reply is not an object"),
+        (
+            json.dumps({k: v for k, v in VALID.items() if k != "intro"}),
+            "reply has no intro",
+        ),
+        (json.dumps(edit(lead=None)), "lead is not a story id"),
+        (json.dumps(edit(order="s2,s1")), "order is not a list of story ids"),
+        (json.dumps(edit(order=["s2", 1])), "order is not a list of story ids"),
+        (json.dumps(edit(themes="Small models")), "themes and why it matters must be lists"),
+        (json.dumps(edit(why_it_matters="s1")), "themes and why it matters must be lists"),
+        (json.dumps(edit(intro="text")), "intro is not text with claim ids"),
+        (
+            json.dumps(edit(why_it_matters=["s1"])),
+            "why it matters has an entry with no story id",
+        ),
     ],
 )
-def test_parse_edit_rejects_a_reply_that_is_not_the_schema(reply):
-    with pytest.raises(InvalidEdit):
+def test_parse_edit_rejects_a_reply_that_is_not_the_schema_and_says_why(reply, problem):
+    with pytest.raises(InvalidEdit) as caught:
         parse_edit(reply, check_run().stories)
+    assert any(problem in p for p in caught.value.problems), caught.value.problems
 
 
 # Invalid output is retried once, then reported.
@@ -302,6 +313,25 @@ def test_output_citing_an_unsupported_id_twice_is_reported_as_an_error():
         "editor_error": edition.error,
         "editor_rejections": edition.rejections,
     }
+
+
+@pytest.mark.parametrize("reply", ["null", "12"])
+def test_a_reply_that_is_json_but_not_an_object_is_retried_then_reported(reply):
+    model = FakeModel(reply, reply)
+    edition = edit_issue(check_run(), make_llm(model))
+
+    assert len(model.requests) == 2
+    assert "reply is not an object" in edition.error
+    assert len(edition.rejections) == 2
+    assert [s.story_id for s in edition.stories] == ["s1", "s2", "s3"]
+
+
+def test_a_reply_that_is_json_but_not_an_object_is_retried_and_a_good_retry_is_used():
+    edition = edit_issue(check_run(), make_llm(FakeModel("null", VALID)))
+
+    assert edition.error is None
+    assert edition.lead == "s2"
+    assert edition.rejections == ["edit: reply is not an object"]
 
 
 def test_an_unparsable_reply_is_retried_then_reported():
