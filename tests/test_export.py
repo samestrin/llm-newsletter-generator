@@ -295,6 +295,22 @@ def test_a_failing_api_ends_in_a_reported_error(reply, expected):
     assert "beehiiv" in summary and expected in summary
 
 
+def test_each_request_carries_the_connectors_timeout():
+    platforms = FakePlatforms()
+    connectors = connectors_from_env({**ENV, "NEWSLETTER_EXPORT_TIMEOUT": "7"})
+    export_draft(
+        TEXT,
+        title=TITLE,
+        approval=approved(),
+        connectors=connectors,
+        transport=httpx.MockTransport(platforms),
+    )
+    assert len(platforms.requests) == 3
+    for request in platforms.requests:
+        timeout = request.extensions["timeout"]
+        assert (timeout["connect"], timeout["read"], timeout["write"]) == (7.0, 7.0, 7.0)
+
+
 def test_a_report_with_nothing_configured_is_not_a_success():
     report = export_draft(TEXT, title=TITLE, approval=approved(), connectors=[])
     assert not report.ok
