@@ -265,6 +265,13 @@ def test_cost_reported_by_server_is_used_when_no_price_is_set(server):
     assert client.records[0].cost == pytest.approx(0.0123)
 
 
+def test_non_numeric_cost_from_server_is_unknown(server):
+    server.replies = [(200, chat_reply(cost=True))]
+    client = make_client(server)
+    client.complete("summarize", [{"role": "user", "content": "x"}])
+    assert client.records[0].cost is None
+
+
 def test_unknown_cost_is_none_not_zero(server):
     server.replies = [(200, chat_reply())]
     client = make_client(server)
@@ -283,6 +290,8 @@ def test_unknown_cost_is_none_not_zero(server):
     [
         (400, {"error": {"message": "bad request"}}),
         (200, b"not json"),
+        (200, []),
+        (200, "hello"),
         (200, {"choices": []}),
         (200, {"choices": [{"message": {"role": "assistant", "content": None}}]}),
         (200, {"choices": [{"message": {"role": "assistant", "content": "  "}}]}),
