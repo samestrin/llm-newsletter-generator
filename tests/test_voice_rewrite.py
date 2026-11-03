@@ -328,3 +328,34 @@ def test_voice_issue_rewrites_the_summaries_and_adds_the_steps_to_the_report(tmp
     assert [s.summary for s in issue.stories] == [VOICED, None]
     assert issue.voice["voiced"] == ["1"]
     assert [step["step"] for step in issue.usage["steps"]] == ["voice-1"]
+
+
+@pytest.mark.parametrize(
+    ("reply", "reason"),
+    [
+        (httpx.ConnectError(f"refused for {KEY}"), "request failed: ConnectError: refused for"),
+        (httpx.Response(200, text="<html>"), "response is not JSON"),
+    ],
+)
+def test_a_connection_error_or_non_json_reply_is_reported_without_the_key(
+    tmp_path, samples, reply, reason
+):
+    def answer(request):
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    result, _, _ = run(tmp_path, samples, api=answer)
+
+    [kept] = result.report()["kept_neutral"]
+    assert kept["reason"].startswith(f"voice profile failed: {reason}")
+    assert KEY not in kept["reason"]
+
+
+def test_a_cache_that_cannot_be_written_still_gives_the_voice(tmp_path, samples, caplog):
+    (tmp_path / "cache").write_text("a file, not a folder", encoding="utf-8")
+
+    result, _, _ = run(tmp_path, samples)
+
+    assert result.texts == {"1": VOICED}
+    assert "could not cache the voice profile" in caplog.text

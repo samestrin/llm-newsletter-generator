@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from newsletter.issue import fill, load_prompt
+from newsletter.issue import Issue, fill, load_prompt
 from newsletter.llm import LLMClient, LLMError
 from newsletter.voice.check import compare_facts
 from newsletter.voice.yourvoice import VoiceError, VoiceSettings, read_samples, voice_style
@@ -112,6 +112,28 @@ def apply_voice(
         run.texts[text_id] = rewrite
         run.voiced.append(text_id)
     _log_kept_neutral(run)
+    return run
+
+
+def voice_issue(
+    issue: Issue,
+    llm: LLMClient,
+    settings: VoiceSettings,
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> VoiceRun:
+    """Rewrite the issue's summaries in place; the voice and its steps join the run report."""
+    summaries = {
+        str(number): story.summary
+        for number, story in enumerate(issue.stories, start=1)
+        if story.summary
+    }
+    run = apply_voice(summaries, llm, settings, transport=transport)
+    for number, story in enumerate(issue.stories, start=1):
+        if str(number) in run.texts:
+            story.summary = run.texts[str(number)]
+    issue.voice = run.report()
+    issue.usage = llm.report()
     return run
 
 

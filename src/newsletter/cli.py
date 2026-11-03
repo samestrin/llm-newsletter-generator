@@ -19,6 +19,7 @@ from newsletter.issue import make_issue, render_markdown
 from newsletter.llm import ConfigError, LLMClient, Settings
 from newsletter.sources import FeedCache, RssSource
 from newsletter.sources.http import Fetch, http_get
+from newsletter.voice import VoiceSettings, voice_issue
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,6 +56,7 @@ def main(
     env: Mapping[str, str] | None = None,
     fetch: Fetch = http_get,
     llm_transport: httpx.BaseTransport | None = None,
+    voice_transport: httpx.BaseTransport | None = None,
 ) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -62,12 +64,13 @@ def main(
         parser.print_help()
         return 0
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    return _issue(args, env, fetch, llm_transport)
+    return _issue(args, env, fetch, llm_transport, voice_transport)
 
 
-def _issue(args, env, fetch, llm_transport) -> int:
+def _issue(args, env, fetch, llm_transport, voice_transport) -> int:
     try:
         settings = Settings.from_env(env)
+        voice = VoiceSettings.from_env(env)
     except ConfigError as error:
         print(f"newsletter: {error}", file=sys.stderr)
         return 2
@@ -86,6 +89,7 @@ def _issue(args, env, fetch, llm_transport) -> int:
             llm=llm,
             issue_date=args.date or date.today(),
         )
+        voice_issue(issue, llm, voice, transport=voice_transport)
     finally:
         llm.close()
 
