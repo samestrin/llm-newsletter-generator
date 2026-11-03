@@ -21,7 +21,7 @@ from newsletter.archive import build_site, demo_approval
 from newsletter.editor import check_claims, edit_issue, summarize_stories
 from newsletter.issue import Issue, first_per_feed, make_issue
 from newsletter.llm import ConfigError, LLMClient, Settings
-from newsletter.render import Newsletter, build_report, render_markdown
+from newsletter.render import Newsletter, build_report, render_html, render_markdown
 from newsletter.sources import FeedCache, RssSource
 from newsletter.sources.http import Fetch, http_get
 from newsletter.voice import VoiceSettings, voice_edition, voice_issue
@@ -56,14 +56,16 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Read RSS or Atom feeds, extract claims with the fast model "
             "(NEWSLETTER_FAST_MODEL), check each against its source, have the reasoning model "
-            "(NEWSLETTER_REASONING_MODEL) edit the issue, and write it as Markdown. Every "
+            "(NEWSLETTER_REASONING_MODEL) edit the issue, and write it as Markdown, and as an "
+            "HTML email with --html. Every "
             "claim links to its source, unsupported or unchecked claims are marked, and a run "
             "report lists what failed and what each step cost. When YOURVOICE_API_KEY is set, "
             "the editor's prose (never a claim or a link) is rewritten in the writer's voice "
             "(see the README)."
         ),
     )
-    issue.add_argument("-o", "--output", type=Path, help="write here instead of stdout")
+    issue.add_argument("-o", "--output", type=Path, help="write Markdown here instead of stdout")
+    issue.add_argument("--html", type=Path, help="also write the HTML email here")
 
     archive = commands.add_parser(
         "archive",
@@ -172,6 +174,8 @@ def _issue(args, env, fetch, llm_transport, voice_transport) -> int:
         args.output.write_text(markdown, encoding="utf-8")
     else:
         sys.stdout.write(markdown)
+    if args.html:
+        args.html.write_text(render_html(newsletter), encoding="utf-8")
 
     print(
         f"newsletter: {_count(len(stories), 'story', 'stories')}, "
@@ -179,7 +183,8 @@ def _issue(args, env, fetch, llm_transport, voice_transport) -> int:
         f"{_count(len(report.dropped_claims), 'dropped claim')}, "
         f"{_count(len(report.flagged_claims), 'flagged claim')}"
         + (f"; editor failed: {report.editor_error}" if report.editor_error else "")
-        + (f"; wrote {args.output}" if args.output else ""),
+        + (f"; wrote {args.output}" if args.output else "")
+        + (f"; wrote {args.html}" if args.html else ""),
         file=sys.stderr,
     )
     return 0 if report.ok and stories else 1
