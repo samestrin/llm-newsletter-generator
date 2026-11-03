@@ -1,6 +1,7 @@
 // A fake of `newsletter serve` for the browser test: the same draft endpoints and the
 // same write rules (token, then Origin, then a JSON object body), drafts kept in memory.
-// `POST /__reset` puts the one draft back as it started.
+// `POST /__reset` puts the one draft back as it started, with any fields in its JSON body
+// (title, text, flags, report...) in place of the seed's.
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -66,7 +67,13 @@ async function readJson(req) {
 createServer(async (req, res) => {
   const { method, url } = req;
   if (method === "POST" && url === "/__reset") {
-    draft = seed();
+    let fields = {};
+    try {
+      fields = (await readJson(req)) ?? {};
+    } catch {
+      // No body: the one draft as it started.
+    }
+    draft = { ...seed(), ...fields };
     return send(res, 200, { ok: true });
   }
   if (req.headers.authorization !== `Bearer ${TOKEN}`) {

@@ -1,0 +1,227 @@
+{
+  "title": "Open models week",
+  "issue_date": "2026-11-02",
+  "text": "# Open models week\n\n*2026-11-02*\n\nThree developments this week. [1](<https://models.example.org/posts/tiny-3b>) [4](<https://regulator.example.gov/news/model-reporting>) [7](<https://northwind.example.com/n200>)\n\n**Themes**\n\n- Open models get smaller [1](<https://models.example.org/posts/tiny-3b>) [2](<https://models.example.org/posts/tiny-3b>)\n- Rules and hardware catch up [4](<https://regulator.example.gov/news/model-reporting>) [7](<https://northwind.example.com/n200>)\n\n## Lead story: [Lab releases small open model](<https://models.example.org/posts/tiny-3b>)\n\n*Example Models Wire (Copyright 2026 Example Models Wire. Headlines and links only.) · 2026-11-02*\n\n**Why it matters:** Why story s1 matters. [1](<https://models.example.org/posts/tiny-3b>)\n\n- \\[1\\] Example Lab released Tiny-3B, a 3 billion parameter model. ([source](<https://models.example.org/posts/tiny-3b>))\n- \\[2\\] The model is licensed under Apache 2.0. ([source](<https://models.example.org/posts/tiny-3b>))\n- \\[3\\] **Flagged: unsupported, the source does not support this claim.** Tiny-3B scores 95 on the MMLU benchmark. ([source](<https://models.example.org/posts/tiny-3b>))\n\n## [Regulator opens consultation on model reporting](<https://regulator.example.gov/news/model-reporting>)\n\n*Example Models Wire (Copyright 2026 Example Models Wire. Headlines and links only.) · 2026-11-02*\n\n**Why it matters:** Why story s2 matters. [4](<https://regulator.example.gov/news/model-reporting>)\n\n- \\[4\\] The Digital Authority opened a consultation on incident reporting for large AI models. ([source](<https://regulator.example.gov/news/model-reporting>))\n- \\[5\\] **Flagged: unsupported, the source does not support this claim.** Responses are due by 15 January. ([source](<https://regulator.example.gov/news/model-reporting>))\n- \\[6\\] The proposal would apply to models trained with more than 10^26 operations. ([source](<https://regulator.example.gov/news/model-reporting>))\n\n## [Chipmaker announces inference accelerator](<https://northwind.example.com/n200>)\n\n*Example Models Wire (Copyright 2026 Example Models Wire. Headlines and links only.) · 2026-11-02*\n\n**Why it matters:** Why story s3 matters. [7](<https://northwind.example.com/n200>)\n\n- \\[7\\] Northwind announced the N200 inference accelerator. ([source](<https://northwind.example.com/n200>))\n- \\[8\\] **Flagged: unsupported, the source does not support this claim.** Northwind says the N200 delivers ten times the throughput of its previous chip. ([source](<https://northwind.example.com/n200>))\n- \\[9\\] Shipping is planned for the second quarter of next year. ([source](<https://northwind.example.com/n200>))\n\n## Run report\n\n**Claims flagged**\n\n- `s1.c3` unsupported: Tiny-3B scores 95 on the MMLU benchmark. (The passage gives 71, not 95.)\n- `s2.c2` unsupported: Responses are due by 15 January. (The passage gives 15 December.)\n- `s3.c2` unsupported: Northwind says the N200 delivers ten times the throughput of its previous chip. (The passage says twice, not ten times.)\n\n| Step | Tier | Model | Tokens in | Tokens out | Cost | Result |\n| --- | --- | --- | --- | --- | --- | --- |\n| claims-s1 | fast | recorded-fast | 900 | 150 | $0.000225 | ok |\n| claims-s2 | fast | recorded-fast | 900 | 150 | $0.000225 | ok |\n| claims-s3 | fast | recorded-fast | 900 | 150 | $0.000225 | ok |\n| check-s1.c1 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s1.c2 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s1.c3 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s2.c1 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s2.c2 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s2.c3 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s3.c1 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s3.c2 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| check-s3.c3 | fast | recorded-fast | 300 | 25 | $0.000060 | ok |\n| edit | reasoning | recorded-reasoning | 800 | 400 | $0.006000 | ok |\n\nTotal cost: $0.007215\n",
+  "flags": [
+    {
+      "id": "s1.c3",
+      "story_id": "s1",
+      "text": "Tiny-3B scores 95 on the MMLU benchmark.",
+      "status": "unsupported",
+      "reason": "The passage gives 71, not 95.",
+      "source_url": "https://models.example.org/posts/tiny-3b"
+    },
+    {
+      "id": "s2.c2",
+      "story_id": "s2",
+      "text": "Responses are due by 15 January.",
+      "status": "unsupported",
+      "reason": "The passage gives 15 December.",
+      "source_url": "https://regulator.example.gov/news/model-reporting"
+    },
+    {
+      "id": "s3.c2",
+      "story_id": "s3",
+      "text": "Northwind says the N200 delivers ten times the throughput of its previous chip.",
+      "status": "unsupported",
+      "reason": "The passage says twice, not ten times.",
+      "source_url": "https://northwind.example.com/n200"
+    }
+  ],
+  "report": {
+    "failed_sources": [],
+    "dropped_stories": [],
+    "dropped_claims": [],
+    "flagged_claims": [
+      {
+        "id": "s1.c3",
+        "story_id": "s1",
+        "text": "Tiny-3B scores 95 on the MMLU benchmark.",
+        "status": "unsupported",
+        "reason": "The passage gives 71, not 95.",
+        "source_url": "https://models.example.org/posts/tiny-3b"
+      },
+      {
+        "id": "s2.c2",
+        "story_id": "s2",
+        "text": "Responses are due by 15 January.",
+        "status": "unsupported",
+        "reason": "The passage gives 15 December.",
+        "source_url": "https://regulator.example.gov/news/model-reporting"
+      },
+      {
+        "id": "s3.c2",
+        "story_id": "s3",
+        "text": "Northwind says the N200 delivers ten times the throughput of its previous chip.",
+        "status": "unsupported",
+        "reason": "The passage says twice, not ten times.",
+        "source_url": "https://northwind.example.com/n200"
+      }
+    ],
+    "editor_error": null,
+    "editor_rejections": [],
+    "steps": [
+      {
+        "step": "claims-s1",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "claims-s2",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "claims-s3",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 900,
+        "completion_tokens": 150,
+        "cost": 0.000225,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s1.c1",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s1.c2",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s1.c3",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s2.c1",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s2.c2",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s2.c3",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s3.c1",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s3.c2",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "check-s3.c3",
+        "tier": "fast",
+        "model": "recorded-fast",
+        "ok": true,
+        "prompt_tokens": 300,
+        "completion_tokens": 25,
+        "cost": 6e-05,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      },
+      {
+        "step": "edit",
+        "tier": "reasoning",
+        "model": "recorded-reasoning",
+        "ok": true,
+        "prompt_tokens": 800,
+        "completion_tokens": 400,
+        "cost": 0.006,
+        "attempts": 1,
+        "seconds": 0.0,
+        "error": null
+      }
+    ],
+    "total_cost": 0.007215,
+    "cost_complete": true,
+    "failed_steps": [],
+    "voice": {},
+    "ok": false
+  }
+}
