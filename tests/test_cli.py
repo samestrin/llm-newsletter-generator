@@ -1,5 +1,6 @@
 import json
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 import httpx
@@ -167,6 +168,31 @@ def test_issue_command_writes_the_edited_issue_with_every_claim_linked(tmp_path,
     assert code == 1
     err = capsys.readouterr().err
     assert "3 stories" in err and "1 flagged claim" in err and "1 dropped claim" in err
+
+
+class Anchors(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.hrefs = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self.hrefs.append(dict(attrs).get("href"))
+
+
+def test_issue_command_writes_the_html_email_with_every_claim_linked_and_flagged(tmp_path):
+    out, html = tmp_path / "issue.md", tmp_path / "issue.html"
+    run(["issue", RSS, "https://example.com/missing.xml", "-o", str(out), "--html", str(html)])
+
+    page = html.read_text(encoding="utf-8")
+    anchors = Anchors()
+    anchors.feed(page)
+    for link in ["https://example.com/posts/open-model", "https://example.com/posts/benchmarks"]:
+        assert link in anchors.hrefs
+    assert "<html" in page.lower()
+    assert FALSE_CLAIM in page and "Flagged: unsupported" in page
+    # The run report lists the failed feed and the cost per step.
+    assert "https://example.com/missing.xml" in page and "claims-s1" in page
 
 
 def test_issue_command_prints_to_stdout_and_exits_zero_when_all_is_well(capsys):
