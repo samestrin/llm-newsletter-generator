@@ -1,7 +1,8 @@
 name: Release
 
-# A `v*` tag builds the image and pushes it to GHCR. A pull request that
-# touches the image or this file runs the same build without pushing.
+# A `v*` tag builds the `api` and `web` images (the two targets in `Dockerfile`)
+# and pushes them to GHCR. A pull request that touches the images or this file
+# runs the same builds without pushing.
 on:
   push:
     tags:
@@ -13,9 +14,6 @@ on:
       - .dockerignore
 
 permissions: {}
-
-env:
-  IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
   lint:
@@ -36,6 +34,9 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      matrix:
+        target: [api, web]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,11 +45,12 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE }}
+          images: ghcr.io/${{ github.repository }}/${{ matrix.target }}
           tags: type=ref,event=pr
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.target }}
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -61,6 +63,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        target: [api, web]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,7 +74,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE }}
+          images: ghcr.io/${{ github.repository }}/${{ matrix.target }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -81,6 +86,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
