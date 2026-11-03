@@ -56,8 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Read RSS or Atom feeds, extract claims with the fast model "
             "(NEWSLETTER_FAST_MODEL), check each against its source, have the reasoning model "
-            "(NEWSLETTER_REASONING_MODEL) edit the issue, and write it as Markdown (and an HTML email with --html). "
-            "Every "
+            "(NEWSLETTER_REASONING_MODEL) edit the issue, and write it as Markdown, and as an "
+            "HTML email with --html. Every "
             "claim links to its source, unsupported or unchecked claims are marked, and a run "
             "report lists what failed and what each step cost. When YOURVOICE_API_KEY is set, "
             "the editor's prose (never a claim or a link) is rewritten in the writer's voice "
