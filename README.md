@@ -103,6 +103,18 @@ Every call but the health check needs `Authorization: Bearer $NEWSLETTER_API_TOK
 | `NEWSLETTER_DATA_DIR` | Where drafts and runs are kept, default `$XDG_DATA_HOME/newsletter` (`~/.local/share/newsletter`) |
 | `NEWSLETTER_RUN_TIMEOUT` | Seconds a run may take, default 900 |
 
+### The review page
+
+`web/` is a page (React and Vite) for reviewing drafts. Paste the API token, pick a draft, and read its text with its flagged claims and its run report: failed feeds, dropped stories and claims, editor and voice problems, and each model call with its tokens and cost. Edit the text and save it, which clears any approval, then approve. Approve is off while an edit is unsaved. It sends the sha256 of the text you read, so if the draft changed since, the API refuses it and the page says so; Reload fetches the new text. The draft text is always shown as text, never as HTML, and only http and https sources are links. The token stays in the page's memory, so a reload asks for it again.
+
+```bash
+export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
+NEWSLETTER_API_ORIGINS=http://localhost:5173 uv run newsletter serve
+cd web && npm ci && npm run dev    # http://localhost:5173, /api goes to 127.0.0.1:8000
+```
+
+The page's origin must be in `NEWSLETTER_API_ORIGINS`, or the API refuses its writes. `NEWSLETTER_API_URL` points the dev server's `/api` somewhere else. `VITE_API_URL` at build time makes the built page call the API there directly instead of on its own origin.
+
 ## Development
 
 ```bash
@@ -110,6 +122,8 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run python -m newsletter.evals   # eval table from recorded responses, no network
+cd web && npm ci && npm run build && npm test   # the review page: build, unit tests with coverage
+npx playwright install chromium && npm run test:e2e   # browser test against a fake API
 ```
 
 The eval replays recorded model answers for past feeds that include planted false claims. `uv run python -m newsletter.evals --live -o evals/results.md` runs the same feeds against the models in your environment and spends credit.
