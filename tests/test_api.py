@@ -550,3 +550,68 @@ def test_a_run_that_fails_after_its_timeout_keeps_the_timeout_error(tmp_path, ca
     assert after["error"] == "the run took longer than 0.1 seconds; its result is not used"
     assert "failed after its timeout" in caplog.text
     assert LLM_KEY not in caplog.text
+
+
+# The store: ids, failed writes and stray files.
+
+
+def test_a_draft_id_cannot_reach_another_json_file(tmp_path, client):
+    from newsletter.api.store import DraftStore, NotFound
+
+    run = run_and_wait(client)
+    assert (tmp_path / "data" / "runs" / f"{run['id']}.json").is_file()
+    store = DraftStore(tmp_path / "data")
+    for draft_id in (f"../runs/{run['id']}", f"..%2Fruns%2F{run['id']}"):
+        with pytest.raises(NotFound):
+            store.get(draft_id)
+    response = client.get(f"/api/drafts/..%2Fruns%2F{run['id']}", headers=headers())
+    assert response.status_code == 404
+    assert run["id"] not in response.text
+
+
+def test_a_well_formed_id_with_no_file_is_not_found(client):
+    missing = "0" * 32
+    assert client.get(f"/api/drafts/{missing}", headers=headers()).status_code == 404
+    assert client.get(f"/api/runs/{missing}", headers=headers()).status_code == 404
+    response = client.post(f"/api/drafts/{missing}/approve", json={}, headers=headers())
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("failing", ["json.dump", "os.replace"])
+def test_a_failed_write_leaves_the_old_file_and_no_temp_file(tmp_path, monkeypatch, failing):
+    from newsletter.api import store as store_module
+    from newsletter.api.store import DraftStore
+
+    drafts = DraftStore(tmp_path)
+    draft = drafts.create(CONTENT, run_id="r")
+
+    def fail(*args, **kwargs):
+        raise OSError("disk full")
+
+    module, name = failing.split(".")
+    monkeypatch.setattr(getattr(store_module, module), name, fail)
+    with pytest.raises(OSError, match="disk full"):
+        drafts.edit(draft["id"], "new text")
+    monkeypatch.undo()
+
+    assert sorted(p.name for p in (tmp_path / "drafts").iterdir()) == [f"{draft['id']}.json"]
+    assert drafts.get(draft["id"])["text"] == TEXT
+
+
+def test_stray_files_in_the_drafts_dir_are_skipped_and_logged(client, tmp_path, caplog):
+    draft = make_draft(client)
+    folder = tmp_path / "data" / "drafts"
+    (folder / "notes.json").write_text('{"id": "notes"}', "utf-8")
+    (folder / ("e" * 32 + ".json")).write_text("[1]", "utf-8")
+    with caplog.at_level(logging.WARNING):
+        listed = client.get("/api/drafts", headers=headers()).json()
+    assert [d["id"] for d in listed] == [draft["id"]]
+    assert "notes.json" in caplog.text
+    assert "e" * 32 in caplog.text and "not an object" in caplog.text
+
+
+def test_a_port_past_65535_is_refused():
+    from newsletter.llm import ConfigError
+
+    with pytest.raises(ConfigError, match="NEWSLETTER_API_PORT"):
+        ApiSettings.from_env({"NEWSLETTER_API_PORT": "70000"})

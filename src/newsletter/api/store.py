@@ -104,6 +104,7 @@ class JsonFiles:
         items = []
         for path in sorted(self.folder.glob("*.json")):
             if not _ID.fullmatch(path.stem):
+                log.warning("skipped %s: not a draft or run file", path)
                 continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
