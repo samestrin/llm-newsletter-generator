@@ -209,3 +209,52 @@ def test_issue_command_rejects_a_bad_voice_setting(capsys):
 
     assert code == 2
     assert "YOURVOICE_TIMEOUT" in capsys.readouterr().err
+
+
+def test_archive_command_builds_a_labeled_demo_site(tmp_path, capsys):
+    site = tmp_path / "site"
+    code = run(["archive", RSS, ATOM, "--demo", "--site", str(site), "--date", "2026-11-03"])
+
+    assert code == 0
+    page = (site / "issues/2026-11-03/index.html").read_text(encoding="utf-8")
+    assert "Automated demo" in page and "Automated demo" in (site / "index.html").read_text()
+    assert "Flagged: unchecked" in page
+    assert f"wrote {site}" in capsys.readouterr().err
+
+
+def test_archive_command_refuses_to_build_without_demo_mode(tmp_path, capsys):
+    fetched = []
+
+    def fetch(url, headers, timeout):
+        fetched.append(url)
+        return HttpResponse(404)
+
+    code = main(["archive", ATOM, "--site", str(tmp_path / "site")], env=ENV, fetch=fetch)
+
+    assert code == 2
+    assert fetched == []
+    assert not (tmp_path / "site").exists()
+    assert "--demo" in capsys.readouterr().err
+
+
+def test_archive_command_builds_the_site_but_fails_when_a_feed_fails(tmp_path, capsys):
+    site = tmp_path / "site"
+    code = run(["archive", ATOM, "https://example.com/missing.xml", "--demo", "--site", str(site)])
+
+    assert code == 1
+    assert (site / "index.html").exists()
+    assert "1 feed problem" in capsys.readouterr().err
+
+
+def test_archive_command_needs_a_fast_model_before_fetching_anything(tmp_path, capsys):
+    code = main(["archive", ATOM, "--demo", "--site", str(tmp_path / "s")], env={})
+
+    assert code == 2
+    assert not (tmp_path / "s").exists()
+    assert "NEWSLETTER_FAST_MODEL" in capsys.readouterr().err
+
+
+def test_archive_command_needs_a_site_dir():
+    with pytest.raises(SystemExit) as exc:
+        run(["archive", ATOM, "--demo"])
+    assert exc.value.code == 2
