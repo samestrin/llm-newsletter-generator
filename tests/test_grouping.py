@@ -100,14 +100,15 @@ def test_stories_rank_closest_to_the_topic_first():
 def test_ties_keep_input_order():
     items = [make_item("Left"), make_item("Best"), make_item("Right")]
     # Left and Right are equally close to the topic, and far from each other.
-    llm = FakeEmbedder({"the topic": [1, 0, 0], "Left": [0.5, 1, 0], "Best": [1, 0, 0],
-                        "Right": [0.5, 0, 1]})
+    llm = FakeEmbedder(
+        {"the topic": [1, 0, 0], "Left": [0.5, 1, 0], "Best": [1, 0, 0], "Right": [0.5, 0, 1]}
+    )
 
     grouping = group_items(items, llm, topic="the topic")
 
     assert [story[0].title for story in grouping.stories.values()] == ["Best", "Left", "Right"]
 
-    llm.vectors["Best"] = [0.5, 0.7, 0.7]  # now all three tie, so input order holds
+    llm.vectors["Best"] = [0.5, 0, -1]  # now all three tie, so input order holds
     grouping = group_items(items, llm, topic="the topic", threshold=0.999)
     assert [story[0].title for story in grouping.stories.values()] == ["Left", "Best", "Right"]
 
@@ -200,6 +201,37 @@ def test_embeddings_of_different_lengths_are_an_error():
     assert [entry.title for entry in grouping.left_out] == ["One", "Two"]
 
 
+def test_the_wrong_number_of_embeddings_is_an_error():
+    class ShortEmbedder:
+        def embed(self, step, inputs):
+            return [[1, 0]]
+
+    grouping = group_items([make_item("One")], ShortEmbedder(), topic="t")
+
+    assert grouping.error == "group: expected 2 embeddings, got 1"
+    assert grouping.left_out == [
+        LeftOut("One", make_item("One").link, "ungrouped: the embeddings could not be used")
+    ]
+
+
+def test_a_story_ranks_by_its_closest_source():
+    items = [make_item("Solo"), make_item("Copy far"), make_item("Copy near")]
+    # The copies group; ranked by its first item alone the story would come after Solo.
+    llm = FakeEmbedder(
+        {
+            "t": [1, 0, 0],
+            "Solo": [0.3, 0, 0.95],
+            "Copy far": [0.1, 1, 0],
+            "Copy near": [0.45, 0.9, 0],
+        }
+    )
+
+    grouping = group_items(items, llm, topic="t", threshold=0.9)
+
+    stories = [[item.title for item in story] for story in grouping.stories.values()]
+    assert stories == [["Copy far", "Copy near"], ["Solo"]]
+
+
 def test_no_items_makes_no_call():
     llm = FakeEmbedder({})
 
@@ -238,7 +270,9 @@ def test_a_threshold_outside_zero_to_one_is_refused(threshold):
 def test_a_story_joins_the_closest_group_not_the_first():
     items = [make_item("A"), make_item("B"), make_item("C")]
     # C is near both A and B, closer to B.
-    llm = FakeEmbedder({"t": [1, 0, 0], "A": [1, 0, 0], "B": [0.8, 0.6, 0], "C": [0.9, 0.44, 0]})
+    llm = FakeEmbedder(
+        {"t": [1, 0, 0], "A": [1, 0, 0], "B": [0.8, 0.6, 0], "C": [0.9397, 0.342, 0]}
+    )
 
     grouping = group_items(items, llm, topic="t", threshold=0.9)
 
