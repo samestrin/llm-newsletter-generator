@@ -75,7 +75,12 @@ def test_every_fixture_page_extracts_text():
 
 
 def test_a_page_that_robots_forbids_is_listed_not_fetched():
-    web = FakeWeb({ROBOTS: html(b"User-agent: *\nDisallow: /2026/\n", "text/plain"), PAGE: html(page("article.html"))})
+    web = FakeWeb(
+        {
+            ROBOTS: html(b"User-agent: *\nDisallow: /2026/\n", "text/plain"),
+            PAGE: html(page("article.html")),
+        }
+    )
     result = PageSource(fetch=web).collect([PAGE])
     assert result.items == []
     assert result.failures == [FeedFailure(PAGE, "disallowed by robots.txt")]
@@ -111,7 +116,9 @@ def test_a_redirect_to_a_private_address_is_refused():
     web = FakeWeb({PAGE: HttpResponse(302, {"location": "http://internal.example/admin"})})
     result = PageSource(fetch=web, resolve=lambda host: ["192.168.1.1"]).collect([PAGE])
     assert result.failures == [
-        FeedFailure(PAGE, "refused: internal.example is a private or loopback address (192.168.1.1)")
+        FeedFailure(
+            PAGE, "refused: internal.example is a private or loopback address (192.168.1.1)"
+        )
     ]
     assert web.fetched("http://internal.example/admin") == []
 
