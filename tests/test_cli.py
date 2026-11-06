@@ -34,12 +34,17 @@ ENV = {
     "NEWSLETTER_BASE_URL": "http://model.test/v1",
     "NEWSLETTER_FAST_MODEL": "fast-1",
     "NEWSLETTER_REASONING_MODEL": "reason-1",
+    "NEWSLETTER_EMBEDDING_MODEL": "embed-1",
     "NEWSLETTER_MAX_RETRIES": "0",
 }
 PASSAGES = {
     "Scaling notes": "Notes on scaling",
     "A new open model": "The model is open",
     "Benchmarks revisited": "Benchmarks are hard",
+    # The run from a sources config, at the end of this file.
+    "City council approves new bike lanes": "12 km of protected bike lanes",
+    "Acme releases Falcon-9 open-weight model": "Apache 2.0",
+    "A mystery launch": "A mystery launch",
 }
 FALSE_CLAIM = "The model has one trillion parameters."
 
@@ -51,12 +56,31 @@ def fixture_web(url, headers, timeout):
     return HttpResponse(200, {}, (FIXTURES / bodies[url]).read_bytes())
 
 
-def model(*, fail_models=(), edit_down=False, rewrite=lambda text: f"In my voice: {text}"):
-    """A fake endpoint answering claims, checks and the edit by their schema name, and a
-    call with no schema (the voice pass) with `rewrite` of the text it was given."""
+def apart(texts):
+    """Embeddings that put no two items together and every item as close to the topic
+    (the first text), so the stories keep the order they came in."""
+    return [[1.0] + [3.0 if i == n else 0.0 for i in range(len(texts))] for n in range(len(texts))]
+
+
+def model(
+    *,
+    fail_models=(),
+    edit_down=False,
+    rewrite=lambda text: f"In my voice: {text}",
+    embed=apart,
+):
+    """A fake endpoint answering claims, checks and the edit by their schema name, a
+    call with no schema (the voice pass) with `rewrite` of the text it was given, and an
+    embedding call with `embed` of its inputs."""
 
     def reply(request):
         body = json.loads(request.content)
+        if request.url.path.endswith("/embeddings"):
+            if body["model"] in fail_models:
+                return httpx.Response(500, json={"error": "down"})
+            vectors = embed(body["input"])
+            data = [{"index": n, "embedding": v} for n, v in enumerate(vectors)]
+            return httpx.Response(200, json={"data": data, "usage": {"prompt_tokens": 3}})
         kind = (body.get("response_format") or {}).get("json_schema", {}).get("name")
         prompt = body["messages"][-1]["content"]
         if body["model"] in fail_models or (edit_down and kind == "issue_edit"):
@@ -233,7 +257,7 @@ def test_issue_command_fails_when_a_model_call_fails(capsys):
     assert "(<https://lab.example.org/scaling>)" in captured.out
 
 
-def test_issue_command_needs_both_models_before_fetching_anything(capsys):
+def test_issue_command_needs_all_three_models_before_fetching_anything(capsys):
     fetched = []
 
     def fetch(url, headers, timeout):
@@ -241,7 +265,12 @@ def test_issue_command_needs_both_models_before_fetching_anything(capsys):
         return HttpResponse(404)
 
     fast_only = {k: v for k, v in ENV.items() if k != "NEWSLETTER_REASONING_MODEL"}
-    for env, name in [({}, "NEWSLETTER_FAST_MODEL"), (fast_only, "NEWSLETTER_REASONING_MODEL")]:
+    no_embedding = {k: v for k, v in ENV.items() if k != "NEWSLETTER_EMBEDDING_MODEL"}
+    for env, name in [
+        ({}, "NEWSLETTER_FAST_MODEL"),
+        (fast_only, "NEWSLETTER_REASONING_MODEL"),
+        (no_embedding, "NEWSLETTER_EMBEDDING_MODEL"),
+    ]:
         assert main(["issue", ATOM], env=env, fetch=fetch, llm_transport=model()) == 2
         assert name in capsys.readouterr().err
     assert fetched == []
@@ -414,3 +443,119 @@ def test_archive_command_drafts_the_same_voiced_issue_as_the_issue_command(tmp_p
     text = page.read_text(encoding="utf-8")
     assert code == 0
     assert "In my voice." in text and "Flagged: unchecked" in text
+
+
+# A run from a sources config: a feed, a page and Hacker News, grouped and ranked.
+
+RUN_FIXTURES = Path(__file__).parent / "fixtures" / "run"
+NEWS = "https://news.example.com/feed.xml"
+PAGE = "https://blog.example.net/2026/11/falcon-9"
+HN = "https://hacker-news.firebaseio.com/v0"
+HN_ITEMS = {
+    1: {
+        "type": "story",
+        "id": 1,
+        "title": "Acme ships Falcon-9 with weights anyone can download",
+        "url": "https://ml.example.io/posts/falcon-9",
+        "score": 300,
+    },
+    3: {
+        "type": "story",
+        "id": 3,
+        "title": "A mystery launch",
+        "score": 150,
+        "url": "https://mystery.example.org/launch",
+    },
+}
+
+
+def run_web(url, headers, timeout):
+    if url == NEWS:
+        return HttpResponse(200, {}, (RUN_FIXTURES / "feed.xml").read_bytes())
+    if url == PAGE:
+        body = (RUN_FIXTURES / "page.html").read_bytes()
+        return HttpResponse(200, {"content-type": "text/html; charset=utf-8"}, body)
+    if url == f"{HN}/topstories.json":
+        return HttpResponse(200, {}, b"[1, 2, 3]")
+    for story_id, story in HN_ITEMS.items():
+        if url == f"{HN}/item/{story_id}.json":
+            return HttpResponse(200, {}, json.dumps(story).encode())
+    return HttpResponse(404)  # robots.txt and story 2
+
+
+def by_meaning(texts):
+    """The topic first; Falcon-9 is close to it, bike lanes far, the mystery launch has an
+    embedding that cannot be compared."""
+
+    def vector(text):
+        if "Falcon-9" in text:
+            return [0.9, 0.1, 0.42]
+        if "bike lanes" in text:
+            return [0.0, 1.0, 0.0]
+        if "mystery" in text:
+            return [0.0, 0.0, 0.0]
+        return [1.0, 0.0, 0.3]
+
+    return [vector(text) for text in texts]
+
+
+def test_issue_from_a_config_groups_copies_ranks_by_topic_and_reports_what_failed(tmp_path, capsys):
+    config = tmp_path / "sources.yaml"
+    config.write_text(
+        "topic: open-weight language models\n"
+        f"sources:\n  - {NEWS}\n  - page: {PAGE}\n  - hackernews: {{min_score: 100}}\n",
+        encoding="utf-8",
+    )
+    html = tmp_path / "issue.html"
+    code = main(
+        ["issue", "--config", str(config), "--html", str(html)],
+        env=ENV,
+        fetch=run_web,
+        llm_transport=model(embed=by_meaning),
+    )
+
+    out, err = capsys.readouterr()
+    issue, report = out.split("## Run report")
+    stories = re.findall(r"^## (?:Lead story: )?\[(.*?)\]\(", issue, re.M)
+    # Three copies of the Falcon-9 story are one story with three sources, ranked first,
+    # and the bike lanes (far from the topic) come after it.
+    assert "3 stories" in err
+    assert stories == [
+        "Acme releases Falcon-9 open-weight model",
+        "City council approves new bike lanes",
+        "A mystery launch",
+    ]
+    falcon = issue.split(stories[0], 1)[1].split("\n## ")[0]
+    assert "Also covered by:" in falcon
+    assert f"(<{PAGE}>)" in falcon and "(<https://ml.example.io/posts/falcon-9>)" in falcon
+    # The failed Hacker News story and the item that could not be grouped are reported.
+    assert f"{HN}/item/2.json" in report and "HTTP 404" in report
+    assert "A mystery launch" in report and "ungrouped" in report
+    page = html.read_text(encoding="utf-8").split("Run report")[1]
+    assert "A mystery launch" in page and "ungrouped" in page
+    assert code == 1
+
+
+def test_an_ungrouped_item_alone_fails_the_issue(tmp_path, capsys):
+    config = tmp_path / "sources.yaml"
+    config.write_text(f"topic: open-weight language models\nsources: [{NEWS}]\n", "utf-8")
+
+    def bike_lanes_cannot_be_compared(texts):
+        vectors = by_meaning(texts)
+        pairs = zip(texts, vectors, strict=True)
+        return [[0.0, 0.0, 0.0] if "bike lanes" in text else v for text, v in pairs]
+
+    code = main(
+        ["issue", "--config", str(config)],
+        env=ENV,
+        fetch=run_web,
+        llm_transport=model(embed=bike_lanes_cannot_be_compared),
+    )
+
+    out, err = capsys.readouterr()
+    report = out.split("## Run report")[1]
+    # Nothing else went wrong: no source failed and no claim was dropped or flagged.
+    assert "0 feed problems" in err and "0 dropped claims" in err and "0 flagged claims" in err
+    assert "1 item not grouped or dropped" in err
+    assert "City council approves new bike lanes" in report and "ungrouped" in report
+    assert code == 1

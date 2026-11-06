@@ -12,8 +12,18 @@ from datetime import date
 from importlib.resources import files
 from typing import Any
 
+from newsletter.config import HackerNewsConfig
+from newsletter.grouping import Embedder, Grouping, group_items
 from newsletter.llm import LLMClient, LLMError
-from newsletter.sources import FeedFailure, Item, RssSource
+from newsletter.sources import (
+    FeedCache,
+    FeedFailure,
+    HackerNewsSource,
+    Item,
+    PageSource,
+    RssSource,
+)
+from newsletter.sources.http import Fetch, http_get
 
 MAX_ITEM_CHARS = 6000
 """Item text past this is cut before it is sent, so one long post cannot fill the context."""
@@ -117,6 +127,48 @@ def first_per_feed(items: list[Item], per_feed: int | None) -> list[Item]:
         if kept[item.feed_url] <= per_feed:
             first.append(item)
     return first
+
+
+@dataclass
+class Gathered:
+    """The stories of one run, grouped and ranked, and what could not be read."""
+
+    stories: dict[str, list[Item]]
+    """Story id to its items (its sources), closest to the topic first."""
+    failures: list[FeedFailure]
+    grouping: Grouping
+
+
+def gather_stories(
+    feeds: list[str],
+    *,
+    llm: Embedder,
+    topic: str,
+    pages: list[str] | None = None,
+    hackernews: HackerNewsConfig | None = None,
+    per_feed: int | None = None,
+    fetch: Fetch = http_get,
+    cache: FeedCache | None = None,
+) -> Gathered:
+    """Read the feeds, then the pages, then Hacker News, keep the first `per_feed` items
+    of each, and group and rank them by `topic` with one embedding call.
+
+    Every failed source is in `failures`; every item the grouping dropped or could not
+    group is in `grouping.left_out`, and a failed embedding call is `grouping.error`.
+    """
+    collected = [
+        RssSource(cache=cache, fetch=fetch).collect(feeds),
+        PageSource(fetch=fetch).collect(pages or []),
+    ]
+    if hackernews is not None:
+        source = HackerNewsSource(
+            min_score=hackernews.min_score, limit=hackernews.limit, fetch=fetch
+        )
+        collected.append(source.collect())
+    items = first_per_feed([item for result in collected for item in result.items], per_feed)
+    grouping = group_items(items, llm, topic=topic)
+    failures = [failure for result in collected for failure in result.failures]
+    return Gathered(grouping.stories, failures, grouping)
 
 
 def make_issue(

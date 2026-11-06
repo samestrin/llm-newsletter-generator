@@ -78,6 +78,17 @@
 {% endfor %}
 </ul>
 {% endif %}
+{% if report.grouping_error %}
+<p style="margin:0 0 12px;"><strong>Grouping failed:</strong> {{ report.grouping_error }}</p>
+{% endif %}
+{% if left_out %}
+<p style="margin:0 0 4px;font-weight:bold;">Items not grouped or dropped</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for entry, url in left_out %}
+<li>{{ link(entry.title or "(no title)", url) }}: {{ entry.reason }}</li>
+{% endfor %}
+</ul>
+{% endif %}
 {% if report.editor_error %}
 <p style="margin:0 0 12px;"><strong>Editor pass failed:</strong> {{ report.editor_error }}</p>
 {% endif %}

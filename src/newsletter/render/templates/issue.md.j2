@@ -57,6 +57,18 @@ Every feed was read, every story and claim was used, and every claim was support
 {% endfor %}
 
 {% endif %}
+{% if report.grouping_error %}
+**Grouping failed:** {{ report.grouping_error }}
+
+{% endif %}
+{% if left_out %}
+**Items not grouped or dropped**
+
+{% for entry, url in left_out %}
+- {{ link(entry.title or "(no title)", url)|markdown }}: {{ entry.reason }}
+{% endfor %}
+
+{% endif %}
 {% if report.editor_error %}
 **Editor pass failed:** {{ report.editor_error }}
 

@@ -30,6 +30,8 @@
   ],
   "report": {
     "failed_sources": [],
+    "left_out": [],
+    "grouping_error": null,
     "dropped_stories": [],
     "dropped_claims": [],
     "flagged_claims": [

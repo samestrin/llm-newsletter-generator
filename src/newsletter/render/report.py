@@ -1,6 +1,7 @@
 """The run report: everything that failed, was left out or is in doubt, and what it cost.
 
-It is built from the feeds' failures, the edited issue (dropped claims, flagged claims,
+It is built from the sources' failures, the grouping step's error and the items it
+left out, the edited issue (dropped claims, flagged claims,
 stories with nothing to show, the editor's own failure), the voice pass's
 `VoiceRun.report()` when there was one, and `LLMClient.report()`, whose steps and costs
 are used as they are, never recomputed. An unknown cost stays unknown.
@@ -12,6 +13,7 @@ from typing import Any
 
 from newsletter.editor import DroppedClaim, Edition
 from newsletter.editor.faithfulness import Status
+from newsletter.grouping import Grouping, LeftOut
 from newsletter.sources import FeedFailure, Item
 
 
@@ -41,7 +43,11 @@ class FlaggedClaim:
 @dataclass
 class RunReport:
     failed_sources: list[FeedFailure] = field(default_factory=list)
-    """Feeds that could not be read and feed entries left out."""
+    """Sources (feeds, pages, Hacker News) that could not be read and entries left out."""
+    left_out: list[LeftOut] = field(default_factory=list)
+    """Items the grouping step dropped or could not group with the others."""
+    grouping_error: str | None = None
+    """Why the grouping step failed, when it did: then every item is its own story."""
     dropped_stories: list[DroppedStory] = field(default_factory=list)
     dropped_claims: list[DroppedClaim] = field(default_factory=list)
     flagged_claims: list[FlaggedClaim] = field(default_factory=list)
@@ -66,6 +72,8 @@ class RunReport:
         """True only when nothing failed, was left out or is flagged."""
         return not (
             self.failed_sources
+            or self.left_out
+            or self.grouping_error
             or self.dropped_stories
             or self.dropped_claims
             or self.flagged_claims
@@ -84,11 +92,15 @@ def build_report(
     stories: Mapping[str, list[Item]],
     usage: Mapping[str, Any],
     voice: Mapping[str, Any] | None = None,
+    grouping: Grouping | None = None,
 ) -> RunReport:
     """The report of one run. `stories` maps each story id to its source items, `usage`
-    is `LLMClient.report()` and `voice` is `VoiceRun.report()`."""
+    is `LLMClient.report()`, `voice` is `VoiceRun.report()` and `grouping` is the
+    `group_items` result the stories came from."""
     report = RunReport(
         failed_sources=list(failures),
+        left_out=list(grouping.left_out) if grouping else [],
+        grouping_error=grouping.error if grouping else None,
         editor_error=edition.error,
         editor_rejections=list(edition.rejections),
         steps=[dict(step) for step in usage.get("steps", [])],
