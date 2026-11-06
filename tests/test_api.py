@@ -199,6 +199,11 @@ def test_a_run_needs_at_least_one_feed(client, runner):
     assert runner.requests == []
 
 
+def test_a_run_with_no_topic_and_no_config_is_about_news(client, runner):
+    run_and_wait(client, {"feeds": ["https://example.org/feed.xml"]})
+    assert runner.requests[0].topic == "news"
+
+
 CONFIG = SourcesConfig(
     "open models",
     feeds=("https://example.org/feed.xml",),

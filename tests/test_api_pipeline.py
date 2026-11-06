@@ -9,7 +9,9 @@ from newsletter.config import HackerNewsConfig
 from newsletter.editor import Edition, Prose
 from newsletter.evals.replay import ReplayClient
 from newsletter.evals.run import load_cases
+from newsletter.grouping import LeftOut
 from newsletter.llm import ConfigError, LLMClient, Settings
+from newsletter.render import RunReport
 from newsletter.sources.http import HttpResponse
 from newsletter.voice import VoiceSettings
 from test_cli import ENV, HN, NEWS, PAGE, apart, by_meaning, model, run_web
@@ -100,7 +102,21 @@ def test_a_failed_embedding_call_is_reported_and_every_item_listed():
     report = content["report"]
     assert report["grouping_error"].startswith("group:")
     assert len(report["left_out"]) == 2
+    assert report["failed_sources"] == []
+    assert report["ok"] is False
     assert "Grouping failed" in content["text"]
+
+
+@pytest.mark.parametrize(
+    "report",
+    [
+        RunReport(left_out=[LeftOut("A story", "https://a.test/s", "ungrouped: no vector")]),
+        RunReport(grouping_error="group: HTTP 500"),
+    ],
+)
+def test_an_item_left_out_or_a_failed_grouping_alone_makes_the_report_not_ok(report):
+    assert report.ok is False
+    assert report.to_dict()["ok"] is False
 
 
 def fake_yourvoice(request: httpx.Request) -> httpx.Response:

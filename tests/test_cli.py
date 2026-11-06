@@ -534,3 +534,28 @@ def test_issue_from_a_config_groups_copies_ranks_by_topic_and_reports_what_faile
     page = html.read_text(encoding="utf-8").split("Run report")[1]
     assert "A mystery launch" in page and "ungrouped" in page
     assert code == 1
+
+
+def test_an_ungrouped_item_alone_fails_the_issue(tmp_path, capsys):
+    config = tmp_path / "sources.yaml"
+    config.write_text(f"topic: open-weight language models\nsources: [{NEWS}]\n", "utf-8")
+
+    def bike_lanes_cannot_be_compared(texts):
+        vectors = by_meaning(texts)
+        pairs = zip(texts, vectors, strict=True)
+        return [[0.0, 0.0, 0.0] if "bike lanes" in text else v for text, v in pairs]
+
+    code = main(
+        ["issue", "--config", str(config)],
+        env=ENV,
+        fetch=run_web,
+        llm_transport=model(embed=bike_lanes_cannot_be_compared),
+    )
+
+    out, err = capsys.readouterr()
+    report = out.split("## Run report")[1]
+    # Nothing else went wrong: no source failed and no claim was dropped or flagged.
+    assert "0 feed problems" in err and "0 dropped claims" in err and "0 flagged claims" in err
+    assert "1 item not grouped or dropped" in err
+    assert "City council approves new bike lanes" in report and "ungrouped" in report
+    assert code == 1
