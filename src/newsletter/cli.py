@@ -18,6 +18,7 @@ import httpx
 
 from newsletter import __version__
 from newsletter.archive import build_site, demo_approval
+from newsletter.config import SourcesConfigError, load_config
 from newsletter.editor import check_claims, edit_issue, summarize_stories
 from newsletter.issue import Issue, first_per_feed, make_issue
 from newsletter.llm import ConfigError, LLMClient, Settings
@@ -36,7 +37,15 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     drafting = argparse.ArgumentParser(add_help=False)
-    drafting.add_argument("feeds", nargs="+", metavar="FEED_URL", help="RSS or Atom feed URL")
+    drafting.add_argument(
+        "feeds", nargs="*", metavar="FEED_URL", help="RSS or Atom feed URL (or use --config)"
+    )
+    drafting.add_argument(
+        "--config",
+        type=Path,
+        metavar="FILE",
+        help="YAML file with topic, sources and limits; FEED_URL, --topic and --per-feed win",
+    )
     drafting.add_argument("--title", default="Newsletter", help="issue title")
     drafting.add_argument("--cache-dir", type=Path, help="keep fetched feeds here between runs")
     drafting.add_argument(
@@ -79,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
             "YOURVOICE_API_KEY is set, the summaries are rewritten in the writer's voice."
         ),
     )
-    archive.add_argument("--topic", default="news", help="topic given to the model")
+    archive.add_argument("--topic", help="topic given to the model (default: news)")
     archive.add_argument("--site", type=Path, required=True, help="build the site here")
     archive.add_argument(
         "--demo",
@@ -115,11 +124,38 @@ def main(
         parser.print_help()
         return 0
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    if args.command in ("issue", "archive"):
+        problem = _apply_config(args)
+        if problem == "usage":
+            parser.error("give at least one FEED_URL or a --config file")
+        if problem:
+            print(f"newsletter: {problem}", file=sys.stderr)
+            return 2
     if args.command == "archive":
         return _archive(args, env, fetch, llm_transport, voice_transport)
     if args.command == "serve":
         return _serve(args, env)
     return _issue(args, env, fetch, llm_transport, voice_transport)
+
+
+def _apply_config(args) -> str | None:
+    """Fill the feeds, topic and per-feed limit the command line left out from `--config`.
+    None when done, "usage" when there are no feeds at all, else why the config is unusable."""
+    if args.config:
+        try:
+            config = load_config(args.config)
+        except SourcesConfigError as error:
+            return str(error)
+        args.feeds = args.feeds or list(config.sources)
+        if hasattr(args, "topic") and args.topic is None:
+            args.topic = config.topic
+        if args.per_feed is None:
+            args.per_feed = config.per_feed
+    if not args.feeds:
+        return "usage"
+    if hasattr(args, "topic") and args.topic is None:
+        args.topic = "news"
+    return None
 
 
 def _serve(args, env) -> int:
