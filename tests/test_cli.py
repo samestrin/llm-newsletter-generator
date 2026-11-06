@@ -521,11 +521,11 @@ def test_issue_from_a_config_groups_copies_ranks_by_topic_and_reports_what_faile
     # and the bike lanes (far from the topic) come after it.
     assert "3 stories" in err
     assert stories == [
-        r"Acme releases Falcon\-9 open\-weight model",
+        "Acme releases Falcon-9 open-weight model",
         "City council approves new bike lanes",
         "A mystery launch",
     ]
-    falcon = issue.split(stories[0])[1].split("\n## ")[0]
+    falcon = issue.split(stories[0], 1)[1].split("\n## ")[0]
     assert "Also covered by:" in falcon
     assert f"(<{PAGE}>)" in falcon and "(<https://ml.example.io/posts/falcon-9>)" in falcon
     # The failed Hacker News story and the item that could not be grouped are reported.

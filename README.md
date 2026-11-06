@@ -49,9 +49,22 @@ NEWSLETTER_FAST_MODEL=gpt-4o-mini NEWSLETTER_REASONING_MODEL=o4-mini NEWSLETTER_
   uv run newsletter issue https://example.com/feed.xml --title "AI Weekly" -o issue.md
 ```
 
-`newsletter issue` reads RSS or Atom feeds, has the fast model extract claims that quote their source, checks each claim against its passage, and has the reasoning model edit the issue (lead, themes, intro and why it matters) from the supported claims only. It writes the issue as Markdown (`-o`, else stdout) and, with `--html FILE`, as an HTML email. Every claim links to its source; unsupported or unchecked claims stay visible and are marked as flagged. A run report lists failed feeds, dropped and flagged claims, a failed editor call, the writer's voice and the cost of each step. It exits 1 when anything failed or is flagged, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs, `--date` to set the issue date and `--per-feed N` to use only the first N items of each feed (each item costs several model calls).
+`newsletter issue` reads RSS or Atom feeds (and, from a config file, web pages and Hacker News), groups copies of one story into one story with all its sources and ranks the stories by the topic with the embedding model, has the fast model extract claims that quote their source, checks each claim against its passage, and has the reasoning model edit the issue (lead, themes, intro and why it matters) from the supported claims only. It writes the issue as Markdown (`-o`, else stdout) and, with `--html FILE`, as an HTML email. Every claim links to its source; unsupported or unchecked claims stay visible and are marked as flagged. A run report lists failed sources, items that could not be grouped or were dropped, a failed embedding call, dropped and flagged claims, a failed editor call, the writer's voice and the cost of each step. It exits 1 when anything failed or is flagged, so a partial issue is never reported as a success. Use `--cache-dir` to keep fetched feeds between runs, `--date` to set the issue date and `--per-feed N` to use only the first N items of each feed (each item costs several model calls).
 
-Instead of listing feeds, `--config FILE` (on `issue` and `archive`) reads a YAML file with `topic`, `sources` (a list of feed URLs) and `limits: {per_feed: N}`. It is checked on load, and an error names the file and the field (exit 2). Feed URLs, `--topic` and `--per-feed` on the command line win over the file.
+Instead of listing feeds, `--config FILE` (on `issue` and `serve`; `archive` takes feed URLs only) reads a YAML file:
+
+```yaml
+topic: open-weight language models   # what the stories are ranked by
+sources:
+  - https://example.com/feed.xml     # a bare URL is an RSS or Atom feed
+  - feed: https://lab.example.org/atom.xml
+  - page: https://example.com/2026/11/article   # one web page, its main text
+  - hackernews: {min_score: 100, limit: 30}     # front-page stories at or over the score
+limits:
+  per_feed: 5                        # first N items of each feed, and of Hacker News
+```
+
+It is checked on load, and an error names the file and the field (exit 2). Feed URLs on the command line replace every source in the file, and `--per-feed` wins over `limits.per_feed`. Pages and Hacker News are fetched with the same timeout, 10 MB cap, robots.txt check and private-address redirect check as feeds. One `embedding` call compares the topic and every item: items close enough to each other become one story with all their sources ("Also covered by"), and the stories closest to the topic come first. An item that cannot be compared is its own story, last, and listed in the run report; if the call fails, every item is its own story and the report says why.
 
 ```bash
 uv run newsletter archive --demo --site site --per-feed 5 https://example.com/feed.xml
@@ -73,7 +86,7 @@ The CLI talks to any OpenAI-compatible endpoint; all model settings come from th
 | `NEWSLETTER_API_KEY` | API key (or `OPENAI_API_KEY`); optional for local endpoints |
 | `NEWSLETTER_FAST_MODEL` | Model for bulk work; required by both commands |
 | `NEWSLETTER_REASONING_MODEL` | Model for the editor pass and the writer's voice; required by `newsletter issue` |
-| `NEWSLETTER_EMBEDDING_MODEL` | Model for comparing stories (later work) |
+| `NEWSLETTER_EMBEDDING_MODEL` | Model that groups copies of one story and ranks stories by the topic; required by `newsletter issue` and by a `serve` run |
 | `NEWSLETTER_<TIER>_PRICE_INPUT` / `NEWSLETTER_<TIER>_PRICE_OUTPUT` | USD per million tokens; without them the cost the server reports is used, else the cost is unknown |
 | `NEWSLETTER_TIMEOUT` | Seconds per request, default 60 |
 | `NEWSLETTER_MAX_RETRIES` | Retries after a timeout, connection error, 408, 409, 429 or 5xx, default 2 |
@@ -94,7 +107,7 @@ When `YOURVOICE_API_KEY` is set, the editor's prose is rewritten in the writer's
 
 ### The API
 
-`newsletter serve` runs an HTTP API for drafting and reviewing issues. A run reads the feeds, then the editor checks each claim against its source and writes the issue, then the voice pass rewrites the editor's prose, then the issue is rendered. Each run is a background job with a status and a timeout. Its result is a draft: the rendered Markdown, the flagged claims and the run report, kept as a JSON file in the data dir, so it survives a restart. Approving a draft stores the sha256 of its text. Any edit clears the approval.
+`newsletter serve` runs an HTTP API for drafting and reviewing issues. A run reads the feeds (or, started with `--config FILE`, the sources in that file when the run names no feeds), groups and ranks the stories, then the editor checks each claim against its source and writes the issue, then the voice pass rewrites the editor's prose, then the issue is rendered. Each run is a background job with a status and a timeout. Its result is a draft: the rendered Markdown, the flagged claims and the run report, kept as a JSON file in the data dir, so it survives a restart. Approving a draft stores the sha256 of its text. Any edit clears the approval.
 
 ```bash
 export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
@@ -107,7 +120,7 @@ curl -X POST http://127.0.0.1:8000/api/runs \
 | Endpoint | Does |
 | --- | --- |
 | `GET /api/health` | `{"ok": true}`; the only call without the token |
-| `POST /api/runs` | Starts a run from `{"feeds": [...], "title", "topic", "date"}`; 202 with the run, 409 while another run is going |
+| `POST /api/runs` | Starts a run from `{"feeds": [...], "title", "topic", "date"}`; 202 with the run, 409 while another run is going. With `serve --config`, `feeds` may be left out to read the file's sources, and `topic` defaults to the file's |
 | `GET /api/runs/{id}` | The run: `queued`, `running`, `done` with its `draft_id`, or `error` with why. A run past its timeout, or cut off by a restart, ends as an `error` and leaves no draft |
 | `GET /api/drafts` | Every draft, newest first, without its text |
 | `GET /api/drafts/{id}` | The draft: `text`, `flags`, `report`, `approval` and `approved` |
@@ -158,7 +171,7 @@ export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
 docker compose up --build    # http://localhost:8080
 ```
 
-Two services: `api` (`newsletter serve`, drafts kept in the `drafts` volume) and `web` (the built review page behind nginx, which forwards `/api` to `api`). Only the page is published, on `127.0.0.1:8080` (`WEB_PORT` changes it); the API is not reachable from outside the compose network, and it allows writes only from the page's origin. `NEWSLETTER_API_TOKEN` is required. `NEWSLETTER_BASE_URL`, `NEWSLETTER_API_KEY`, `NEWSLETTER_FAST_MODEL`, `NEWSLETTER_REASONING_MODEL` and `YOURVOICE_API_KEY` are passed through from your shell when set. CI's `compose` job builds both images, starts them and checks the page, the proxied API and the token.
+Two services: `api` (`newsletter serve`, drafts kept in the `drafts` volume) and `web` (the built review page behind nginx, which forwards `/api` to `api`). Only the page is published, on `127.0.0.1:8080` (`WEB_PORT` changes it); the API is not reachable from outside the compose network, and it allows writes only from the page's origin. `NEWSLETTER_API_TOKEN` is required. `NEWSLETTER_BASE_URL`, `NEWSLETTER_API_KEY`, `NEWSLETTER_FAST_MODEL`, `NEWSLETTER_REASONING_MODEL`, `NEWSLETTER_EMBEDDING_MODEL` and `YOURVOICE_API_KEY` are passed through from your shell when set. CI's `compose` job builds both images, starts them and checks the page, the proxied API and the token.
 
 ## Eval
 

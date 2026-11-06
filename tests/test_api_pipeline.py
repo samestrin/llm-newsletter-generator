@@ -2,13 +2,14 @@ import json
 from datetime import date
 
 import httpx
+import pytest
 
 from newsletter.api.pipeline import RunRequest, run_issue, voice_edition
+from newsletter.config import HackerNewsConfig
 from newsletter.editor import Edition, Prose
 from newsletter.evals.replay import ReplayClient
 from newsletter.evals.run import load_cases
-from newsletter.config import HackerNewsConfig
-from newsletter.llm import LLMClient, Settings
+from newsletter.llm import ConfigError, LLMClient, Settings
 from newsletter.sources.http import HttpResponse
 from newsletter.voice import VoiceSettings
 from test_cli import ENV, HN, NEWS, PAGE, apart, by_meaning, model, run_web
@@ -182,3 +183,10 @@ def test_the_default_runner_reads_its_settings_from_the_environment():
     ]
     assert content["report"]["editor_error"] == "no supported claims to edit from"
     assert content["report"]["voice"]["skipped"] == "YOURVOICE_API_KEY is not set"
+
+
+def test_a_run_with_items_and_no_embedding_model_fails_with_the_setting_named():
+    env = {k: v for k, v in ENV.items() if k != "NEWSLETTER_EMBEDDING_MODEL"}
+    llm = LLMClient(Settings.from_env(env), transport=model())
+    with pytest.raises(ConfigError, match="NEWSLETTER_EMBEDDING_MODEL"):
+        run_issue(request(feeds=[NEWS]), llm, fetch=run_web, voice=VoiceSettings())

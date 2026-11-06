@@ -31,6 +31,7 @@ from newsletter.api.store import (
     is_approved,
     redactor,
 )
+from newsletter.config import SourcesConfig
 
 log = logging.getLogger(__name__)
 
@@ -42,9 +43,11 @@ MAX_FEEDS = 50
 class RunBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    feeds: list[str] = Field(min_length=1, max_length=MAX_FEEDS)
+    feeds: list[str] = Field(default_factory=list, max_length=MAX_FEEDS)
+    """Empty to read the sources config `serve` was started with."""
     title: str = Field("Newsletter", min_length=1, max_length=200)
-    topic: str = Field("news", min_length=1, max_length=200)
+    topic: str | None = Field(None, min_length=1, max_length=200)
+    """Default: the sources config's topic, else "news"."""
     date: dt.date | None = None
 
 
@@ -61,7 +64,13 @@ class ApproveBody(BaseModel):
     """The sha256 of the text the reviewer read; the approval is refused if it changed."""
 
 
-def create_app(settings: ApiSettings, *, runner: Runner | None = None) -> FastAPI:
+def create_app(
+    settings: ApiSettings,
+    *,
+    runner: Runner | None = None,
+    config: SourcesConfig | None = None,
+) -> FastAPI:
+    """The API. A run that names no feeds reads the sources in `config` (`serve --config`)."""
     redact = redactor(settings.secrets)
     drafts = DraftStore(settings.data_dir)
     runs = RunStore(settings.data_dir)
@@ -82,6 +91,7 @@ def create_app(settings: ApiSettings, *, runner: Runner | None = None) -> FastAP
     app.router.lifespan_context = lifespan
     app.state.settings = settings
     app.state.jobs = jobs
+    app.state.config = config
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.origins),
@@ -135,7 +145,7 @@ def create_app(settings: ApiSettings, *, runner: Runner | None = None) -> FastAP
     @app.post("/api/runs", status_code=202)
     def start_run(raw: Guarded) -> dict[str, Any]:
         body = parse(RunBody, raw)
-        request = RunRequest(body.feeds, body.title, body.topic, body.date)
+        request = _run_request(body, config)
         try:
             return jobs.start(request)
         except Busy as error:
@@ -196,3 +206,22 @@ def _summary(draft: dict[str, Any]) -> dict[str, Any]:
         "flags": len(draft.get("flags", [])),
         "approved": is_approved(draft),
     }
+
+
+def _run_request(body: RunBody, config: SourcesConfig | None) -> RunRequest:
+    """The run `body` asks for. Feeds in the body replace every source in `config`."""
+    topic = body.topic or (config.topic if config else "news")
+    per_feed = config.per_feed if config else None
+    if body.feeds:
+        return RunRequest(body.feeds, body.title, topic, body.date, per_feed=per_feed)
+    if config is None:
+        raise HTTPException(422, "give at least one feed, or start serve with --config")
+    return RunRequest(
+        list(config.feeds),
+        body.title,
+        topic,
+        body.date,
+        pages=list(config.pages),
+        hackernews=config.hackernews,
+        per_feed=per_feed,
+    )

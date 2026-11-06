@@ -1,9 +1,10 @@
 """Command-line entry point for the `newsletter` command.
 
 Exit codes: 0 when the issue (or the archive site) was written and nothing failed; 1
-when it was written but a feed, entry, model call or the writer's voice failed, or (for
-`newsletter issue`) a claim was dropped or flagged (the run report says which), or no
-feed returned an item; 2 for a usage or settings error, before anything is fetched.
+when it was written but a source, entry, model call or the writer's voice failed, or (for
+`newsletter issue`) the grouping failed, an item was not grouped or dropped, or a claim
+was dropped or flagged (the run report says which), or no source returned an item; 2 for
+a usage, settings or config error, before anything is fetched.
 """
 
 import argparse
@@ -20,7 +21,7 @@ from newsletter import __version__
 from newsletter.archive import build_site, demo_approval
 from newsletter.config import SourcesConfigError, load_config
 from newsletter.editor import check_claims, edit_issue, summarize_stories
-from newsletter.issue import Issue, first_per_feed, make_issue
+from newsletter.issue import Issue, gather_stories, make_issue
 from newsletter.llm import ConfigError, LLMClient, Settings
 from newsletter.render import Newsletter, build_report, render_html, render_markdown
 from newsletter.sources import FeedCache, RssSource
@@ -37,15 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     drafting = argparse.ArgumentParser(add_help=False)
-    drafting.add_argument(
-        "feeds", nargs="*", metavar="FEED_URL", help="RSS or Atom feed URL (or use --config)"
-    )
-    drafting.add_argument(
-        "--config",
-        type=Path,
-        metavar="FILE",
-        help="YAML file with topic, sources and limits; FEED_URL, --topic and --per-feed win",
-    )
+    drafting.add_argument("feeds", nargs="*", metavar="FEED_URL", help="RSS or Atom feed URL")
     drafting.add_argument("--title", default="Newsletter", help="issue title")
     drafting.add_argument("--cache-dir", type=Path, help="keep fetched feeds here between runs")
     drafting.add_argument(
@@ -70,8 +63,17 @@ def build_parser() -> argparse.ArgumentParser:
             "claim links to its source, unsupported or unchecked claims are marked, and a run "
             "report lists what failed and what each step cost. When YOURVOICE_API_KEY is set, "
             "the editor's prose (never a claim or a link) is rewritten in the writer's voice "
-            "(see the README)."
+            "(see the README). With --config, the feeds, web pages and Hacker News named "
+            "in the file are read, and copies of one story are grouped into one story with "
+            "all its sources, ranked by the file's topic (NEWSLETTER_EMBEDDING_MODEL)."
         ),
+    )
+    issue.add_argument(
+        "--config",
+        type=Path,
+        metavar="FILE",
+        help="YAML file with topic, sources (feeds, pages, hackernews) and limits; "
+        "FEED_URL and --per-feed win",
     )
     issue.add_argument("-o", "--output", type=Path, help="write Markdown here instead of stdout")
     issue.add_argument("--html", type=Path, help="also write the HTML email here")
@@ -107,6 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve.add_argument("--host", help="bind address (NEWSLETTER_API_HOST, default 127.0.0.1)")
     serve.add_argument("--port", type=int, help="port (NEWSLETTER_API_PORT, default 8000)")
+    serve.add_argument(
+        "--config",
+        type=Path,
+        metavar="FILE",
+        help="YAML sources file a run reads when it names no feeds",
+    )
     return parser
 
 
@@ -139,22 +147,25 @@ def main(
 
 
 def _apply_config(args) -> str | None:
-    """Fill the feeds, topic and per-feed limit the command line left out from `--config`.
-    None when done, "usage" when there are no feeds at all, else why the config is unusable."""
-    if args.config:
+    """Fill the sources, topic and per-feed limit the command line left out from
+    `--config`. FEED_URLs on the command line replace every source in the file. None when
+    done, "usage" when there are no sources at all, else why the config is unusable."""
+    args.pages, args.hackernews = [], None
+    config = None
+    if getattr(args, "config", None):
         try:
             config = load_config(args.config)
         except SourcesConfigError as error:
             return str(error)
-        args.feeds = args.feeds or list(config.sources)
-        if hasattr(args, "topic") and args.topic is None:
-            args.topic = config.topic
+        if not args.feeds:
+            args.feeds, args.pages = list(config.feeds), list(config.pages)
+            args.hackernews = config.hackernews
         if args.per_feed is None:
             args.per_feed = config.per_feed
-    if not args.feeds:
+    if getattr(args, "topic", None) is None:
+        args.topic = config.topic if config else "news"
+    if not (args.feeds or args.pages or args.hackernews):
         return "usage"
-    if hasattr(args, "topic") and args.topic is None:
-        args.topic = "news"
     return None
 
 
@@ -176,7 +187,12 @@ def _serve(args, env) -> int:
     if not settings.token:
         print("newsletter: set NEWSLETTER_API_TOKEN before serving the API", file=sys.stderr)
         return 2
-    uvicorn.run(create_app(settings), host=settings.host, port=settings.port)
+    try:
+        config = load_config(args.config) if args.config else None
+    except SourcesConfigError as error:
+        print(f"newsletter: {error}", file=sys.stderr)
+        return 2
+    uvicorn.run(create_app(settings, config=config), host=settings.host, port=settings.port)
     return 0
 
 
@@ -186,24 +202,37 @@ def _issue(args, env, fetch, llm_transport, voice_transport) -> int:
     if loaded is None:
         return 2
     settings, voice = loaded
-    if not settings.models.get("reasoning"):
-        print("newsletter: no reasoning model: set NEWSLETTER_REASONING_MODEL", file=sys.stderr)
-        return 2
+    for tier in ("reasoning", "embedding"):
+        if not settings.models.get(tier):
+            print(
+                f"newsletter: no {tier} model: set NEWSLETTER_{tier.upper()}_MODEL",
+                file=sys.stderr,
+            )
+            return 2
 
     cache = FeedCache(args.cache_dir) if args.cache_dir else None
     llm = LLMClient(settings, transport=llm_transport)
     try:
-        collected = RssSource(cache=cache, fetch=fetch).collect(args.feeds)
-        items = first_per_feed(collected.items, args.per_feed)
-        # Each item is its own story until grouping exists.
-        stories = {f"s{n}": [item] for n, item in enumerate(items, start=1)}
+        gathered = gather_stories(
+            args.feeds,
+            pages=args.pages,
+            hackernews=args.hackernews,
+            llm=llm,
+            topic=args.topic,
+            per_feed=args.per_feed,
+            fetch=fetch,
+            cache=cache,
+        )
+        stories = gathered.stories
         edition = edit_issue(check_claims(summarize_stories(stories, llm), llm), llm)
         voiced = voice_edition(edition, llm, voice, transport=voice_transport)
         usage = llm.report()
     finally:
         llm.close()
 
-    report = build_report(collected.failures, edition, stories, usage, voiced.report())
+    report = build_report(
+        gathered.failures, edition, stories, usage, voiced.report(), gathered.grouping
+    )
     newsletter = Newsletter(args.title, args.date or date.today(), edition, stories, report)
     markdown = render_markdown(newsletter)
     if args.output:
@@ -216,8 +245,10 @@ def _issue(args, env, fetch, llm_transport, voice_transport) -> int:
     print(
         f"newsletter: {_count(len(stories), 'story', 'stories')}, "
         f"{_count(len(report.failed_sources), 'feed problem')}, "
+        f"{_count(len(report.left_out), 'item')} not grouped or dropped, "
         f"{_count(len(report.dropped_claims), 'dropped claim')}, "
         f"{_count(len(report.flagged_claims), 'flagged claim')}"
+        + (f"; grouping failed: {report.grouping_error}" if report.grouping_error else "")
         + (f"; editor failed: {report.editor_error}" if report.editor_error else "")
         + (f"; wrote {args.output}" if args.output else "")
         + (f"; wrote {args.html}" if args.html else ""),

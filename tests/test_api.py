@@ -7,8 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from newsletter.api import ApiSettings, create_app
-from newsletter.config import HackerNewsConfig, SourcesConfig
 from newsletter.api.store import is_approved
+from newsletter.config import HackerNewsConfig, SourcesConfig
 
 TOKEN = "api-token-not-for-anyone-else"
 LLM_KEY = "sk-llm-secret-456"

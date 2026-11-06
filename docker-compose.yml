@@ -14,6 +14,7 @@ services:
       NEWSLETTER_API_KEY:
       NEWSLETTER_FAST_MODEL:
       NEWSLETTER_REASONING_MODEL:
+      NEWSLETTER_EMBEDDING_MODEL:
       YOURVOICE_API_KEY:
     volumes:
       - drafts:/data
