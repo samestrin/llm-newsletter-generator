@@ -4,7 +4,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from newsletter.sources.http import FetchError, http_get
+from newsletter.sources.http import FetchError, HttpResponse, follow_redirects, http_get
+
+BIG = b"x" * 2000
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -37,6 +39,34 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"short")
             self.wfile.flush()
             self.close_connection = True
+        elif self.path == "/big":
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(BIG)))
+            self.end_headers()
+            self.wfile.write(BIG)
+        elif self.path == "/big-no-length":
+            # No Content-Length: the body ends when the connection closes.
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(BIG)
+            self.close_connection = True
+        elif self.path == "/big-error":
+            self.send_response(500)
+            self.send_header("Content-Length", str(len(BIG)))
+            self.end_headers()
+            self.wfile.write(BIG)
+        elif self.path == "/to-loopback":
+            port = self.server.server_address[1]
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{port}/feed")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif self.path == "/to-localhost":
+            port = self.server.server_address[1]
+            self.send_response(302)
+            self.send_header("Location", f"http://localhost:{port}/feed")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
         elif self.path == "/slow":
             time.sleep(1)
             self.send_response(200)
@@ -107,3 +137,121 @@ def test_connection_refused_is_an_error():
 def test_only_http_and_https_are_fetched(url):
     with pytest.raises(FetchError, match="only http and https"):
         http_get(url, {}, timeout=1)
+
+
+def test_a_body_over_the_size_cap_is_an_error(server):
+    with pytest.raises(FetchError, match="larger than 1000 bytes"):
+        http_get(f"{server}/big", {}, timeout=5, max_bytes=1000)
+
+
+def test_a_body_with_no_length_over_the_size_cap_is_an_error(server):
+    with pytest.raises(FetchError, match="larger than 1000 bytes"):
+        http_get(f"{server}/big-no-length", {}, timeout=5, max_bytes=1000)
+
+
+def test_an_error_body_over_the_size_cap_is_an_error(server):
+    with pytest.raises(FetchError, match="larger than 1000 bytes"):
+        http_get(f"{server}/big-error", {}, timeout=5, max_bytes=1000)
+
+
+def test_a_body_at_the_size_cap_is_read(server):
+    assert http_get(f"{server}/big", {}, timeout=5, max_bytes=len(BIG)).body == BIG
+
+
+def test_the_default_size_cap_allows_ordinary_pages(server):
+    assert http_get(f"{server}/big-no-length", {}, timeout=5).body == BIG
+
+
+@pytest.mark.parametrize("path", ["/to-loopback", "/to-localhost"])
+def test_a_redirect_to_a_loopback_address_is_refused(server, path):
+    # The first URL is the one the user configured; only where it redirects to is checked.
+    with pytest.raises(FetchError, match="private or loopback"):
+        follow_redirects(http_get, f"{server}{path}", {}, 5)
+
+
+def test_a_redirect_is_followed_when_the_host_resolves_to_a_public_address(server):
+    resolved = []
+
+    def resolve(host):
+        resolved.append(host)
+        return ["93.184.215.14"]
+
+    final, response = follow_redirects(http_get, f"{server}/to-loopback", {}, 5, resolve=resolve)
+    assert final.endswith("/feed")
+    assert response.body == b"<rss/>"
+    assert resolved == ["127.0.0.1"]
+
+
+def hops(routes):
+    def fetch(url, headers, timeout):
+        return routes[url]
+
+    return fetch
+
+
+def moved(location):
+    return HttpResponse(302, {"location": location})
+
+
+ADDRESSES = {
+    "public.example": ["93.184.215.14"],
+    "also-public.example": ["2606:2800:21f:cb07:6820:80da:af6b:8b2c"],
+    "private.example": ["10.1.2.3"],
+    "mixed.example": ["93.184.215.14", "192.168.0.10"],
+}
+
+
+def fake_resolve(host):
+    if host not in ADDRESSES:
+        raise FetchError(f"cannot resolve {host}")
+    return ADDRESSES[host]
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "http://private.example/x",
+        "http://mixed.example/x",
+        "http://10.0.0.1/x",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::1]/x",
+        "http://[::ffff:127.0.0.1]/x",
+        "http://0.0.0.0/x",
+        "http://[fd00::1]/x",
+    ],
+)
+def test_a_redirect_to_a_private_address_is_refused(target):
+    fetch = hops({"https://public.example/a": moved(target)})
+    with pytest.raises(FetchError, match="private or loopback"):
+        follow_redirects(fetch, "https://public.example/a", {}, 5, resolve=fake_resolve)
+
+
+def test_every_hop_is_resolved_and_a_late_private_hop_is_refused():
+    fetch = hops(
+        {
+            "https://public.example/a": moved("https://also-public.example/b"),
+            "https://also-public.example/b": moved("https://private.example/c"),
+        }
+    )
+    resolved = []
+
+    def resolve(host):
+        resolved.append(host)
+        return fake_resolve(host)
+
+    with pytest.raises(FetchError, match="private.example"):
+        follow_redirects(fetch, "https://public.example/a", {}, 5, resolve=resolve)
+    assert resolved == ["also-public.example", "private.example"]
+
+
+def test_a_redirect_to_a_host_that_does_not_resolve_is_refused():
+    fetch = hops({"https://public.example/a": moved("https://nowhere.example/")})
+    with pytest.raises(FetchError, match="cannot resolve"):
+        follow_redirects(fetch, "https://public.example/a", {}, 5, resolve=fake_resolve)
+
+
+def test_the_default_resolver_reports_an_unknown_host():
+    from newsletter.sources.http import resolve_host
+
+    with pytest.raises(FetchError, match="cannot resolve"):
+        resolve_host("no-such-host.invalid")
