@@ -1,0 +1,38 @@
+{
+  "topic": "open-weight language models",
+  "items": [
+    {
+      "title": "Acme releases Falcon-9 open-weight model",
+      "link": "https://news.example.com/acme-falcon-9",
+      "summary": "Acme published the weights of Falcon-9, a 70B model, under Apache 2.0.",
+      "feed_url": "https://news.example.com/feed.xml",
+      "feed_title": "Example News",
+      "embedding": [0.9, 0.1, 0.42]
+    },
+    {
+      "title": "City council approves new bike lanes",
+      "link": "https://local.example.org/bike-lanes",
+      "summary": "The council voted 7-2 for 12 km of protected bike lanes.",
+      "feed_url": "https://local.example.org/rss",
+      "feed_title": "Local Example",
+      "embedding": [0.0, 1.0, 0.0]
+    },
+    {
+      "title": "Falcon-9: Acme opens its 70B weights",
+      "link": "https://blog.example.net/2026/11/falcon-9",
+      "summary": "Acme's Falcon-9 is out with open weights and an Apache 2.0 license.",
+      "feed_url": "https://blog.example.net/atom.xml",
+      "feed_title": "Example Blog",
+      "embedding": [0.88, 0.12, 0.45]
+    },
+    {
+      "title": "Acme ships Falcon-9 with weights anyone can download",
+      "link": "https://ml.example.io/posts/falcon-9",
+      "summary": "The 70B Falcon-9 model from Acme can be downloaded under Apache 2.0.",
+      "feed_url": "https://ml.example.io/feed",
+      "feed_title": "ML Example",
+      "embedding": [0.91, 0.08, 0.4]
+    }
+  ],
+  "topic_embedding": [1.0, 0.0, 0.3]
+}
