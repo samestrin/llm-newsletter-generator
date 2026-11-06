@@ -176,10 +176,10 @@ def test_a_redirect_is_followed_when_the_host_resolves_to_a_public_address(serve
         resolved.append(host)
         return ["93.184.215.14"]
 
-    final, response = follow_redirects(http_get, f"{server}/to-loopback", {}, 5, resolve=resolve)
+    final, response = follow_redirects(http_get, f"{server}/to-localhost", {}, 5, resolve=resolve)
     assert final.endswith("/feed")
     assert response.body == b"<rss/>"
-    assert resolved == ["127.0.0.1"]
+    assert resolved == ["localhost"]
 
 
 def hops(routes):

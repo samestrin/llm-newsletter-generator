@@ -3,16 +3,19 @@
 from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
-from newsletter.sources.http import Fetch, FetchError, follow_redirects
+from newsletter.sources.http import Fetch, FetchError, Resolve, follow_redirects
 
 
 class RobotsPolicy:
     """Answers "may we fetch this URL?", reading each host's robots.txt once."""
 
-    def __init__(self, fetch: Fetch, user_agent: str, timeout: float) -> None:
+    def __init__(
+        self, fetch: Fetch, user_agent: str, timeout: float, resolve: Resolve | None = None
+    ) -> None:
         self.fetch = fetch
         self.user_agent = user_agent
         self.timeout = timeout
+        self.resolve = resolve
         self._hosts: dict[str, RobotFileParser | str] = {}
 
     def refusal(self, url: str) -> str | None:
@@ -34,7 +37,11 @@ class RobotsPolicy:
         try:
             # RFC 9309 asks crawlers to follow at least five redirects for robots.txt.
             _, response = follow_redirects(
-                self.fetch, robots_url, {"User-Agent": self.user_agent}, self.timeout
+                self.fetch,
+                robots_url,
+                {"User-Agent": self.user_agent},
+                self.timeout,
+                resolve=self.resolve,
             )
         except FetchError as error:
             # Unreachable: RFC 9309 says assume everything is disallowed.
