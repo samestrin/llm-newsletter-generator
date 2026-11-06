@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from newsletter.api import ApiSettings, create_app
+from newsletter.config import HackerNewsConfig, SourcesConfig
 from newsletter.api.store import is_approved
 
 TOKEN = "api-token-not-for-anyone-else"
@@ -192,9 +193,43 @@ def test_a_body_that_fails_validation_is_refused_without_echoing_it(client):
 
 
 def test_a_run_needs_at_least_one_feed(client, runner):
-    response = client.post("/api/runs", json={"feeds": []}, headers=headers())
-    assert response.status_code == 422
+    for body in ({"feeds": []}, {"title": "Weekly"}):
+        response = client.post("/api/runs", json=body, headers=headers())
+        assert response.status_code == 422
     assert runner.requests == []
+
+
+CONFIG = SourcesConfig(
+    "open models",
+    feeds=("https://example.org/feed.xml",),
+    pages=("https://example.org/article",),
+    hackernews=HackerNewsConfig(min_score=50),
+    per_feed=2,
+)
+
+
+def test_a_run_with_no_feeds_reads_the_sources_config(tmp_path, runner):
+    app = create_app(make_settings(tmp_path), runner=runner, config=CONFIG)
+    with TestClient(app) as client:
+        run = run_and_wait(client, {"title": "Weekly"})
+    assert run["status"] == "done"
+    (request,) = runner.requests
+    assert request.feeds == ["https://example.org/feed.xml"]
+    assert request.pages == ["https://example.org/article"]
+    assert request.hackernews == HackerNewsConfig(min_score=50)
+    assert request.per_feed == 2
+    assert request.topic == "open models"
+
+
+def test_feeds_in_the_run_win_over_the_sources_config(tmp_path, runner):
+    app = create_app(make_settings(tmp_path), runner=runner, config=CONFIG)
+    with TestClient(app) as client:
+        run_and_wait(client, {"feeds": ["https://b.example/feed.xml"], "topic": "AI"})
+    (request,) = runner.requests
+    assert request.feeds == ["https://b.example/feed.xml"]
+    assert request.pages == [] and request.hackernews is None
+    assert request.per_feed == 2
+    assert request.topic == "AI"
 
 
 def test_the_browser_page_may_preflight_from_an_allowed_origin(client):
@@ -498,6 +533,33 @@ def test_serve_takes_a_host_and_port(tmp_path, monkeypatch):
     env = {"NEWSLETTER_API_TOKEN": TOKEN, "NEWSLETTER_DATA_DIR": str(tmp_path)}
     assert main(["serve", "--host", "0.0.0.0", "--port", "9001"], env=env) == 0
     assert calls[0]["host"] == "0.0.0.0" and calls[0]["port"] == 9001
+
+
+def test_serve_reads_a_sources_config(tmp_path, monkeypatch):
+    import uvicorn
+
+    from newsletter.cli import main
+
+    calls = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: calls.append(app))
+    config = tmp_path / "sources.yaml"
+    config.write_text("topic: open models\nsources:\n  - page: https://a.test/p\n", "utf-8")
+    env = {"NEWSLETTER_API_TOKEN": TOKEN, "NEWSLETTER_DATA_DIR": str(tmp_path)}
+    assert main(["serve", "--config", str(config)], env=env) == 0
+    assert calls[0].state.config == SourcesConfig("open models", pages=("https://a.test/p",))
+
+
+def test_serve_refuses_an_invalid_sources_config(tmp_path, monkeypatch, capsys):
+    import uvicorn
+
+    from newsletter.cli import main
+
+    monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: pytest.fail("started"))
+    config = tmp_path / "sources.yaml"
+    config.write_text("topic: t\nsources: [{page: 3}]\n", "utf-8")
+    env = {"NEWSLETTER_API_TOKEN": TOKEN, "NEWSLETTER_DATA_DIR": str(tmp_path)}
+    assert main(["serve", "--config", str(config)], env=env) == 2
+    assert "sources[0].page" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

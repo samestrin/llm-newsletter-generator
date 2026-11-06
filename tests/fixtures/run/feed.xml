@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example News</title>
+    <link>https://news.example.com/</link>
+    <description>News</description>
+    <item>
+      <title>City council approves new bike lanes</title>
+      <link>https://news.example.com/bike-lanes</link>
+      <description>The council voted 7-2 for 12 km of protected bike lanes.</description>
+    </item>
+    <item>
+      <title>Acme releases Falcon-9 open-weight model</title>
+      <link>https://news.example.com/acme-falcon-9</link>
+      <description>Acme published the weights of Falcon-9, a 70B model, under Apache 2.0.</description>
+    </item>
+  </channel>
+</rss>

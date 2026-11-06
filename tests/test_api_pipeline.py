@@ -7,10 +7,11 @@ from newsletter.api.pipeline import RunRequest, run_issue, voice_edition
 from newsletter.editor import Edition, Prose
 from newsletter.evals.replay import ReplayClient
 from newsletter.evals.run import load_cases
-from newsletter.llm import Settings
-from newsletter.sources import RssSource
+from newsletter.config import HackerNewsConfig
+from newsletter.llm import LLMClient, Settings
 from newsletter.sources.http import HttpResponse
 from newsletter.voice import VoiceSettings
+from test_cli import ENV, HN, NEWS, PAGE, apart, by_meaning, model, run_web
 
 CASE = next(case for case in load_cases() if case.name == "open-models-week")
 VOICE_KEY = "yv-secret-key-123"
@@ -32,12 +33,19 @@ def request(**changes) -> RunRequest:
     return RunRequest(**{**fields, **changes})
 
 
+class Replay(ReplayClient):
+    """The recorded case, with every item kept apart by the grouping step."""
+
+    def embed(self, step, inputs):
+        return apart(inputs)
+
+
 def replay(extra=None) -> ReplayClient:
-    return ReplayClient(Settings(models=CASE.models), {**CASE.recorded, **(extra or {})})
+    return Replay(Settings(models=CASE.models), {**CASE.recorded, **(extra or {})})
 
 
 def test_a_run_edits_and_renders_the_issue_with_its_flags_and_report():
-    content = run_issue(request(), replay(), source=RssSource(fetch=web), voice=VoiceSettings())
+    content = run_issue(request(), replay(), fetch=web, voice=VoiceSettings())
 
     assert content["title"] == "Open models week"
     assert content["issue_date"] == "2026-11-02"
@@ -57,11 +65,41 @@ def test_a_feed_that_fails_is_in_the_report():
     content = run_issue(
         request(feeds=[CASE.feed_url, missing]),
         replay(),
-        source=RssSource(fetch=web),
+        fetch=web,
         voice=VoiceSettings(),
     )
     assert [f["url"] for f in content["report"]["failed_sources"]] == [missing]
     assert content["report"]["ok"] is False
+
+
+def test_a_run_reads_feeds_pages_and_hacker_news_and_groups_them():
+    llm = LLMClient(Settings.from_env(ENV), transport=model(embed=by_meaning))
+    run = request(
+        feeds=[NEWS],
+        pages=[PAGE],
+        hackernews=HackerNewsConfig(min_score=100),
+        topic="open-weight language models",
+    )
+    content = run_issue(run, llm, fetch=run_web, voice=VoiceSettings())
+
+    report = content["report"]
+    assert [f["url"] for f in report["failed_sources"]] == [f"{HN}/item/2.json"]
+    assert [entry["title"] for entry in report["left_out"]] == ["A mystery launch"]
+    assert report["left_out"][0]["reason"].startswith("ungrouped:")
+    assert report["grouping_error"] is None
+    assert report["ok"] is False
+    assert f"(<{PAGE}>)" in content["text"] and "Also covered by:" in content["text"]
+    assert [s["step"] for s in report["steps"]][0] == "group"
+
+
+def test_a_failed_embedding_call_is_reported_and_every_item_listed():
+    llm = LLMClient(Settings.from_env(ENV), transport=model(fail_models=("embed-1",)))
+    content = run_issue(request(feeds=[NEWS]), llm, fetch=run_web, voice=VoiceSettings())
+
+    report = content["report"]
+    assert report["grouping_error"].startswith("group:")
+    assert len(report["left_out"]) == 2
+    assert "Grouping failed" in content["text"]
 
 
 def fake_yourvoice(request: httpx.Request) -> httpx.Response:
@@ -117,7 +155,7 @@ def test_the_voice_pass_runs_between_the_editor_and_render(tmp_path):
     content = run_issue(
         request(),
         llm,
-        source=RssSource(fetch=web),
+        fetch=web,
         voice=voice_settings(tmp_path),
         voice_transport=httpx.MockTransport(fake_yourvoice),
     )
