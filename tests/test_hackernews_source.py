@@ -263,3 +263,10 @@ def test_a_deleted_story_that_would_qualify_is_not_kept():
         f"{API}/item/1.json": js(odd_story(id=1, deleted=True)),
     }
     assert HackerNewsSource(min_score=0, api_url=API, fetch=FakeHn(table)).collect().items == []
+
+
+@pytest.mark.parametrize("payload", [None, [], "story", 7])
+def test_an_item_that_is_not_an_object_is_skipped(payload):
+    table = {f"{API}/topstories.json": js([1]), f"{API}/item/1.json": js(payload)}
+    result = HackerNewsSource(min_score=0, api_url=API, fetch=FakeHn(table)).collect()
+    assert result.items == [] and result.failures == []
