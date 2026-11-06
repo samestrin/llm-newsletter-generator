@@ -7,7 +7,14 @@ from dataclasses import dataclass, field
 from newsletter import __version__
 from newsletter.sources.cache import CachedFeed, FeedCache
 from newsletter.sources.feed import FeedError, Item, ParsedFeed, parse_feed
-from newsletter.sources.http import Fetch, FetchError, check_url, follow_redirects, http_get
+from newsletter.sources.http import (
+    Fetch,
+    FetchError,
+    Resolve,
+    check_url,
+    follow_redirects,
+    http_get,
+)
 from newsletter.sources.robots import RobotsPolicy
 
 DEFAULT_USER_AGENT = (
@@ -38,13 +45,15 @@ class RssSource:
         user_agent: str = DEFAULT_USER_AGENT,
         fetch: Fetch = http_get,
         clock: Callable[[], float] = time.time,
+        resolve: Resolve | None = None,
     ) -> None:
         self.cache = cache
         self.timeout = timeout
         self.user_agent = user_agent
         self.fetch = fetch
         self.clock = clock
-        self.robots = RobotsPolicy(fetch, user_agent, timeout)
+        self.resolve = resolve
+        self.robots = RobotsPolicy(fetch, user_agent, timeout, resolve)
 
     def collect(self, urls: Iterable[str]) -> SourceResult:
         """Read every feed in `urls`. A feed that fails is listed in `failures`, never skipped."""
@@ -76,7 +85,12 @@ class RssSource:
         if cached and cached.last_modified:
             headers["If-Modified-Since"] = cached.last_modified
         final_url, response = follow_redirects(
-            self.fetch, url, headers, self.timeout, before_hop=self._check_robots
+            self.fetch,
+            url,
+            headers,
+            self.timeout,
+            before_hop=self._check_robots,
+            resolve=self.resolve,
         )
 
         if response.status == 304 and cached:

@@ -1,11 +1,19 @@
 from pathlib import Path
 
+import pytest
+
 from newsletter.sources import FeedCache, FeedFailure, RssSource
 from newsletter.sources.http import FetchError, HttpResponse
 
 FIXTURES = Path(__file__).parent / "fixtures" / "feeds"
 RSS = "https://example.com/feed.xml"
 ATOM = "https://lab.example.org/atom.xml"
+
+
+@pytest.fixture(autouse=True)
+def public_dns(monkeypatch):
+    """The hosts here are made up: resolve every one to a public address, never ask real DNS."""
+    monkeypatch.setattr("newsletter.sources.http.resolve_host", lambda host: ["93.184.215.14"])
 
 
 def ok(body: bytes, **headers: str) -> HttpResponse:
@@ -291,3 +299,22 @@ def test_a_cached_redirected_feed_still_resolves_links_against_the_final_url(tmp
 
     assert web.requests == []
     assert [item.link for item in result.items] == ["https://cdn.example.net/feeds/posts/r"]
+
+
+def test_a_redirect_to_a_private_address_is_refused():
+    web = FakeWeb({RSS: redirect("https://intranet.example/feed.xml")})
+    result = RssSource(fetch=web, resolve=lambda host: ["10.0.0.7"]).collect([RSS])
+    assert result.failures == [
+        FeedFailure(RSS, "refused: intranet.example is a private or loopback address (10.0.0.7)")
+    ]
+    assert web.fetched("https://intranet.example/feed.xml") == []
+
+
+def test_a_robots_txt_redirect_to_a_loopback_address_blocks_the_feed():
+    web = FakeWeb({"https://example.com/robots.txt": redirect("http://127.0.0.1/robots.txt")})
+    result = RssSource(fetch=web).collect([RSS])
+    assert len(result.failures) == 1
+    assert "robots.txt unavailable (refused: 127.0.0.1 is a private or loopback" in (
+        result.failures[0].reason
+    )
+    assert web.fetched(RSS) == []
