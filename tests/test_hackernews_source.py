@@ -212,3 +212,54 @@ def test_server_timeout_and_size_cap_are_listed(api_url):
         FeedFailure(f"{api_url}/item/2.json", "response larger than 1000 bytes"),
         FeedFailure(f"{api_url}/item/3.json", "timed out after 0.3s"),
     ]
+
+
+def odd_story(**fields):
+    return {"type": "story", "title": "T", "url": "https://a.example/", "score": 500, **fields}
+
+
+@pytest.mark.parametrize(
+    "story",
+    [
+        odd_story(id=1, title=""),
+        odd_story(id=1, title=None),
+        odd_story(id=1, score="500"),
+        odd_story(id=1, score=None),
+        odd_story(id=1, deleted=True),
+        odd_story(id=1, dead=True),
+    ],
+)
+def test_a_story_without_a_usable_title_or_score_or_that_is_deleted_is_filtered(story):
+    table = {f"{API}/topstories.json": js([1]), f"{API}/item/1.json": js(story)}
+    result = HackerNewsSource(min_score=0, api_url=API, fetch=FakeHn(table)).collect()
+    assert result.items == [] and result.failures == []
+
+
+def test_a_story_without_an_id_is_listed_not_a_crash():
+    table = {f"{API}/topstories.json": js([1]), f"{API}/item/1.json": js(odd_story(url=None))}
+    result = HackerNewsSource(min_score=0, api_url=API, fetch=FakeHn(table)).collect()
+    assert result.items == []
+    assert result.failures == [FeedFailure(f"{API}/item/1.json", "story has no id")]
+
+
+def test_an_out_of_range_time_leaves_published_empty():
+    table = {
+        f"{API}/topstories.json": js([1]),
+        f"{API}/item/1.json": js(odd_story(id=1, time=10**20)),
+    }
+    [item] = HackerNewsSource(min_score=0, api_url=API, fetch=FakeHn(table)).collect().items
+    assert item.published is None
+
+
+def test_a_story_list_with_a_non_integer_id_is_listed():
+    hn = FakeHn({f"{API}/topstories.json": js([1, "2"])})
+    result = HackerNewsSource(api_url=API, fetch=hn).collect()
+    assert result.failures == [FeedFailure(f"{API}/topstories.json", "not a list of story ids")]
+
+
+def test_a_deleted_story_that_would_qualify_is_not_kept():
+    table = {
+        f"{API}/topstories.json": js([1]),
+        f"{API}/item/1.json": js(odd_story(id=1, deleted=True)),
+    }
+    assert HackerNewsSource(min_score=0, api_url=API, fetch=FakeHn(table)).collect().items == []

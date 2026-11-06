@@ -74,7 +74,12 @@ class HackerNewsSource:
 
     def _story(self, data, list_url: str) -> Item | None:
         """The item for a story at or over the threshold; None for anything else."""
-        if not isinstance(data, dict) or data.get("type") != "story" or data.get("deleted"):
+        if (
+            not isinstance(data, dict)
+            or data.get("type") != "story"
+            or data.get("deleted")
+            or data.get("dead")
+        ):
             return None
         title, score = data.get("title"), data.get("score")
         if not isinstance(title, str) or not title or not isinstance(score, int):
@@ -83,15 +88,22 @@ class HackerNewsSource:
             return None
         link = data.get("url")
         if not isinstance(link, str) or not link:
+            if not isinstance(data.get("id"), int):
+                raise FetchError("story has no id")
             link = DISCUSSION_URL.format(data["id"])
         text = data.get("text")
         summary = f"{title}\n{html_to_text(text)}" if isinstance(text, str) and text else title
-        stamp = data.get("time")
+        published = None
+        if isinstance(data.get("time"), int):
+            try:
+                published = datetime.fromtimestamp(data["time"], UTC)
+            except (OverflowError, OSError, ValueError):
+                pass  # An unusable time is left empty; the story is still good.
         return Item(
             title=title,
             link=link,
             summary=summary,
-            published=datetime.fromtimestamp(stamp, UTC) if isinstance(stamp, int) else None,
+            published=published,
             feed_url=list_url,
             feed_title="Hacker News",
             rights=None,
