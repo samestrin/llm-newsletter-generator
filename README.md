@@ -74,7 +74,7 @@ uv run newsletter archive --demo --site site --per-feed 5 https://example.com/fe
 
 ### Daily archive
 
-`.github/workflows/daily.yml` runs `newsletter archive --demo` every day (and by hand from the Actions tab) on five public AI news feeds, five items each, and uploads the site as the `archive-site` workflow artifact. It has no deploy step and never runs on pull requests. To turn it on, set the secret `NEWSLETTER_API_KEY` and the repository variable `NEWSLETTER_FAST_MODEL` (and `NEWSLETTER_BASE_URL` for a non-OpenAI endpoint).
+`.github/workflows/daily.yml` runs `newsletter archive --demo` by hand from the Actions tab (it has no schedule: it ran daily until 2026-11-07, but no model was configured) on five public AI news feeds, five items each, and uploads the site as the `archive-site` workflow artifact. It has no deploy step and never runs on pull requests. To turn it on, set the secret `NEWSLETTER_API_KEY` and the repository variable `NEWSLETTER_FAST_MODEL` (and `NEWSLETTER_BASE_URL` for a non-OpenAI endpoint).
 
 ## Configuration
 

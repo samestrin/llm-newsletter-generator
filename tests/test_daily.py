@@ -49,9 +49,8 @@ def build_argv(workflow) -> list[str]:
     return argv[3:]
 
 
-def test_runs_on_schedule_and_workflow_dispatch_only(workflow):
-    assert set(triggers(workflow)) == {"schedule", "workflow_dispatch"}
-    assert triggers(workflow)["schedule"], "a cron entry"
+def test_runs_by_workflow_dispatch_only(workflow):
+    assert set(triggers(workflow)) == {"workflow_dispatch"}
     assert "pull_request_target" not in WORKFLOW.read_text(encoding="utf-8")
 
 

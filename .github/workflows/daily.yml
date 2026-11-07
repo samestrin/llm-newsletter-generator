@@ -1,9 +1,11 @@
-# The daily public archive, in demo mode: draft an issue from public AI news feeds,
+# The public archive, in demo mode: draft an issue from public AI news feeds,
 # build the static site, and upload it as a workflow artifact. Nothing is deployed,
 # published or exported; the owner picks the host. Each page is labeled as an
 # automated demo, because no person reviews it.
 #
-# Runs on a schedule or by hand only. Never add a pull request trigger: this job holds
+# Runs by hand only (Actions tab). The daily schedule was removed on 2026-11-07: no model
+# was configured, so every scheduled run failed. A one-time sample is committed in
+# docs/sample-archive/. Never add a pull request trigger: this job holds
 # the model key. tests/test_daily.py checks this file and runs the same build offline.
 #
 # The owner sets the secret NEWSLETTER_API_KEY and the repository variables
@@ -12,8 +14,6 @@
 name: Daily archive
 
 on:
-  schedule:
-    - cron: "17 6 * * *"
   workflow_dispatch:
 
 permissions:
