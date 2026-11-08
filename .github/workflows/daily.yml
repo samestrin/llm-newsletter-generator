@@ -4,8 +4,7 @@
 # automated demo, because no person reviews it.
 #
 # Runs by hand only (Actions tab). The daily schedule was removed on 2026-11-07: no model
-# was configured, so every scheduled run failed. A one-time sample is committed in
-# docs/sample-archive/. Never add a pull request trigger: this job holds
+# was configured, so every scheduled run failed. Never add a pull request trigger: this job holds
 # the model key. tests/test_daily.py checks this file and runs the same build offline.
 #
 # The owner sets the secret NEWSLETTER_API_KEY and the repository variables
