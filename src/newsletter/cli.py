@@ -19,6 +19,8 @@ import httpx
 
 from newsletter import __version__
 from newsletter.archive import build_site, demo_approval
+from newsletter.archive import render_email as archive_email
+from newsletter.archive import render_markdown as archive_markdown
 from newsletter.config import SourcesConfigError, load_config
 from newsletter.editor import check_claims, edit_issue, summarize_stories
 from newsletter.issue import Issue, gather_stories, make_issue
@@ -86,8 +88,10 @@ def build_parser() -> argparse.ArgumentParser:
             "Draft a plain issue (one fast-model summary and one link per item) and build "
             "it into a static site. Only demo mode exists so far: the issue is approved by "
             "an automated-demo record, valid for archive pages only, and every page is "
-            "labeled as an automated demo. Nothing is published or exported. When "
-            "YOURVOICE_API_KEY is set, the summaries are rewritten in the writer's voice."
+            "labeled as an automated demo. Nothing is published or exported. With "
+            "--markdown and --html, the same issue is also written as Markdown and as an "
+            "HTML email, labeled the same way. When YOURVOICE_API_KEY is set, the "
+            "summaries are rewritten in the writer's voice."
         ),
     )
     archive.add_argument("--topic", help="topic given to the model (default: news)")
@@ -97,6 +101,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="approve with an automated-demo record and label every page; required",
     )
+    archive.add_argument("--markdown", type=Path, help="also write the issue Markdown here")
+    archive.add_argument("--html", type=Path, help="also write the HTML email here")
 
     serve = commands.add_parser(
         "serve",
@@ -269,7 +275,15 @@ def _archive(args, env, fetch, llm_transport, voice_transport) -> int:
     if issue is None:
         return 2
     build_site([issue], args.site, approval=demo_approval())
-    return _summary(issue, args.site)
+    written = [args.site]
+    # From the draft that built the site, so the three files say the same thing.
+    if args.markdown:
+        args.markdown.write_text(archive_markdown(issue, demo=True), encoding="utf-8")
+        written.append(args.markdown)
+    if args.html:
+        args.html.write_text(archive_email(issue, demo=True), encoding="utf-8")
+        written.append(args.html)
+    return _summary(issue, written)
 
 
 def _draft(args, env, fetch, llm_transport, voice_transport) -> Issue | None:
@@ -312,13 +326,13 @@ def _settings(env) -> tuple[Settings, VoiceSettings] | None:
     return settings, voice
 
 
-def _summary(issue: Issue, written: Path | None) -> int:
+def _summary(issue: Issue, written: list[Path]) -> int:
     failed = sum(1 for story in issue.stories if story.error)
     print(
         f"newsletter: {_count(len(issue.stories), 'story', 'stories')}, "
         f"{_count(len(issue.failures), 'feed problem')}, "
         f"{_count(failed, 'failed summary', 'failed summaries')}"
-        + (f"; wrote {written}" if written else ""),
+        + "".join(f"; wrote {path}" for path in written),
         file=sys.stderr,
     )
     return 0 if issue.ok else 1
