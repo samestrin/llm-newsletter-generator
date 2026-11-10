@@ -376,6 +376,20 @@ describe("the draft list's states", () => {
 });
 
 describe("the draft's states", () => {
+  it("saves an edit while the list shows its error, and keeps that error", async () => {
+    const api = fakeApi(makeDraft());
+    const { user } = await openDraft(api);
+    const nav = screen.getByRole("navigation", { name: "Drafts" });
+    api.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "the API is busy" }), { status: 503 }));
+    await user.click(within(nav).getByRole("button", { name: "Refresh list" }));
+    expect(await within(nav).findByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.type(screen.getByLabelText("Draft text"), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByTestId("draft-text")).toHaveTextContent(/!$/);
+    expect(within(nav).getByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
+  });
+
   it("asks for a draft to be chosen before one is open", async () => {
     await connect(heldFetch());
     expect(screen.getByRole("main")).toHaveTextContent("Choose a draft to review.");
@@ -429,6 +443,13 @@ describe("the draft's states", () => {
 });
 
 describe("the run report's states", () => {
+  it("says a report that is a list could not be read, and never that nothing failed", async () => {
+    await openDraft(fakeApi(makeDraft({ report: [] as unknown as Draft["report"] })));
+    const report = screen.getByRole("region", { name: "Run report" });
+    expect(within(report).getByRole("alert")).toHaveTextContent("The run report could not be read.");
+    expect(report).not.toHaveTextContent("Nothing failed");
+  });
+
   it("says when the draft has no run report", async () => {
     await openDraft(fakeApi(makeDraft({ report: null as unknown as Draft["report"] })));
     const report = screen.getByRole("region", { name: "Run report" });
