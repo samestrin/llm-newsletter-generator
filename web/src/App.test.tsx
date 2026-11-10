@@ -273,3 +273,221 @@ describe("edit and approve", () => {
     expect(screen.getByLabelText("Draft text")).toHaveValue(`${makeDraft().text}!`);
   });
 });
+
+/** A fetch whose replies the test hands out one at a time, to see the page while it waits. */
+function heldFetch() {
+  const waiting: { url: string; reply: (status: number, body: unknown) => void }[] = [];
+  const fetch = vi.fn(
+    (url: string) =>
+      new Promise<Response>((resolve) => {
+        waiting.push({
+          url,
+          reply: (status, body) =>
+            resolve(
+              new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }),
+            ),
+        });
+      }),
+  );
+  return {
+    fetch,
+    /** Answer the oldest request still waiting for `url`. */
+    async reply(url: string, status: number, body: unknown) {
+      await vi.waitFor(() => expect(waiting.map((w) => w.url)).toContain(url));
+      waiting.splice(waiting.findIndex((w) => w.url === url), 1)[0].reply(status, body);
+    },
+  };
+}
+
+function summary(draft: Draft) {
+  const { text: _text, report: _report, approval: _approval, ...rest } = draft;
+  return { ...rest, flags: draft.flags.length };
+}
+
+async function connect(held: ReturnType<typeof heldFetch>, drafts: Draft[] = [makeDraft()]) {
+  vi.stubGlobal("fetch", held.fetch);
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(screen.getByLabelText("API token"), "good-token");
+  await user.click(screen.getByRole("button", { name: "Connect" }));
+  await held.reply("/api/drafts", 200, drafts.map(summary));
+  await screen.findByRole("navigation", { name: "Drafts" });
+  return user;
+}
+
+describe("the draft list's states", () => {
+  it("says it is loading while the list is on its way", async () => {
+    const held = heldFetch();
+    vi.stubGlobal("fetch", held.fetch);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(screen.getByLabelText("API token"), "good-token");
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Loading the drafts…");
+    expect(screen.getByRole("button", { name: "Connect" })).toBeDisabled();
+    await held.reply("/api/drafts", 200, [summary(makeDraft())]);
+    expect(await screen.findByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("says there are no drafts yet, and how to make one", async () => {
+    await connect(heldFetch(), []);
+    const nav = screen.getByRole("navigation", { name: "Drafts" });
+    expect(nav).toHaveTextContent("No drafts yet.");
+    expect(nav).toHaveTextContent("POST /api/runs");
+    expect(within(nav).queryByRole("list")).toBeNull();
+    expect(screen.queryByText("Choose a draft to review.")).toBeNull();
+  });
+
+  it("says the list could not be loaded, and keeps the token form to try again", async () => {
+    const held = heldFetch();
+    vi.stubGlobal("fetch", held.fetch);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(screen.getByLabelText("API token"), "good-token");
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+    await held.reply("/api/drafts", 500, {});
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load the drafts: the API answered 500",
+    );
+    expect(screen.queryByRole("navigation", { name: "Drafts" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+    await held.reply("/api/drafts", 200, [summary(makeDraft())]);
+    expect(await screen.findByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("refreshes the list, with its loading and error states in the list", async () => {
+    const held = heldFetch();
+    const user = await connect(held, []);
+    const nav = screen.getByRole("navigation", { name: "Drafts" });
+    await user.click(within(nav).getByRole("button", { name: "Refresh list" }));
+    expect(within(nav).getByRole("status")).toHaveTextContent("Loading the drafts…");
+    expect(within(nav).getByRole("button", { name: "Refresh list" })).toBeDisabled();
+    await held.reply("/api/drafts", 503, { detail: "the API is busy" });
+    expect(await within(nav).findByRole("alert")).toHaveTextContent(
+      "Could not load the drafts: the API is busy",
+    );
+    await user.click(within(nav).getByRole("button", { name: "Refresh list" }));
+    await held.reply("/api/drafts", 200, [summary(makeDraft())]);
+    expect(await within(nav).findByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
+    expect(within(nav).queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("the draft's states", () => {
+  it("saves an edit while the list shows its error, and keeps that error", async () => {
+    const api = fakeApi(makeDraft());
+    const { user } = await openDraft(api);
+    const nav = screen.getByRole("navigation", { name: "Drafts" });
+    api.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "the API is busy" }), { status: 503 }));
+    await user.click(within(nav).getByRole("button", { name: "Refresh list" }));
+    expect(await within(nav).findByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.type(screen.getByLabelText("Draft text"), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByTestId("draft-text")).toHaveTextContent(/!$/);
+    expect(within(nav).getByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
+  });
+
+  it("asks for a draft to be chosen before one is open", async () => {
+    await connect(heldFetch());
+    expect(screen.getByRole("main")).toHaveTextContent("Choose a draft to review.");
+  });
+
+  it("says the draft and its run report are loading", async () => {
+    const held = heldFetch();
+    const user = await connect(held);
+    await user.click(screen.getByRole("button", { name: /AI Weekly/ }));
+    expect(screen.getByRole("status")).toHaveTextContent("Loading the draft…");
+    expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("region", { name: "Run report" })).toHaveTextContent("Loading the run report…");
+    await held.reply(`/api/drafts/${makeDraft().id}`, 200, makeDraft());
+    expect(await screen.findByRole("heading", { level: 2, name: "AI Weekly" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("main")).not.toHaveAttribute("aria-busy");
+  });
+
+  it("says the draft could not be loaded, and tries again", async () => {
+    const held = heldFetch();
+    const user = await connect(held);
+    await user.click(screen.getByRole("button", { name: /AI Weekly/ }));
+    await held.reply(`/api/drafts/${makeDraft().id}`, 404, { detail: "no such draft" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the draft: no such draft");
+    expect(screen.queryByRole("region", { name: "Run report" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await held.reply(`/api/drafts/${makeDraft().id}`, 200, makeDraft());
+    expect(await screen.findByRole("heading", { level: 2, name: "AI Weekly" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the draft opened last, even when an earlier one answers after it", async () => {
+    const held = heldFetch();
+    const second = makeDraft({ id: "second", title: "Second issue" });
+    const user = await connect(held, [makeDraft(), second]);
+    await user.click(screen.getByRole("button", { name: /AI Weekly/ }));
+    await user.click(screen.getByRole("button", { name: /Second issue/ }));
+    await held.reply("/api/drafts/second", 200, second);
+    expect(await screen.findByRole("heading", { level: 2, name: "Second issue" })).toBeInTheDocument();
+    await held.reply(`/api/drafts/${makeDraft().id}`, 200, makeDraft());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("heading", { level: 2, name: "Second issue" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "AI Weekly" })).toBeNull();
+  });
+
+  it("says a draft has no text", async () => {
+    await openDraft(fakeApi(makeDraft({ text: "" })));
+    expect(screen.getByRole("main")).toHaveTextContent("This draft has no text.");
+    expect(screen.queryByTestId("draft-text")).toBeNull();
+  });
+});
+
+describe("the run report's states", () => {
+  it("says a report that is a list could not be read, and never that nothing failed", async () => {
+    await openDraft(fakeApi(makeDraft({ report: [] as unknown as Draft["report"] })));
+    const report = screen.getByRole("region", { name: "Run report" });
+    expect(within(report).getByRole("alert")).toHaveTextContent("The run report could not be read.");
+    expect(report).not.toHaveTextContent("Nothing failed");
+  });
+
+  it("says when the draft has no run report", async () => {
+    await openDraft(fakeApi(makeDraft({ report: null as unknown as Draft["report"] })));
+    const report = screen.getByRole("region", { name: "Run report" });
+    expect(report).toHaveTextContent("No run report was saved with this draft.");
+    expect(report).not.toHaveTextContent("Nothing failed");
+  });
+
+  it("says a report that is not a report could not be read, and keeps the draft", async () => {
+    await openDraft(fakeApi(makeDraft({ report: "garbage" as unknown as Draft["report"] })));
+    const report = screen.getByRole("region", { name: "Run report" });
+    expect(within(report).getByRole("alert")).toHaveTextContent("The run report could not be read.");
+    expect(screen.getByTestId("draft-text")).toBeInTheDocument();
+  });
+
+  it("says a report that breaks while it is shown could not be read, and keeps the draft", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await openDraft(fakeApi(makeDraft({ report: { steps: "x" } as unknown as Draft["report"] })));
+      const report = screen.getByRole("region", { name: "Run report" });
+      expect(within(report).getByRole("alert")).toHaveTextContent("The run report could not be read.");
+      expect(screen.getByRole("region", { name: "Flags (2)" })).toBeInTheDocument();
+    } finally {
+      quiet.mockRestore();
+    }
+  });
+
+  it("shows the report again once a reload brings a readable one", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const api = fakeApi(makeDraft({ report: { steps: "x" } as unknown as Draft["report"] }));
+      const { user } = await openDraft(api);
+      api.fetch.mockResolvedValueOnce(new Response(JSON.stringify(makeDraft()), { status: 200 }));
+      await user.click(screen.getByRole("button", { name: "Reload" }));
+      const report = screen.getByRole("region", { name: "Run report" });
+      expect(await within(report).findByText("Problems found")).toBeInTheDocument();
+      expect(within(report).queryByRole("alert")).toBeNull();
+    } finally {
+      quiet.mockRestore();
+    }
+  });
+});

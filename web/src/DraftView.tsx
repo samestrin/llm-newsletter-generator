@@ -95,9 +95,13 @@ export function DraftView({
         )}
       </div>
       {editing === null ? (
-        <pre className="draft-text" data-testid="draft-text">
-          {draft.text}
-        </pre>
+        draft.text ? (
+          <pre className="draft-text" data-testid="draft-text">
+            {draft.text}
+          </pre>
+        ) : (
+          <p className="state">This draft has no text. Edit it to write some.</p>
+        )
       ) : (
         <label className="editor">
           Draft text
@@ -105,7 +109,7 @@ export function DraftView({
         </label>
       )}
       <Flags flags={draft.flags ?? []} />
-      <RunReport report={draft.report ?? {}} />
+      <RunReport report={draft.report} />
     </article>
   );
 }
