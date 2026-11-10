@@ -49,4 +49,4 @@ The 33.3% is exactly the planted share: the fixtures plant a false claim in a th
 
 ## Try it
 
-The project is MIT-licensed. `uv run python -m newsletter.evals` reproduces the table above from recorded responses, with no network and no API key. See the [README](../README.md) for installation, the daily public archive, and the review page where a draft, its flagged claims and its run report are shown together.
+The project is MIT-licensed. `uv run python -m newsletter.evals` reproduces the table above from recorded responses, with no network and no API key. See the [README](../README.md) for installation and the review page where a draft, its flagged claims and its run report are shown together.
