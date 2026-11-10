@@ -1,6 +1,6 @@
 [project]
 name = "newsletter"
-version = "0.0.4"
+version = "1.0.0"
 description = "Generate text-only newsletters from RSS feeds using LLMs."
 readme = "README.md"
 license = { file = "LICENSE" }

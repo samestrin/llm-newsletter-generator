@@ -115,7 +115,7 @@ def test_robots_disallow_blocks_the_feed():
 def test_robots_rules_for_our_agent_apply():
     robots = b"User-agent: newsletter\nDisallow: /\n\nUser-agent: *\nAllow: /\n"
     web = FakeWeb({"https://example.com/robots.txt": ok(robots), RSS: ok(fixture("rss.xml"))})
-    result = RssSource(fetch=web, user_agent="newsletter/0.0.4").collect([RSS])
+    result = RssSource(fetch=web, user_agent="newsletter/1.0.0").collect([RSS])
     assert result.failures == [FeedFailure(RSS, "disallowed by robots.txt")]
 
 
