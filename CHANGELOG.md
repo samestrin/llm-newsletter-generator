@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The README shows the review page in light and dark mode and at phone width (360 px), saved to `docs/img/` by the browser test, and links `docs/sample/`. (epic 06)
+
 - The review page shows explicit empty, loading and error states: "Loading the drafts…" while the list loads, "No drafts yet" with a Refresh list button, and the API's reason when the list fails; "Loading the draft…" and "Loading the run report…" while a draft loads, its failure with Try again, "This draft has no text", "No run report was saved with this draft" (it used to say nothing failed) and "The run report could not be read" for a malformed report, while the rest of the draft still shows. Only the draft opened last fills the page when answers arrive out of order. (epic 06)
 - The daily archive workflow (`.github/workflows/daily.yml`) is removed: no workflow runs on a schedule. `tests/test_daily.py` keeps the offline `archive --demo` build test with its argv in the test. (epic 06)
 - `newsletter issue --config FILE` and `newsletter serve --config FILE` read the file's feeds, web pages (`- page: URL`) and Hacker News (`- hackernews: {min_score, limit}`), group copies of one story into one story with all its sources, and rank the stories closest to the file's `topic` first, with one `embedding` call. `newsletter issue` now needs `NEWSLETTER_EMBEDDING_MODEL` (exit 2 without it). The run report (`RunReport.left_out`, `RunReport.grouping_error`, and both the Markdown and HTML reports) lists every item that could not be grouped or was dropped, and a failed embedding call; either one makes the run exit 1. A `serve` run that names no feeds reads the file's sources. `newsletter archive` no longer takes `--config`. (epic 02)

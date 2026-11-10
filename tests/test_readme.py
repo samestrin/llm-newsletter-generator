@@ -57,6 +57,18 @@ def test_the_screenshotted_issue_shows_its_planted_claims_flagged():
 def test_every_readme_image_is_committed():
     images = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", README.read_text(encoding="utf-8"))
     local = [i for i in images if not i.startswith(("http://", "https://"))]
-    assert {"docs/img/review-page.png", "docs/img/issue.png"} <= set(local)
+    assert {
+        "docs/img/review-page-light.png",
+        "docs/img/review-page-dark.png",
+        "docs/img/review-page-phone.png",
+        "docs/img/issue.png",
+    } <= set(local)
     for image in local:
         assert (ROOT / image).is_file(), image
+
+
+def test_every_readme_link_to_a_repo_file_exists():
+    links = re.findall(r"(?<!!)\[[^\]]*\]\(([^)\s#]+)", README.read_text(encoding="utf-8"))
+    for link in links:
+        if not link.startswith(("http://", "https://", "mailto:")):
+            assert (ROOT / link).exists(), link
