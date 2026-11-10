@@ -130,6 +130,13 @@ describe("flags", () => {
     );
   });
 
+  it("marks a flagged claim by text and an icon the screen reader skips", async () => {
+    await openDraft();
+    const items = within(screen.getByRole("region", { name: "Flags (2)" })).getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("Flagged: unsupported");
+    expect(within(items[0]).getByTestId("flag-icon")).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("does not link a source that is not http or https", async () => {
     await openDraft();
     const items = within(screen.getByRole("region", { name: "Flags (2)" })).getAllByRole("listitem");
