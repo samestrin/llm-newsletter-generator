@@ -16,15 +16,20 @@ It reads RSS and Atom feeds and drafts an issue that a person reviews before it 
 4. The issue is rendered as Markdown and as an HTML email, with a run report: failed feeds, flagged and dropped claims, and each model call with its tokens and cost.
 5. A person reads the draft on the review page, edits it and approves it. Any edit clears the approval.
 
-The review page, showing a draft with its three flagged claims and its run report:
+The review page, showing a draft with its three flagged claims and its run report, in light and dark mode:
 
-![The review page: a draft's text, its flagged claims and its run report](docs/img/review-page.png)
+![The review page in light mode: a draft's text, its flagged claims and its run report](docs/img/review-page-light.png)
+![The review page in dark mode](docs/img/review-page-dark.png)
+
+At phone width (360 px) the page is one column:
+
+![The review page at 360 px wide](docs/img/review-page-phone.png)
 
 The same issue as the HTML email. The three claims the source does not support are flagged in red:
 
 ![An issue rendered as the HTML email, with flagged claims marked](docs/img/issue.png)
 
-Both screenshots show the `open-models-week` eval case below, replayed from recorded model answers. The browser test (`cd web && npm run test:e2e`) saves them to `docs/img/` against a fake API.
+All of these show the `open-models-week` eval case below, replayed from recorded model answers. The browser test (`cd web && npm run test:e2e`) saves them to `docs/img/` against a fake API. A real issue, with its email and archive page, is in [`docs/sample/`](docs/sample/).
 
 Grouping stories from several feeds is later work.
 

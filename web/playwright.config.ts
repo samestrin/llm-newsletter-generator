@@ -13,7 +13,7 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: { baseURL: PAGE, trace: "retain-on-failure" },
   // The review page is checked at desktop and phone (360 px) widths, in light and dark.
-  // The README screenshots are taken once, at the desktop width in light mode.
+  // The README screenshots are taken once: the review page in light, dark and at phone width, and the issue email.
   projects: [
     { name: "screenshots", testMatch: "screenshots.spec.ts", use: { ...devices["Desktop Chrome"] } },
     ...(["light", "dark"] as const).flatMap((colorScheme) => [
