@@ -7,7 +7,7 @@ The sample was generated once, by the command below, and committed. CI never
 regenerates it, and no model key is needed to read it.
 
 - **Model:** `kimi-k3`
-- **Date:** pending
+- **Date:** 2026-11-10
 - **Feeds:**
   - https://openai.com/news/rss.xml
   - https://blog.google/technology/ai/rss/
