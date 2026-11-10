@@ -12,7 +12,23 @@ export default defineConfig({
   retries: 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: { baseURL: PAGE, trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // The review page is checked at desktop and phone (360 px) widths, in light and dark.
+  // The README screenshots are taken once, at the desktop width in light mode.
+  projects: [
+    { name: "screenshots", testMatch: "screenshots.spec.ts", use: { ...devices["Desktop Chrome"] } },
+    ...(["light", "dark"] as const).flatMap((colorScheme) => [
+      {
+        name: `desktop-${colorScheme}`,
+        testIgnore: "screenshots.spec.ts",
+        use: { ...devices["Desktop Chrome"], colorScheme },
+      },
+      {
+        name: `phone-${colorScheme}`,
+        testIgnore: "screenshots.spec.ts",
+        use: { ...devices["Desktop Chrome"], viewport: { width: 360, height: 740 }, colorScheme },
+      },
+    ]),
+  ],
   webServer: [
     {
       command: "node e2e/fake-api.mjs",

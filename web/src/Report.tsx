@@ -16,6 +16,21 @@ export function SafeLink({ href }: { href: string }) {
   );
 }
 
+/** A warning sign beside the "Flagged" text; decoration only, so screen readers skip it. */
+function FlagIcon() {
+  return (
+    <svg
+      className="flag-icon"
+      data-testid="flag-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path fill="currentColor" d="M12 2 1 21h22L12 2Zm-1 7h2v6h-2V9Zm0 8h2v2h-2v-2Z" />
+    </svg>
+  );
+}
+
 export function Flags({ flags }: { flags: Flag[] }) {
   return (
     <section aria-labelledby="flags-heading" className="flags">
@@ -25,8 +40,11 @@ export function Flags({ flags }: { flags: Flag[] }) {
       ) : (
         <ul>
           {flags.map((flag) => (
-            <li key={flag.id}>
-              <span className={`status status-${flag.status}`}>{flag.status}</span>{" "}
+            <li key={flag.id} className="flag">
+              <span className="flag-label">
+                <FlagIcon />
+                Flagged: {flag.status}
+              </span>{" "}
               <q>{flag.text}</q>
               <div className="muted">
                 {flag.id} · {flag.reason}
@@ -126,30 +144,32 @@ export function RunReport({ report }: { report: Report }) {
       {steps.length === 0 ? (
         <p>None.</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Step</th>
-              <th>Tier</th>
-              <th>Model</th>
-              <th>Tokens in</th>
-              <th>Tokens out</th>
-              <th>Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {steps.map((s, n) => (
-              <tr key={n}>
-                <td>{s.step}</td>
-                <td>{s.tier}</td>
-                <td>{s.model}</td>
-                <td>{s.input_tokens ?? ""}</td>
-                <td>{s.output_tokens ?? ""}</td>
-                <td>{s.cost == null ? "unknown" : money(s.cost)}</td>
+        <div className="table-scroll" role="region" aria-label="Model calls table" tabIndex={0}>
+          <table>
+            <thead>
+              <tr>
+                <th>Step</th>
+                <th>Tier</th>
+                <th>Model</th>
+                <th>Tokens in</th>
+                <th>Tokens out</th>
+                <th>Cost</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {steps.map((s, n) => (
+                <tr key={n}>
+                  <td>{s.step}</td>
+                  <td>{s.tier}</td>
+                  <td>{s.model}</td>
+                  <td>{s.input_tokens ?? ""}</td>
+                  <td>{s.output_tokens ?? ""}</td>
+                  <td>{s.cost == null ? "unknown" : money(s.cost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <p>
         Total cost: {money(report.total_cost ?? 0)}
