@@ -1,10 +1,8 @@
 // The design tokens in styles.css: every text color on every background it is used on
 // reaches 4.5:1 (WCAG AA for body text) in light and in dark mode, and the focus ring
 // reaches 3:1 (non-text contrast). axe in the browser test checks the rendered page too.
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-
-const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+import css from "./styles.css?raw";
 
 /** The `--color-*` tokens declared in the first `:root { ... }` block of `source`. */
 function tokens(source: string): Record<string, string> {
