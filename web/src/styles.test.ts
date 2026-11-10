@@ -1,13 +1,19 @@
 // The design tokens in styles.css: every text color on every background it is used on
 // reaches 4.5:1 (WCAG AA for body text) in light and in dark mode, and the focus ring
 // reaches 3:1 (non-text contrast). axe in the browser test checks the rendered page too.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import css from "./styles.css?raw";
+
+// Read from disk: Vitest imports CSS as an empty string, `?raw` included.
+const css = readFileSync(join(import.meta.dirname, "styles.css"), "utf8");
 
 /** The `--color-*` tokens declared in the first `:root { ... }` block of `source`. */
 function tokens(source: string): Record<string, string> {
   const block = /:root\s*{([^}]*)}/.exec(source)?.[1] ?? "";
-  return Object.fromEntries([...block.matchAll(/--color-([\w-]+):\s*(#[0-9a-f]{6})\s*;/gi)].map((m) => [m[1], m[2]]));
+  return Object.fromEntries(
+    [...block.matchAll(/--color-([\w-]+):\s*(#[0-9a-f]{6})\s*;/gi)].map((m) => [m[1], m[2]]),
+  );
 }
 
 const light = tokens(css);
@@ -40,9 +46,12 @@ describe.each([
     }
   });
 
-  it.each(TEXT.flatMap((text) => BACKGROUNDS.map((bg) => [text, bg])))("%s on %s reaches 4.5:1", (text, bg) => {
-    expect(contrast(colors[text], colors[bg])).toBeGreaterThanOrEqual(4.5);
-  });
+  it.each(TEXT.flatMap((text) => BACKGROUNDS.map((bg) => [text, bg])))(
+    "%s on %s reaches 4.5:1",
+    (text, bg) => {
+      expect(contrast(colors[text], colors[bg])).toBeGreaterThanOrEqual(4.5);
+    },
+  );
 
   it("button text on the accent color reaches 4.5:1", () => {
     expect(contrast(colors["on-accent"], colors.accent)).toBeGreaterThanOrEqual(4.5);

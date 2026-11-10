@@ -97,7 +97,9 @@ async function expectFocusRing(target: Locator) {
   expect(ring.width).toBeGreaterThanOrEqual(2);
 }
 
-test("axe finds no serious or critical issues on the token form, a draft and the editor", async ({ page }) => {
+test("axe finds no serious or critical issues on the token form, a draft and the editor", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page.getByLabel("API token")).toBeVisible();
   expect(await axeIssues(page)).toEqual([]);

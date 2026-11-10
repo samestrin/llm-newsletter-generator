@@ -48,30 +48,15 @@ export default function App() {
   }
 
   return (
-    <main>
-      <h1>Newsletter review</h1>
-      {error && (
-        <p role="alert" className="bad">
-          {error}
-        </p>
-      )}
-      {!api ? (
-        <form onSubmit={connect} className="connect">
-          <label>
-            API token
-            <input
-              type="password"
-              autoComplete="off"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={!token}>
-            Connect
-          </button>
-        </form>
-      ) : (
-        <div className="layout">
+    <>
+      <a className="skip-link" href="#main">
+        Skip to main content
+      </a>
+      <header className="site-header">
+        <h1>Newsletter review</h1>
+      </header>
+      <div className={api ? "layout layout-split" : "layout"}>
+        {api && (
           <nav aria-label="Drafts">
             <h2 className="sr-only">Drafts</h2>
             {drafts.length === 0 ? (
@@ -93,9 +78,35 @@ export default function App() {
               </ul>
             )}
           </nav>
-          {draft && <DraftView key={draft.id} api={api} draft={draft} onChange={changed} />}
-        </div>
-      )}
-    </main>
+        )}
+        <main id="main" tabIndex={-1}>
+          {error && (
+            <p role="alert" className="bad">
+              {error}
+            </p>
+          )}
+          {!api ? (
+            <form onSubmit={connect} className="connect">
+              <label>
+                API token
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+              </label>
+              <button type="submit" className="primary" disabled={!token}>
+                Connect
+              </button>
+            </form>
+          ) : draft ? (
+            <DraftView key={draft.id} api={api} draft={draft} onChange={changed} />
+          ) : (
+            drafts.length > 0 && <p className="muted">Choose a draft to review.</p>
+          )}
+        </main>
+      </div>
+    </>
   );
 }
