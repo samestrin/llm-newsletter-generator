@@ -454,4 +454,19 @@ describe("the run report's states", () => {
       quiet.mockRestore();
     }
   });
+
+  it("shows the report again once a reload brings a readable one", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const api = fakeApi(makeDraft({ report: { steps: "x" } as unknown as Draft["report"] }));
+      const { user } = await openDraft(api);
+      api.fetch.mockResolvedValueOnce(new Response(JSON.stringify(makeDraft()), { status: 200 }));
+      await user.click(screen.getByRole("button", { name: "Reload" }));
+      const report = screen.getByRole("region", { name: "Run report" });
+      expect(await within(report).findByText("Problems found")).toBeInTheDocument();
+      expect(within(report).queryByRole("alert")).toBeNull();
+    } finally {
+      quiet.mockRestore();
+    }
+  });
 });

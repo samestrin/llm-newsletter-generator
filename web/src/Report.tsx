@@ -1,3 +1,4 @@
+import { Component, type ReactNode } from "react";
 import type { Flag, Report } from "./api";
 
 /** A link only for http and https; any other URL is shown as plain text. */
@@ -78,13 +79,55 @@ function List<T>({ title, items, show }: { title: string; items?: T[]; show: (it
 
 const money = (cost: number) => `$${cost.toFixed(4)}`;
 
-export function RunReport({ report }: { report: Report }) {
+/** Shows "could not be read" in place of a report that breaks while it renders. */
+class Unreadable extends Component<{ report: Report; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidUpdate(previous: { report: Report }) {
+    // A new report, from a reload or a save, gets its own try.
+    if (this.state.failed && previous.report !== this.props.report) this.setState({ failed: false });
+  }
+  render() {
+    return this.state.failed ? <ReportError /> : this.props.children;
+  }
+}
+
+function ReportError() {
+  return (
+    <p role="alert" className="state state-error">
+      The run report could not be read.
+    </p>
+  );
+}
+
+/** The run report section: loading, none saved, unreadable, or the report. */
+export function RunReport({ report, loading = false }: { report?: Report | null; loading?: boolean }) {
+  return (
+    <section aria-labelledby="report-heading" className="report">
+      <h3 id="report-heading">Run report</h3>
+      {loading ? (
+        <p className="state">Loading the run report…</p>
+      ) : report == null ? (
+        <p className="state">No run report was saved with this draft.</p>
+      ) : typeof report !== "object" || Array.isArray(report) ? (
+        <ReportError />
+      ) : (
+        <Unreadable report={report}>
+          <ReportBody report={report} />
+        </Unreadable>
+      )}
+    </section>
+  );
+}
+
+function ReportBody({ report }: { report: Report }) {
   const steps = report.steps ?? [];
   const unknown = steps.filter((s) => s.cost == null).length;
   const voice = report.voice;
   return (
-    <section aria-labelledby="report-heading" className="report">
-      <h3 id="report-heading">Run report</h3>
+    <>
       <p className={report.ok === false ? "bad" : "good"}>
         {report.ok === false ? "Problems found" : "Nothing failed, was left out or is flagged"}
       </p>
@@ -175,6 +218,6 @@ export function RunReport({ report }: { report: Report }) {
         Total cost: {money(report.total_cost ?? 0)}
         {unknown > 0 && ` (${unknown} step${unknown === 1 ? "" : "s"} cost unknown, not counted)`}
       </p>
-    </section>
+    </>
   );
 }
