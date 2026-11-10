@@ -164,14 +164,26 @@ Each connector is optional and is set up only when its key is set. Each makes on
 
 `NEWSLETTER_EXPORT_TIMEOUT` sets the seconds per request, default 30. The result lists each connector as exported, with its draft id, or failed, with the reason. An HTTP error, a timeout, a reply with no draft id or a reply with a status other than draft counts as failed, never as exported, and the others still run. There is no retry, since a repeated call could leave a second draft. A connector whose platform has no draft-only endpoint is dropped and listed. Keys are never logged or reported.
 
+### Try it
+
+No model key needed. On a fresh clone:
+
+```bash
+docker compose up --build --wait    # http://localhost:8080
+```
+
+Open http://localhost:8080 and paste the demo token `demo-token-change-me`. The page starts with no drafts, since no model has run. To read a finished issue, open the committed sample in [`docs/sample/`](docs/sample/) (`issue.md`, `email.html`, and `site/index.html`, which open offline); its README says how it was made. `docker compose down --volumes` stops it and clears the drafts.
+
+The demo token is the compose default and is safe only because the page is published on `127.0.0.1` alone. Set your own before exposing it.
+
 ### Docker
 
 ```bash
-export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
-docker compose up --build    # http://localhost:8080
+docker compose up --build    # http://localhost:8080, token demo-token-change-me
+NEWSLETTER_API_TOKEN=$(openssl rand -hex 32) docker compose up --build    # your own token
 ```
 
-Two services: `api` (`newsletter serve`, drafts kept in the `drafts` volume) and `web` (the built review page behind nginx, which forwards `/api` to `api`). Only the page is published, on `127.0.0.1:8080` (`WEB_PORT` changes it); the API is not reachable from outside the compose network, and it allows writes only from the page's origin. `NEWSLETTER_API_TOKEN` is required. `NEWSLETTER_BASE_URL`, `NEWSLETTER_API_KEY`, `NEWSLETTER_FAST_MODEL`, `NEWSLETTER_REASONING_MODEL`, `NEWSLETTER_EMBEDDING_MODEL` and `YOURVOICE_API_KEY` are passed through from your shell when set. CI's `compose` job builds both images, starts them and checks the page, the proxied API and the token.
+Two services: `api` (`newsletter serve`, drafts kept in the `drafts` volume) and `web` (the built review page behind nginx, which forwards `/api` to `api`). Only the page is published, on `127.0.0.1:8080` (`WEB_PORT` changes it); the API is not reachable from outside the compose network, and it allows writes only from the page's origin. `NEWSLETTER_API_TOKEN` defaults to `demo-token-change-me`. `NEWSLETTER_BASE_URL`, `NEWSLETTER_API_KEY`, `NEWSLETTER_FAST_MODEL`, `NEWSLETTER_REASONING_MODEL`, `NEWSLETTER_EMBEDDING_MODEL` and `YOURVOICE_API_KEY` are passed through from your shell when set. CI's `compose` job builds both images, starts them and checks the page, the proxied API and the token, with no environment set.
 
 ## Eval
 
