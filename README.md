@@ -172,7 +172,7 @@ No model key needed. On a fresh clone:
 docker compose up --build --wait    # http://localhost:8080
 ```
 
-Open http://localhost:8080 and paste the demo token `demo-token-change-me`. The page starts with no drafts, since no model has run. To read a finished issue, open the committed sample in [`docs/sample/`](docs/sample/) (`issue.md`, `email.html`, and `site/index.html`, which open offline); its README says how it was made. `docker compose down --volumes` stops it and clears the drafts.
+Open http://localhost:8080 and paste the demo token `demo-token-change-me`. The page starts with no drafts, since no model has run. The sample issue lives in [`docs/sample/`](docs/sample/); its README records the model, the feeds and the command, and the issue, email and archive page land there with that one-off run. `docker compose down --volumes` stops it and clears the drafts.
 
 The demo token is the compose default and is safe only because the page is published on `127.0.0.1` alone. Set your own before exposing it.
 
