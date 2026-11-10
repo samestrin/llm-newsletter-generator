@@ -3,7 +3,15 @@ import type { Api, Draft } from "./api";
 import { Flags, RunReport } from "./Report";
 
 /** One draft: its text (as text, never HTML), flags and run report; edit and approve. */
-export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; onChange: (d: Draft) => void }) {
+export function DraftView({
+  api,
+  draft,
+  onChange,
+}: {
+  api: Api;
+  draft: Draft;
+  onChange: (d: Draft) => void;
+}) {
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,8 +53,14 @@ export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; on
           <>
             <button
               type="button"
+              className="primary"
               disabled={busy || !unsaved}
-              onClick={() => act(() => api.saveText(draft.id, editing), () => setEditing(null))}
+              onClick={() =>
+                act(
+                  () => api.saveText(draft.id, editing),
+                  () => setEditing(null),
+                )
+              }
             >
               Save
             </button>
@@ -59,13 +73,19 @@ export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; on
           type="button"
           disabled={busy || unsaved}
           title={unsaved ? "Save or cancel the edit first" : undefined}
-          onClick={() => act(() => api.getDraft(draft.id), () => setEditing(null))}
+          onClick={() =>
+            act(
+              () => api.getDraft(draft.id),
+              () => setEditing(null),
+            )
+          }
         >
           Reload
         </button>
         {!draft.approved && (
           <button
             type="button"
+            className="primary"
             disabled={busy || unsaved}
             title={unsaved ? "Save or cancel the edit first" : undefined}
             onClick={() => act(() => api.approve(draft))}
