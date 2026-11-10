@@ -70,7 +70,7 @@ It is checked on load, and an error names the file and the field (exit 2). Feed 
 uv run newsletter archive --demo --site site --per-feed 5 https://example.com/feed.xml
 ```
 
-`newsletter archive` drafts a plain issue, one fast-model summary and one link per item, with `--topic` given to the model (in the writer's voice too, when `YOURVOICE_API_KEY` is set; the daily workflow sets none) and builds it into a static site in `--site`: an index and one page per issue. Only demo mode exists so far, so `--demo` is required. A demo issue is approved by a record marked `automated-demo` instead of a person's sha256 of the text; that record is valid for archive pages only and export refuses it. Every demo page carries a visible "Automated demo" label, and every summary is marked as unchecked.
+`newsletter archive` drafts a plain issue, one fast-model summary and one link per item, with `--topic` given to the model (in the writer's voice too, when `YOURVOICE_API_KEY` is set; the daily workflow sets none) and builds it into a static site in `--site`: an index and one page per issue. Only demo mode exists so far, so `--demo` is required. A demo issue is approved by a record marked `automated-demo` instead of a person's sha256 of the text; that record is valid for archive pages only and export refuses it. Every demo page carries a visible "Automated demo" label, and every summary is marked as unchecked. With `--markdown PATH` and `--html PATH`, the same draft is also written as Markdown and as an HTML email, with the same label and marks; like the site, their run report names feed hosts and counts only, never a feed URL, an error, a path or a model.
 
 ### Daily archive
 

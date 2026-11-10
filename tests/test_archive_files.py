@@ -75,7 +75,9 @@ def archive(tmp_path, *extra, feeds=(FEED,), fail_first=False):
         str(out["html"]),
         *extra,
     ]
-    code = main(argv, env=ENV, fetch=fetch, llm_transport=numbered_model(calls, fail_first=fail_first))
+    code = main(
+        argv, env=ENV, fetch=fetch, llm_transport=numbered_model(calls, fail_first=fail_first)
+    )
     return code, calls, out
 
 
@@ -141,11 +143,14 @@ def test_the_run_report_shows_no_key_file_path_or_model_url(tmp_path, capsys):
     code, _, out = archive(tmp_path, feeds=(FEED, KEYED_FEED), fail_first=True)
 
     assert code == 1, "a failed feed and a failed summary still fail the run"
-    for path in [out["md"], out["html"], *sorted(out["site"].rglob("*.html"))]:
+    page = out["site"] / "issues/2026-11-03/index.html"
+    for path in (out["md"], out["html"], page):
         text = path.read_text(encoding="utf-8")
         assert "Run report" in text
         assert "feeds.example.net: 1 problem" in text
         assert "lab.example.org: 1 problem" in text, "the failed summary"
+    for path in [out["md"], out["html"], *sorted(out["site"].rglob("*.html"))]:
+        text = path.read_text(encoding="utf-8")
         for secret in SECRETS:
             assert secret not in text, (path, secret)
         assert str(tmp_path) not in text, path
@@ -172,7 +177,16 @@ def test_without_demo_mode_nothing_is_written(tmp_path, capsys):
     calls = []
     md, html = tmp_path / "issue.md", tmp_path / "email.html"
     code = main(
-        ["archive", FEED, "--site", str(tmp_path / "s"), "--markdown", str(md), "--html", str(html)],
+        [
+            "archive",
+            FEED,
+            "--site",
+            str(tmp_path / "s"),
+            "--markdown",
+            str(md),
+            "--html",
+            str(html),
+        ],
         env=ENV,
         fetch=fetch,
         llm_transport=numbered_model(calls),
@@ -244,7 +258,8 @@ def hostile_issue():
 def test_markdown_renders_feed_and_model_text_as_text_and_links_only_the_web():
     markdown = render_markdown(hostile_issue(), demo=True)
 
-    assert "<script" not in markdown and "<b>" not in markdown
+    assert not re.search(r"(?<!\\)</?(script|b)\b", markdown), "markup is escaped"
+    assert "\\<script\\>" in markdown
     assert "javascript:" not in markdown and "data:text" not in markdown
     assert "[Failed](<https://example.com/a>)" in markdown
     assert "[Example News](<https://example.com/>)" in markdown
