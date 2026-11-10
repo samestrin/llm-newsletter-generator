@@ -2,8 +2,14 @@
 
 ## Unreleased
 
-- The README shows the review page in light and dark mode and at phone width (360 px), saved to `docs/img/` by the browser test, and links `docs/sample/`. (epic 06)
+## 1.0.0 - 2026-11-10
 
+The first demo-ready release: sources from a config file, grouped and ranked stories, an editor pass with a faithfulness check, a human approval gate, a review page with light and dark mode, a one-command local start, and a static archive build.
+
+- `docker compose up` starts with no environment set: `NEWSLETTER_API_TOKEN` defaults to `demo-token-change-me`, safe only because the page binds to `127.0.0.1`. The CI `compose` job runs without the token, and the README has a Try it section. (epic 06)
+- The review page has one design token set with light and dark mode, a 360 px layout, a skip link, landmarks, focus rings and a flag icon for flagged claims; the browser test runs an axe check at desktop and 360 px in both color schemes. (epic 06)
+- `newsletter archive --demo` takes `--markdown PATH` and `--html PATH` and writes them from the same draft that builds the site; `docs/sample/README.md` records the model, feeds and command of the one-off sample run. (epic 06)
+- The README shows the review page in light and dark mode and at phone width (360 px), saved to `docs/img/` by the browser test, and links `docs/sample/`. (epic 06)
 - The review page shows explicit empty, loading and error states: "Loading the drafts…" while the list loads, "No drafts yet" with a Refresh list button, and the API's reason when the list fails; "Loading the draft…" and "Loading the run report…" while a draft loads, its failure with Try again, "This draft has no text", "No run report was saved with this draft" (it used to say nothing failed) and "The run report could not be read" for a malformed report, while the rest of the draft still shows. Only the draft opened last fills the page when answers arrive out of order. (epic 06)
 - The daily archive workflow (`.github/workflows/daily.yml`) is removed: no workflow runs on a schedule. `tests/test_daily.py` keeps the offline `archive --demo` build test with its argv in the test. (epic 06)
 - `newsletter issue --config FILE` and `newsletter serve --config FILE` read the file's feeds, web pages (`- page: URL`) and Hacker News (`- hackernews: {min_score, limit}`), group copies of one story into one story with all its sources, and rank the stories closest to the file's `topic` first, with one `embedding` call. `newsletter issue` now needs `NEWSLETTER_EMBEDDING_MODEL` (exit 2 without it). The run report (`RunReport.left_out`, `RunReport.grouping_error`, and both the Markdown and HTML reports) lists every item that could not be grouped or was dropped, and a failed embedding call; either one makes the run exit 1. A `serve` run that names no feeds reads the file's sources. `newsletter archive` no longer takes `--config`. (epic 02)
