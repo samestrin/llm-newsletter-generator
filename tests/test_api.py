@@ -584,6 +584,91 @@ def test_serve_refuses_to_start_without_good_settings(monkeypatch, capsys, env, 
     assert message in capsys.readouterr().err
 
 
+# `serve --seed-sample`: the committed eval replay as one draft, no model key.
+
+
+def seed_env(tmp_path) -> dict[str, str]:
+    """Only the token and the data dir: no model key, no voice key."""
+    return {"NEWSLETTER_API_TOKEN": TOKEN, "NEWSLETTER_DATA_DIR": str(tmp_path / "data")}
+
+
+def test_seed_sample_lists_one_draft_with_a_flagged_claim_and_a_report(tmp_path):
+    settings = ApiSettings.from_env(seed_env(tmp_path))
+    with TestClient(create_app(settings, seed_sample=True)) as client:
+        listed = client.get("/api/drafts", headers=headers()).json()
+        assert len(listed) == 1
+        assert listed[0]["flags"] >= 1
+        assert listed[0]["approved"] is False
+        draft = client.get(f"/api/drafts/{listed[0]['id']}", headers=headers()).json()
+        assert draft["text"].startswith("# Open models week")
+        assert draft["flags"]
+        assert draft["report"]["flagged_claims"]
+        assert draft["report"]["steps"]
+        run = client.get(f"/api/runs/{draft['run_id']}", headers=headers()).json()
+    assert run["status"] == "done"
+    assert run["draft_id"] == draft["id"]
+
+
+def test_seed_sample_a_second_start_lists_still_one(tmp_path):
+    settings = ApiSettings.from_env(seed_env(tmp_path))
+    with TestClient(create_app(settings, seed_sample=True)) as client:
+        before = client.get("/api/drafts", headers=headers()).json()
+        draft_before = client.get(f"/api/drafts/{before[0]['id']}", headers=headers()).json()
+    with TestClient(create_app(settings, seed_sample=True)) as client:
+        after = client.get("/api/drafts", headers=headers()).json()
+        draft_after = client.get(f"/api/drafts/{after[0]['id']}", headers=headers()).json()
+    assert len(after) == 1
+    assert draft_after == draft_before
+    assert len(list((tmp_path / "data" / "drafts").glob("*.json"))) == 1
+    assert len(list((tmp_path / "data" / "runs").glob("*.json"))) == 1
+
+
+@pytest.mark.parametrize("approved", [False, True])
+def test_seed_sample_never_overwrites_or_re_approves_an_existing_draft(tmp_path, runner, approved):
+    settings = make_settings(tmp_path)
+    with TestClient(create_app(settings, runner=runner)) as client:
+        draft = make_draft(client)
+        if approved:
+            client.post(f"/api/drafts/{draft['id']}/approve", json={}, headers=headers())
+        before = client.get(f"/api/drafts/{draft['id']}", headers=headers()).json()
+    with TestClient(create_app(settings, runner=FakeRunner(), seed_sample=True)) as client:
+        listed = client.get("/api/drafts", headers=headers()).json()
+        after = client.get(f"/api/drafts/{draft['id']}", headers=headers()).json()
+    assert [d["id"] for d in listed] == [draft["id"]]
+    assert after == before
+    assert after["approved"] is approved
+
+
+def test_without_seed_sample_the_list_is_empty(client):
+    assert client.get("/api/drafts", headers=headers()).json() == []
+
+
+def test_serve_seed_sample_writes_the_draft_at_start(tmp_path, monkeypatch):
+    import uvicorn
+
+    from newsletter.cli import main
+
+    calls = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: calls.append(app))
+    assert main(["serve", "--seed-sample"], env=seed_env(tmp_path)) == 0
+    with TestClient(calls[0]) as client:
+        listed = client.get("/api/drafts", headers=headers()).json()
+    assert len(listed) == 1
+    assert listed[0]["flags"] >= 1
+
+
+def test_serve_without_seed_sample_starts_with_no_drafts(tmp_path, monkeypatch):
+    import uvicorn
+
+    from newsletter.cli import main
+
+    calls = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: calls.append(app))
+    assert main(["serve"], env=seed_env(tmp_path)) == 0
+    with TestClient(calls[0]) as client:
+        assert client.get("/api/drafts", headers=headers()).json() == []
+
+
 @pytest.mark.parametrize("method,path,body", WRITES)
 def test_the_token_is_checked_before_the_origin_and_the_body(client, method, path, body):
     draft = make_draft(client)
