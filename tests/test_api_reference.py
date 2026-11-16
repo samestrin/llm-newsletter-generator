@@ -31,6 +31,18 @@ GUARDED = {
     ("put", "/api/drafts/{draft_id}"),
     ("post", "/api/drafts/{draft_id}/approve"),
 }
+# The response model each route must name in its success schema. A bare `assert
+# schema` would also pass FastAPI's inferred `{"type": "object",
+# "additionalProperties": true}` fallback, which carries no field names.
+SUCCESS_MODELS = {
+    ("get", "/api/health"): "Health",
+    ("post", "/api/runs"): "RunView",
+    ("get", "/api/runs/{run_id}"): "RunView",
+    ("get", "/api/drafts"): "DraftSummary",  # array items
+    ("get", "/api/drafts/{draft_id}"): "DraftView",
+    ("put", "/api/drafts/{draft_id}"): "DraftView",
+    ("post", "/api/drafts/{draft_id}/approve"): "DraftView",
+}
 WRITES = {
     ("post", "/api/runs"),
     ("put", "/api/drafts/{draft_id}"),
@@ -168,9 +180,21 @@ def test_every_registered_route_is_in_the_spec_with_a_success_schema(client, spe
 
     assert registered == set(operations)
     assert registered == GUARDED | {("get", "/api/health")}
-    for operation in operations.values():
+    assert registered == set(SUCCESS_MODELS)
+    for key, operation in operations.items():
         schema = _success(operation)["content"]["application/json"]["schema"]
-        assert schema, operation  # a $ref or an inline schema, never empty
+        name = SUCCESS_MODELS[key]
+        ref = {"$ref": f"#/components/schemas/{name}"}
+        if key == ("get", "/api/drafts"):
+            assert schema["type"] == "array", key
+            assert schema["items"] == ref, key
+        else:
+            assert schema == ref, key
+        # The named model exists and declares its fields. (The inferred fallback
+        # is an untyped object with no properties; extra="allow" adds
+        # additionalProperties on top of the named fields, which is fine.)
+        model = spec["components"]["schemas"][name]
+        assert model.get("properties"), name
 
 
 def test_the_guarded_routes_show_the_bearer_security_scheme(spec):
