@@ -110,7 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Serve the HTTP API: run an issue as a background job, list, edit and approve "
             "drafts. Needs NEWSLETTER_API_TOKEN; binds 127.0.0.1:8000 unless told otherwise "
-            "(see the README)."
+            "(see the README). With --seed-sample, the committed open-models-week sample "
+            "is written as one draft at start, once; it needs no model key."
         ),
     )
     serve.add_argument("--host", help="bind address (NEWSLETTER_API_HOST, default 127.0.0.1)")
@@ -120,6 +121,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         metavar="FILE",
         help="YAML sources file a run reads when it names no feeds",
+    )
+    serve.add_argument(
+        "--seed-sample",
+        action="store_true",
+        help="at start, write the committed open-models-week sample as one draft "
+        "(once; an existing draft is never touched; needs no model key)",
     )
     return parser
 
@@ -198,7 +205,11 @@ def _serve(args, env) -> int:
     except SourcesConfigError as error:
         print(f"newsletter: {error}", file=sys.stderr)
         return 2
-    uvicorn.run(create_app(settings, config=config), host=settings.host, port=settings.port)
+    uvicorn.run(
+        create_app(settings, config=config, seed_sample=args.seed_sample),
+        host=settings.host,
+        port=settings.port,
+    )
     return 0
 
 

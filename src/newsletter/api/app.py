@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from newsletter.api import seed
 from newsletter.api.jobs import Busy, Jobs, Runner
 from newsletter.api.pipeline import RunRequest, default_runner
 from newsletter.api.settings import ApiSettings
@@ -69,8 +70,11 @@ def create_app(
     *,
     runner: Runner | None = None,
     config: SourcesConfig | None = None,
+    seed_sample: bool = False,
 ) -> FastAPI:
-    """The API. A run that names no feeds reads the sources in `config` (`serve --config`)."""
+    """The API. A run that names no feeds reads the sources in `config` (`serve --config`).
+    With `seed_sample`, the committed sample draft is written at start, once (see
+    `newsletter.api.seed`)."""
     redact = redactor(settings.secrets)
     drafts = DraftStore(settings.data_dir)
     runs = RunStore(settings.data_dir)
@@ -85,6 +89,8 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         runs.mark_interrupted()
+        if seed_sample:
+            seed.seed_sample(settings.data_dir)
         yield
 
     app = FastAPI(title="newsletter", docs_url=None, redoc_url=None, openapi_url=None)
