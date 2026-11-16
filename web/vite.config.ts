@@ -13,7 +13,9 @@ export default defineConfig({
   preview: { proxy: { "/api": api } },
   test: {
     environment: "jsdom",
-    include: ["src/**/*.test.{ts,tsx}"],
+    // The live capture's frame check is unit-tested too (e2e/live/frames.test.ts);
+    // the Playwright configs never run it: the normal one ignores e2e/live/.
+    include: ["src/**/*.test.{ts,tsx}", "e2e/**/*.test.ts"],
     setupFiles: ["src/setup-tests.ts"],
     coverage: {
       include: ["src/**"],
