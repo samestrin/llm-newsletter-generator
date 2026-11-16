@@ -73,9 +73,7 @@ def test_a_route_missing_from_the_spec_or_without_a_success_response_is_caught()
 
     app.openapi = lambda: {
         "paths": {
-            "/api/no-success": {
-                "get": {"responses": {"401": {"description": "Missing token."}}}
-            }
+            "/api/no-success": {"get": {"responses": {"401": {"description": "Missing token."}}}}
         }
     }
 

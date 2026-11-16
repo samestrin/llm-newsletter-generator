@@ -58,6 +58,18 @@ jobs:
       - name: The API answers with the token
         run: |
           curl -fsS -H "Authorization: Bearer demo-token-change-me" http://localhost:8080/api/drafts
+      # nginx's SPA fallback (web/nginx.conf) answers a missing /api/ route with a 200
+      # index.html, so these check the body, not the status: the spec must parse as JSON
+      # with paths, and the reference must be the Scalar page, not the SPA's root div.
+      - name: The spec answers JSON through the web container, not the SPA page
+        run: |
+          curl -fsS http://localhost:8080/api/openapi.json |
+            python3 -c 'import json,sys; spec=json.load(sys.stdin); assert spec["paths"], "spec has no paths"'
+      - name: The reference answers the Scalar page through the web container, not the SPA page
+        run: |
+          body=$(curl -fsS http://localhost:8080/api/docs)
+          echo "$body" | grep -q '/api/docs/scalar.js'
+          ! echo "$body" | grep -q '<div id="root">'
       - name: Logs on failure
         if: failure()
         run: docker compose logs
