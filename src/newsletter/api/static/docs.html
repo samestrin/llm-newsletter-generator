@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>newsletter API reference</title>
+  <!-- The accent is the app's, from web/src/styles.css, light and dark: --color-accent
+       and --color-on-accent. Scalar draws links, buttons and the active sidebar item
+       from their own variables, not --scalar-color-accent alone, so each is set here.
+       Scalar's own theme variables sit in @layer scalar-theme, so these unlayered rules
+       win. tests/test_api_reference.py checks the colours against styles.css. -->
+  <style>
+    .light-mode {
+      --scalar-color-accent: #1d4ed8;
+      --scalar-background-accent: #e8edfb;
+      --scalar-link-color: #1d4ed8;
+      --scalar-link-color-hover: #1e40af;
+      --scalar-link-color-visited: #1d4ed8;
+      --scalar-button-1: #1d4ed8;
+      --scalar-button-1-hover: #1e40af;
+      --scalar-button-1-color: #ffffff;
+      --scalar-sidebar-color-active: #1d4ed8;
+      --scalar-sidebar-item-active-background: #e8edfb;
+      --scalar-sidebar-indent-border-active: #1d4ed8;
+    }
+    .dark-mode {
+      --scalar-color-accent: #8ab4ff;
+      --scalar-background-accent: #1c2740;
+      --scalar-link-color: #8ab4ff;
+      --scalar-link-color-hover: #a8c4ff;
+      --scalar-link-color-visited: #8ab4ff;
+      --scalar-button-1: #8ab4ff;
+      --scalar-button-1-hover: #a8c4ff;
+      --scalar-button-1-color: #0b1220;
+      --scalar-sidebar-color-active: #8ab4ff;
+      --scalar-sidebar-item-active-background: #1c2740;
+      --scalar-sidebar-indent-border-active: #8ab4ff;
+    }
+    /* Code samples scroll sideways in their own box, never the page. */
+    .scalar-app pre {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <!-- Both URLs are absolute under /api: web/nginx.conf passes /api/ through unchanged,
+       so the spec declares no servers prefix and "Test Request" reaches the routes as
+       is. proxyUrl, withDefaultFonts and telemetry are the defaults of the pinned
+       Scalar (scalar/README.md) that reach outside; all three are off, and no button
+       opens the hosted client, so the page loads nothing but this origin's
+       /api/openapi.json and /api/docs/scalar.js. No colour mode is set: Scalar follows
+       the system, like the app does. -->
+  <script
+    id="api-reference"
+    data-configuration='{"url": "/api/openapi.json", "proxyUrl": null, "withDefaultFonts": false, "telemetry": false, "hideClientButton": true}'
+  ></script>
+  <script src="/api/docs/scalar.js"></script>
+</body>
+</html>
