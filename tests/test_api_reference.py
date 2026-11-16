@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
-from test_api import CONTENT, FakeRunner, headers, make_draft, make_settings
 
 from newsletter.api import create_app
+from test_api import CONTENT, FakeRunner, headers, make_draft, make_settings
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "newsletter" / "api" / "static"
@@ -176,7 +176,8 @@ def test_every_registered_route_is_in_the_spec_with_a_success_schema(client, spe
 def test_the_guarded_routes_show_the_bearer_security_scheme(spec):
     schemes = spec["components"]["securitySchemes"]
     (name, scheme) = next(iter(schemes.items()))
-    assert scheme == {"type": "http", "scheme": "bearer"}
+    assert scheme["type"] == "http"
+    assert scheme["scheme"] == "bearer"
 
     for key, operation in _operations(spec).items():
         if key in GUARDED:

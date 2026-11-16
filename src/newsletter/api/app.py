@@ -5,6 +5,12 @@ A write (any method but GET, HEAD and OPTIONS) also needs an `Origin` in the all
 list and a JSON object body sent as `application/json`, so a page on another site
 cannot make one even with the token. Checks run in that order: 401, 403, then 415 or
 400. No error body echoes the request, and nothing returned or stored holds a secret.
+
+`GET /api/openapi.json` is the OpenAPI spec and `GET /api/docs` the Scalar reference
+that reads it (vendored in `newsletter/api/static/`, no CDN). Both are readable without
+the token: the spec holds route names and schemas only, and the reference's "Test
+Request" still needs the token, declared there as the bearer security scheme. FastAPI's
+own docs pages and ReDoc stay off.
 """
 
 import datetime as dt
@@ -12,14 +18,17 @@ import hmac
 import json
 import logging
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, TypeVar
+from pathlib import Path
+from typing import Annotated, Any, Literal, TypeVar
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from newsletter import __version__
 from newsletter.api import seed
 from newsletter.api.jobs import Busy, Jobs, Runner
 from newsletter.api.pipeline import RunRequest, default_runner
@@ -65,6 +74,139 @@ class ApproveBody(BaseModel):
     """The sha256 of the text the reviewer read; the approval is refused if it changed."""
 
 
+# Response models. `extra="allow"` and `response_model_exclude_unset=True` on every
+# route keep the bodies exactly as they were before the spec existed: a stored draft
+# or report passes through whole, including fields these models do not name.
+
+
+class Health(BaseModel):
+    ok: bool
+
+
+class RunView(BaseModel):
+    """A run's status: `queued`, `running`, then `done` with its draft id or `error`."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    status: Literal["queued", "running", "done", "error"]
+    error: str | None
+    draft_id: str | None
+    feeds: list[str]
+    title: str
+    created_at: str
+    started_at: str | None
+    finished_at: str | None
+
+
+class FlaggedClaim(BaseModel):
+    """A claim shown in the issue, marked: its source does not support it, or it was
+    not checked."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    story_id: str | None = None
+    text: str | None = None
+    status: str | None = None
+    reason: str | None = None
+    source_url: str | None = None
+
+
+class RunReport(BaseModel):
+    """Everything that failed, was left out or is in doubt, and what it cost."""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool | None = None
+    failed_sources: list[dict[str, Any]] | None = None
+    left_out: list[dict[str, Any]] | None = None
+    grouping_error: str | None = None
+    dropped_stories: list[dict[str, Any]] | None = None
+    dropped_claims: list[dict[str, Any]] | None = None
+    flagged_claims: list[dict[str, Any]] | None = None
+    editor_error: str | None = None
+    editor_rejections: list[str] | None = None
+    steps: list[dict[str, Any]] | None = None
+    total_cost: float | None = None
+    cost_complete: bool | None = None
+    failed_steps: list[str] | None = None
+    voice: dict[str, Any] | None = None
+
+
+class Approval(BaseModel):
+    sha256: str
+    approved_at: str
+
+
+class DraftSummary(BaseModel):
+    """A draft as listed: no text, the flag count instead of the flags."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    run_id: str
+    title: str
+    issue_date: str
+    created_at: str
+    updated_at: str
+    flags: int
+    approved: bool
+
+
+class DraftView(BaseModel):
+    """A draft whole: its text, flags, run report and approval, if any."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    run_id: str
+    title: str
+    issue_date: str
+    text: str
+    flags: list[FlaggedClaim] = Field(default_factory=list)
+    report: RunReport = Field(default_factory=RunReport)
+    approval: Approval | None = None
+    created_at: str
+    updated_at: str
+    approved: bool
+
+
+class ErrorBody(BaseModel):
+    """An error: the reason only, never the request."""
+
+    detail: str
+
+
+class ValidationProblem(BaseModel):
+    loc: list[str]
+    msg: str
+
+
+class InvalidRequest(BaseModel):
+    """422: a field is missing or invalid (a list of problems), or the run names no
+    feed and `serve` was started without a config (a plain reason)."""
+
+    detail: str | list[ValidationProblem]
+
+
+UNAUTHORIZED = {401: {"description": "Missing or wrong bearer token.", "model": ErrorBody}}
+NOT_FOUND = {404: {"description": "No draft or run with this id.", "model": ErrorBody}}
+WRITE_ERRORS = {
+    **UNAUTHORIZED,
+    400: {"description": "The body is not JSON, or not a JSON object.", "model": ErrorBody},
+    403: {"description": "This origin may not write.", "model": ErrorBody},
+    415: {"description": "The body was not sent as application/json.", "model": ErrorBody},
+    422: {"description": "A field is missing or invalid.", "model": InvalidRequest},
+    503: {
+        "description": "Writes are off: NEWSLETTER_API_TOKEN is not set.",
+        "model": ErrorBody,
+    },
+}
+
+STATIC = Path(__file__).parent / "static"
+
+
 def create_app(
     settings: ApiSettings,
     *,
@@ -93,7 +235,19 @@ def create_app(
             seed.seed_sample(settings.data_dir)
         yield
 
-    app = FastAPI(title="newsletter", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(
+        title="newsletter",
+        version=__version__,
+        description=(
+            "Generate text-only newsletters from RSS feeds using LLMs: start a run, read "
+            "its status, list, read, edit and approve drafts. Every route but "
+            "`/api/health` needs the bearer token. The spec and the reference at "
+            "`/api/docs` are readable without it; they hold route names and schemas only."
+        ),
+        docs_url=None,  # /api/docs is the Scalar reference below; /redoc stays off
+        redoc_url=None,
+        openapi_url="/api/openapi.json",
+    )
     app.router.lifespan_context = lifespan
     app.state.settings = settings
     app.state.jobs = jobs
@@ -105,7 +259,17 @@ def create_app(
         allow_headers=["Authorization", "Content-Type"],
     )
 
-    async def guard(request: Request) -> dict[str, Any] | None:
+    # Declares the bearer scheme in the spec so the reference can send the token.
+    # auto_error=False: the guard below keeps answering 401 itself, in its own order.
+    bearer = HTTPBearer(
+        auto_error=False,
+        description="The `NEWSLETTER_API_TOKEN` the server was started with.",
+    )
+
+    async def guard(
+        request: Request,
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    ) -> dict[str, Any] | None:
         if request.method not in SAFE_METHODS and not settings.token:
             raise HTTPException(503, "writes are off: set NEWSLETTER_API_TOKEN")
         if not _token_ok(request.headers.get("authorization"), settings.token):
@@ -144,11 +308,32 @@ def create_app(
         ]
         return JSONResponse({"detail": redact(problems)}, status_code=422)
 
-    @app.get("/api/health")
+    @app.get("/api/docs", include_in_schema=False)
+    def api_reference() -> HTMLResponse:
+        """The API reference: Scalar, vendored in `static/`, reading `/api/openapi.json`."""
+        return HTMLResponse((STATIC / "docs.html").read_text(encoding="utf-8"))
+
+    @app.get("/api/docs/scalar.js", include_in_schema=False)
+    def scalar_script() -> FileResponse:
+        """The vendored Scalar bundle, served by this API so the page loads no CDN."""
+        return FileResponse(STATIC / "scalar" / "standalone.js", media_type="text/javascript")
+
+    @app.get("/api/health", response_model=Health)
     def health() -> dict[str, bool]:
+        """Report that the service is up. No token needed."""
         return {"ok": True}
 
-    @app.post("/api/runs", status_code=202)
+    @app.post(
+        "/api/runs",
+        status_code=202,
+        response_model=RunView,
+        response_model_exclude_unset=True,
+        responses={
+            202: {"description": "The run is queued; follow it at `/api/runs/{id}`."},
+            **WRITE_ERRORS,
+            409: {"description": "A run is already going.", "model": ErrorBody},
+        },
+    )
     def start_run(raw: Guarded) -> dict[str, Any]:
         body = parse(RunBody, raw)
         request = _run_request(body, config)
@@ -157,25 +342,65 @@ def create_app(
         except Busy as error:
             raise HTTPException(409, str(error)) from None
 
-    @app.get("/api/runs/{run_id}", dependencies=[Depends(guard)])
+    @app.get(
+        "/api/runs/{run_id}",
+        dependencies=[Depends(guard)],
+        response_model=RunView,
+        response_model_exclude_unset=True,
+        responses={**UNAUTHORIZED, **NOT_FOUND},
+    )
     def get_run(run_id: str) -> dict[str, Any]:
+        """A run's status, and its draft id once it is done."""
         return _found(runs.get, run_id)
 
-    @app.get("/api/drafts", dependencies=[Depends(guard)])
+    @app.get(
+        "/api/drafts",
+        dependencies=[Depends(guard)],
+        response_model=list[DraftSummary],
+        response_model_exclude_unset=True,
+        responses=UNAUTHORIZED,
+    )
     def list_drafts() -> list[dict[str, Any]]:
+        """Every draft, newest first, without its text."""
         return [_summary(draft) for draft in drafts.list()]
 
-    @app.get("/api/drafts/{draft_id}", dependencies=[Depends(guard)])
+    @app.get(
+        "/api/drafts/{draft_id}",
+        dependencies=[Depends(guard)],
+        response_model=DraftView,
+        response_model_exclude_unset=True,
+        responses={**UNAUTHORIZED, **NOT_FOUND},
+    )
     def get_draft(draft_id: str) -> dict[str, Any]:
+        """A draft whole: its text, flags, run report and approval."""
         return _view(_found(drafts.get, draft_id))
 
-    @app.put("/api/drafts/{draft_id}")
+    @app.put(
+        "/api/drafts/{draft_id}",
+        response_model=DraftView,
+        response_model_exclude_unset=True,
+        responses={**WRITE_ERRORS, **NOT_FOUND},
+    )
     def edit_draft(draft_id: str, raw: Guarded) -> dict[str, Any]:
+        """Replace the draft's text. Any edit clears the approval."""
         body = parse(EditBody, raw)
         return _view(_found(drafts.edit, draft_id, body.text))
 
-    @app.post("/api/drafts/{draft_id}/approve")
+    @app.post(
+        "/api/drafts/{draft_id}/approve",
+        response_model=DraftView,
+        response_model_exclude_unset=True,
+        responses={
+            **WRITE_ERRORS,
+            **NOT_FOUND,
+            409: {
+                "description": "The draft changed since it was read.",
+                "model": ErrorBody,
+            },
+        },
+    )
     def approve_draft(draft_id: str, raw: Guarded) -> dict[str, Any]:
+        """Approve the draft's text as it is now; with `sha256`, only if it is that text."""
         body = parse(ApproveBody, raw)
         try:
             return _view(_found(drafts.approve, draft_id, body.sha256))
