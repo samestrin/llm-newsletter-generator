@@ -7,6 +7,9 @@ const PAGE = `http://127.0.0.1:${PAGE_PORT}`;
 // The built page, served by `vite preview`, whose `/api` proxy goes to the fake API.
 export default defineConfig({
   testDir: "e2e",
+  // The live recording (e2e/live/) runs only under playwright.live.config.ts, against a
+  // real instance; it approves a draft and needs LIVE_URL, so the normal run skips it.
+  testIgnore: ["live/**"],
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: 0,
@@ -19,12 +22,12 @@ export default defineConfig({
     ...(["light", "dark"] as const).flatMap((colorScheme) => [
       {
         name: `desktop-${colorScheme}`,
-        testIgnore: "screenshots.spec.ts",
+        testIgnore: ["screenshots.spec.ts", "live/**"],
         use: { ...devices["Desktop Chrome"], colorScheme },
       },
       {
         name: `phone-${colorScheme}`,
-        testIgnore: "screenshots.spec.ts",
+        testIgnore: ["screenshots.spec.ts", "live/**"],
         use: { ...devices["Desktop Chrome"], viewport: { width: 360, height: 740 }, colorScheme },
       },
     ]),
