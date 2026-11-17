@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The review page's Model calls table shows each step's Tokens in and Tokens out again: it read `input_tokens` and `output_tokens`, but the API sends `prompt_tokens` and `completion_tokens`. A contract test renders the seed sample's report as the API serves it (`web/src/contract/seed-report.json`, kept equal to the API's answer by `tests/test_web_contract.py`).
+
 ## 1.1.0 - 2026-11-17
 
 The API documents itself, a review instance starts with a real draft, and this repo ships its half of the private review deploy.

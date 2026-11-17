@@ -1,0 +1,198 @@
+{
+  "ok": false,
+  "failed_sources": [],
+  "left_out": [],
+  "grouping_error": null,
+  "dropped_stories": [],
+  "dropped_claims": [],
+  "flagged_claims": [
+    {
+      "id": "s1.c3",
+      "story_id": "s1",
+      "text": "Tiny-3B scores 95 on the MMLU benchmark.",
+      "status": "unsupported",
+      "reason": "The passage gives 71, not 95.",
+      "source_url": "https://models.example.org/posts/tiny-3b"
+    },
+    {
+      "id": "s2.c2",
+      "story_id": "s2",
+      "text": "Responses are due by 15 January.",
+      "status": "unsupported",
+      "reason": "The passage gives 15 December.",
+      "source_url": "https://regulator.example.gov/news/model-reporting"
+    },
+    {
+      "id": "s3.c2",
+      "story_id": "s3",
+      "text": "Northwind says the N200 delivers ten times the throughput of its previous chip.",
+      "status": "unsupported",
+      "reason": "The passage says twice, not ten times.",
+      "source_url": "https://northwind.example.com/n200"
+    }
+  ],
+  "editor_error": null,
+  "editor_rejections": [],
+  "steps": [
+    {
+      "step": "claims-s1",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 900,
+      "completion_tokens": 150,
+      "cost": 0.000225,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "claims-s2",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 900,
+      "completion_tokens": 150,
+      "cost": 0.000225,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "claims-s3",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 900,
+      "completion_tokens": 150,
+      "cost": 0.000225,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s1.c1",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s1.c2",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s1.c3",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s2.c1",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s2.c2",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s2.c3",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s3.c1",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s3.c2",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "check-s3.c3",
+      "tier": "fast",
+      "model": "recorded-fast",
+      "ok": true,
+      "prompt_tokens": 300,
+      "completion_tokens": 25,
+      "cost": 6e-05,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    },
+    {
+      "step": "edit",
+      "tier": "reasoning",
+      "model": "recorded-reasoning",
+      "ok": true,
+      "prompt_tokens": 800,
+      "completion_tokens": 400,
+      "cost": 0.006,
+      "attempts": 1,
+      "seconds": 0.0,
+      "error": null
+    }
+  ],
+  "total_cost": 0.007215,
+  "cost_complete": true,
+  "failed_steps": [],
+  "voice": {}
+}

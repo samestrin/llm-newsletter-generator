@@ -37,7 +37,7 @@ function seed() {
       flagged_claims: [],
       editor_error: null,
       editor_rejections: [],
-      steps: [{ step: "summary", tier: "fast", model: "fast-model", input_tokens: 10, output_tokens: 5, cost: 0.001 }],
+      steps: [{ step: "summary", tier: "fast", model: "fast-model", prompt_tokens: 10, completion_tokens: 5, cost: 0.001 }],
       total_cost: 0.001,
       cost_complete: true,
       failed_steps: [],
