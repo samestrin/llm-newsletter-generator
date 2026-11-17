@@ -1,0 +1,66 @@
+# The private review deploy on embassy, behind Traefik and Authelia at
+# https://newsletter.estr.in (the host name is proposed; the owner confirms it on
+# fleet-deploy's PR). See docs/deploy/embassy.md. For local use, run docker-compose.yml.
+#
+# No host port: Traefik reaches the web page on the external `proxy` network, and
+# nginx forwards /api to the api service on the internal network. No model key:
+# `serve --seed-sample` writes the committed sample as one draft at start, once.
+# Settings come only from .env.embassy, which exists on embassy and never in git.
+name: llm-newsletter-generator # images are <name>-<service>, which fleet-deploy's receiver tags for rollback
+
+services:
+  api:
+    # Built from the repo's Dockerfile (target api). No image: the receiver tags
+    # compose's default <name>-<service> names :rollback before each deploy.
+    build:
+      context: .
+      target: api
+    command: ["/app/.venv/bin/newsletter", "serve", "--seed-sample"]
+    env_file:
+      - .env.embassy
+    volumes:
+      - drafts:/data
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+    depends_on:
+      api:
+        condition: service_healthy
+    # fleet-deploy's entry names service: web, and the receiver waits for this
+    # healthcheck. It fetches the built page (/ must contain the app's root
+    # element) and /api/health, both through nginx, so it proves the page and
+    # the proxied API together. busybox wget ships in the nginx alpine image.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1/ | grep -q '<div id="root">' && wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      default: {}
+      proxy:
+        # Traefik's router for the review host points at http://newsletter:80.
+        aliases:
+          - newsletter
+    restart: unless-stopped
+
+networks:
+  # Owned by the homelab Traefik stack.
+  proxy:
+    external: true
+
+volumes:
+  drafts:

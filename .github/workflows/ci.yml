@@ -48,6 +48,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: The embassy compose file is valid
+        run: |
+          printf 'NEWSLETTER_API_TOKEN=ci-dummy\nNEWSLETTER_API_ORIGINS=https://newsletter.estr.in\n' > .env.embassy
+          docker compose -f docker-compose.embassy.yml config -q
+          rm .env.embassy
       - run: docker compose up --build --wait --wait-timeout 300
       - name: The page is served
         run: curl -fsS http://localhost:8080/ | grep -q '<div id="root">'

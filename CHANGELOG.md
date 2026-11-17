@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `docker-compose.embassy.yml` and `docs/deploy/embassy.md`: this repo's half of the private review deploy on embassy — `api` started with `serve --seed-sample` and `web` behind nginx, no host port, on the external `proxy` network, settings only from a host-only `.env.embassy` (now gitignored), no model key needed for the seeded draft. CI's `compose` job validates the file with a dummy `.env.embassy`, and `tests/test_embassy_compose.py` guards its shape. (epic 07)
+
 ## 1.0.0 - 2026-11-10
 
 The first demo-ready release: sources from a config file, grouped and ranked stories, an editor pass with a faithfulness check, a human approval gate, a review page with light and dark mode, a one-command local start, and a static archive build.
