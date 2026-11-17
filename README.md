@@ -122,15 +122,7 @@ curl -X POST http://127.0.0.1:8000/api/runs \
   -H "Content-Type: application/json" -d '{"feeds": ["https://example.com/feed.xml"]}'
 ```
 
-| Endpoint | Does |
-| --- | --- |
-| `GET /api/health` | `{"ok": true}`; the only call without the token |
-| `POST /api/runs` | Starts a run from `{"feeds": [...], "title", "topic", "date"}`; 202 with the run, 409 while another run is going. With `serve --config`, `feeds` may be left out to read the file's sources, and `topic` defaults to the file's |
-| `GET /api/runs/{id}` | The run: `queued`, `running`, `done` with its `draft_id`, or `error` with why. A run past its timeout, or cut off by a restart, ends as an `error` and leaves no draft |
-| `GET /api/drafts` | Every draft, newest first, without its text |
-| `GET /api/drafts/{id}` | The draft: `text`, `flags`, `report`, `approval` and `approved` |
-| `PUT /api/drafts/{id}` | Replaces the text from `{"text": "..."}` and clears the approval |
-| `POST /api/drafts/{id}/approve` | Approves the text as it is now. Send `{}`, or `{"sha256": "..."}` of the text you read to get a 409 if it changed since |
+The routes are not listed here: the API writes its own reference. `GET /api/openapi.json` is the OpenAPI spec — every route, the fields it takes, the replies and error responses it sends, the run states, the 409 while another run is going and the 409 from an approval whose sha256 no longer matches — and [http://127.0.0.1:8000/api/docs](http://127.0.0.1:8000/api/docs) is a Scalar page that reads it. Both are served by the API itself (the Scalar script is vendored, so neither page loads anything from a CDN) and both are readable without the token, since the spec holds route names and schemas only. The reference's Test Request sends the token you give it, declared in the spec as its bearer scheme.
 
 Every call but the health check needs `Authorization: Bearer $NEWSLETTER_API_TOKEN`. A write also needs an `Origin` from `NEWSLETTER_API_ORIGINS` and a JSON object sent as `application/json`; anything else is refused with 401, 403, 415 or 400. Without a token, the server will not start. The token and the model and voice keys never appear in a response, an error body, a stored file or a log.
 
@@ -142,6 +134,8 @@ Every call but the health check needs `Authorization: Bearer $NEWSLETTER_API_TOK
 | `NEWSLETTER_API_ORIGINS` | Comma-separated origins allowed to write, default `http://127.0.0.1:<port>,http://localhost:<port>` |
 | `NEWSLETTER_DATA_DIR` | Where drafts and runs are kept, default `$XDG_DATA_HOME/newsletter` (`~/.local/share/newsletter`) |
 | `NEWSLETTER_RUN_TIMEOUT` | Seconds a run may take, default 900 |
+
+`uv run newsletter serve --seed-sample` writes the committed `open-models-week` sample, with its flagged claims and run report, as one draft at start: once, so a restart adds no second copy and an existing draft is never overwritten or re-approved. It needs no model key and no network, which is what the review deploy (`docker-compose.embassy.yml`, described in [`docs/deploy/embassy.md`](docs/deploy/embassy.md)) starts with.
 
 ### The review page
 
@@ -214,6 +208,8 @@ uv run python -m newsletter.evals   # eval table from recorded responses, no net
 cd web && npm ci && npm run build && npm test   # the review page: build, unit tests with coverage
 npx playwright install chromium && npm run test:e2e   # browser test against a fake API, saves docs/img/
 ```
+
+`LIVE_URL=... npm run capture:live` (in `web/`, with `LIVE_TOKEN` for a token other than the local demo one) records a session on a running instance instead: the drafts list, the seeded issue with a flagged claim and its citation, Approve, and `/api/docs`, written to `docs/img/demo.gif`. Every frame is 1280x800 and a set of frames that is any other size, or longer than 30 s, is refused. The normal `test:e2e` run skips it.
 
 The screenshots' issue comes from fixtures in `web/e2e/fixtures/`, made from the `open-models-week` eval case. After a change to the renderer or the case, `uv run python tests/readme_issue.py` rewrites them; `uv run pytest` fails until it is run.
 

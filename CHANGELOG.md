@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+## 1.1.0 - 2026-11-17
+
+The API documents itself, a review instance starts with a real draft, and this repo ships its half of the private review deploy.
+
+- `newsletter serve` serves the OpenAPI spec at `GET /api/openapi.json` and a Scalar reference at `GET /api/docs` that reads it. The reference's script is vendored in `src/newsletter/api/static/scalar/` at Scalar's pinned version, its remote fonts, proxy and telemetry are off, and it draws in the app's accent colours in light and dark. Both pages are readable without the token; the spec declares every route and its error responses, and the bearer token as a security scheme so the reference's Test Request can send it. FastAPI's own docs pages and ReDoc stay off. (epic 07)
+- `newsletter serve --seed-sample` writes the committed `open-models-week` eval replay — its text, flagged claims and run report — as one draft at start, once: a restart adds no second copy and an existing draft is never overwritten or re-approved. It needs no model key and no network. (epic 07)
 - `docker-compose.embassy.yml` and `docs/deploy/embassy.md`: this repo's half of the private review deploy on embassy — `api` started with `serve --seed-sample` and `web` behind nginx, no host port, on the external `proxy` network, settings only from a host-only `.env.embassy` (now gitignored), no model key needed for the seeded draft. CI's `compose` job validates the file with a dummy `.env.embassy`, and `tests/test_embassy_compose.py` guards its shape. (epic 07)
+- `npm run capture:live` (in `web/`, `LIVE_URL` set) records a session on a running instance — the drafts list, the seeded issue with a flagged claim and its citation, Approve, and `/api/docs` — into `docs/img/demo.gif`. Frames are 1280x800; a mixed size, another size, an empty recording or delays over 30 s are refused with the reason. The normal Playwright run skips `e2e/live/`. (epic 07)
+- CI keeps the spec complete: `tests/test_spec_completeness.py` fails when a registered route (`include_in_schema=False` aside) is missing from the spec or has no response schema, and the `compose` job checks that through the web container `/api/openapi.json` answers JSON and `/api/docs` answers the Scalar page, not the review page's `index.html`. (epic 07)
 
 ## 1.0.0 - 2026-11-10
 
