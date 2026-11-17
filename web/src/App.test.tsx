@@ -197,6 +197,22 @@ describe("the run report", () => {
     await openDraft(fakeApi(makeDraft({ report: {} })));
     expect(screen.getByRole("region", { name: "Run report" })).toBeInTheDocument();
   });
+
+  // The seed sample's report as the API serves it; tests/test_web_contract.py keeps the
+  // file equal to the API's answer, so this reads the field names the API really sends.
+  it("shows the token counts of a report the API served", async () => {
+    const served = JSON.parse(readFileSync(join(__dirname, "contract", "seed-report.json"), "utf-8"));
+    await openDraft(fakeApi(makeDraft({ report: served })));
+    const table = screen.getByRole("region", { name: "Model calls table" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(served.steps.length);
+    served.steps.forEach((step: { step: string; prompt_tokens: number; completion_tokens: number }, n: number) => {
+      const cells = within(rows[n]).getAllByRole("cell");
+      expect(cells[0]).toHaveTextContent(step.step);
+      expect(cells[3]).toHaveTextContent(String(step.prompt_tokens));
+      expect(cells[4]).toHaveTextContent(String(step.completion_tokens));
+    });
+  });
 });
 
 describe("edit and approve", () => {
