@@ -3,7 +3,6 @@ the file, settings only from `.env.embassy`, the api seeded with the sample.
 fleet-deploy's receiver builds it as-is and waits for `web`'s healthcheck, so
 the shape is part of the deploy contract (epic 07 T4)."""
 
-import copy
 from pathlib import Path
 
 import yaml
@@ -79,6 +78,34 @@ def test_the_check_catches_a_secret_in_the_file() -> None:
     assert any("NEWSLETTER_API_KEY" in p for p in problems(doc))
 
 
+def test_the_check_catches_an_image_name() -> None:
+    # The receiver tags compose's default <name>-<service> images for rollback;
+    # an image: line would break that tagging.
+    doc = _doc()
+    doc["services"]["api"]["image"] = "x:y"
+    assert any("image" in p for p in problems(doc))
+
+
+def test_the_check_reads_a_string_command() -> None:
+    # Compose also accepts command as a plain string.
+    doc = _doc()
+    doc["services"]["api"]["command"] = "newsletter serve --seed-sample"
+    assert problems(doc) == []
+    doc = _doc()
+    doc["services"]["api"]["command"] = "newsletter serve"
+    assert any("--seed-sample" in p for p in problems(doc))
+    # Whole tokens, not substrings: neither flag below is the real one.
+    doc = _doc()
+    doc["services"]["api"]["command"] = "newsletter serve --seed-samples"
+    assert any("--seed-sample" in p for p in problems(doc))
+    doc = _doc()
+    doc["services"]["api"]["command"] = "newsletter preserve --seed-sample"
+    assert any("serve" in p for p in problems(doc))
+    doc = _doc()
+    doc["services"]["api"]["command"] = ["--seed-sample"]
+    assert any("serve" in p for p in problems(doc))
+
+
 def test_the_check_catches_a_lost_seed_or_settings_file() -> None:
     doc = _doc()
     doc["services"]["api"]["command"] = ["/app/.venv/bin/newsletter", "serve"]
@@ -95,8 +122,3 @@ def test_the_check_catches_a_lost_healthcheck_or_network() -> None:
     doc = _doc()
     doc["networks"]["proxy"]["external"] = False
     assert any("proxy" in p for p in problems(doc))
-
-
-def test_the_check_passes_a_known_good_copy() -> None:
-    doc = copy.deepcopy(_doc())
-    assert problems(doc) == []

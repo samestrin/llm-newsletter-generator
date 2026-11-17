@@ -39,12 +39,13 @@ services:
       api:
         condition: service_healthy
     # fleet-deploy's entry names service: web, and the receiver waits for this
-    # healthcheck. It goes through nginx, so it proves the page and the proxied
-    # API together. busybox wget ships in the nginx alpine image.
+    # healthcheck. It fetches the built page (/ must contain the app's root
+    # element) and /api/health, both through nginx, so it proves the page and
+    # the proxied API together. busybox wget ships in the nginx alpine image.
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1
+        - wget -qO- http://127.0.0.1/ | grep -q '<div id="root">' && wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1
       interval: 5s
       timeout: 5s
       retries: 12

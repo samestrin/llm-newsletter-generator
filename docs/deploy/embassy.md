@@ -9,7 +9,7 @@ The owner's review copy of the newsletter generator runs on embassy at `https://
   - `web` (target `web`) is the built review page behind nginx, which forwards `/api/` to `api:8000` unchanged (`web/nginx.conf`).
 - No host port. Traefik reaches `web` on the external Docker network `proxy`, where it also answers as `newsletter`, so the gateway's router points at `http://newsletter:80`. `api` stays on the compose's internal network; only nginx reaches it.
 - No model server and no model key in the file. To run a *new* issue on the review instance (beyond the seeded sample), add the model settings below to `.env.embassy`; the seeded draft works without them.
-- Health: `api` keeps the same healthcheck as `docker-compose.yml` (`GET /api/health`); `web` checks the same route through nginx, so one check proves the page and the proxied API together. fleet-deploy's receiver waits for `web`'s healthcheck and rolls back to the previous images if it fails.
+- Health: `api` keeps the same healthcheck as `docker-compose.yml` (`GET /api/health`); `web` fetches `/` through nginx and requires the built page's `<div id="root">` (a missing or empty build fails), then checks `/api/health` through the same nginx, so one check proves the page and the proxied API together. fleet-deploy's receiver waits for `web`'s healthcheck and rolls back to the previous images if it fails.
 - `restart: unless-stopped`. Drafts live in the `drafts` volume (`/data`), which survives deploys.
 - The project is named `llm-newsletter-generator` and no service sets `image:`, so the images are `llm-newsletter-generator-api` and `llm-newsletter-generator-web`. The receiver tags each `:latest` as `:rollback` before a deploy.
 
