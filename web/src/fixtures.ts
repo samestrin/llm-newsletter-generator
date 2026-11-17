@@ -41,8 +41,8 @@ export function makeDraft(overrides: Partial<Draft> = {}): Draft {
       editor_error: null,
       editor_rejections: ["intro cited an unknown claim"],
       steps: [
-        { step: "summary", tier: "fast", model: "fast-model", input_tokens: 1200, output_tokens: 300, cost: 0.0042 },
-        { step: "check", tier: "reasoning", model: "big-model", input_tokens: 900, output_tokens: 50, cost: null },
+        { step: "summary", tier: "fast", model: "fast-model", prompt_tokens: 1200, completion_tokens: 300, cost: 0.0042 },
+        { step: "check", tier: "reasoning", model: "big-model", prompt_tokens: 900, completion_tokens: 50, cost: null },
       ],
       total_cost: 0.0042,
       cost_complete: false,

@@ -22,8 +22,8 @@ export type Report = {
     step?: string;
     tier?: string;
     model?: string;
-    input_tokens?: number | null;
-    output_tokens?: number | null;
+    prompt_tokens?: number | null;
+    completion_tokens?: number | null;
     cost?: number | null;
   }[];
   total_cost?: number;

@@ -205,8 +205,8 @@ function ReportBody({ report }: { report: Report }) {
                   <td>{s.step}</td>
                   <td>{s.tier}</td>
                   <td>{s.model}</td>
-                  <td>{s.input_tokens ?? ""}</td>
-                  <td>{s.output_tokens ?? ""}</td>
+                  <td>{s.prompt_tokens ?? ""}</td>
+                  <td>{s.completion_tokens ?? ""}</td>
                   <td>{s.cost == null ? "unknown" : money(s.cost)}</td>
                 </tr>
               ))}
