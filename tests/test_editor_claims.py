@@ -9,6 +9,7 @@ from newsletter.editor import (
     summarize_stories,
     summarize_story,
 )
+from newsletter.issue import load_prompt
 from newsletter.llm import LLMClient, Settings
 from newsletter.sources import Item
 
@@ -346,7 +347,5 @@ def test_a_claim_about_the_story_itself_is_not_dropped_by_the_listing_check(raw)
 
 
 def test_the_claims_prompt_asks_for_no_claims_about_the_listing():
-    model = FakeModel({"claims": []})
-    summarize_story("s1", [HN_ITEM], make_llm(model))
-    prompt = model.requests[0]["messages"][-1]["content"]
-    assert "points" in prompt and "comment" in prompt and "URL" in prompt
+    template = load_prompt("claims")
+    assert "points" in template and "comment counts" in template and "URLs" in template

@@ -50,6 +50,22 @@ RESPONSE_FORMAT = {
 
 _FENCE = re.compile(r"^```(?:json)?\s*\n(.*)\n```$", re.DOTALL)
 
+# A claim about the listing (Hacker News, hnrss) rather than the story: a URL, or a count
+# of points, votes or comments. What is left once those and the words that only frame
+# them are taken out is the claim's own content; with none, the claim is dropped.
+_URL = re.compile(r"\b(?:https?://|www\.)\S+", re.IGNORECASE)
+_COUNT = re.compile(
+    r"#?\s*\b(?:\d[\d,.]*k?\s+(?:points?|up-?votes?|votes?|comments?|replies)"
+    r"|(?:points?|score|up-?votes?|votes?|comments?)\s*:?\s*\d[\d,.]*k?)\b",
+    re.IGNORECASE,
+)
+_LISTING_WORDS = frozenset(
+    """a an the this that it its it's story post article submission item link url urls
+    comment comments discussion thread page has have had received got gets earned is was
+    are were be with of on at in to for and or by from over about hacker news hn hnrss
+    ycombinator site points score upvotes votes so far currently""".split()
+)
+
 
 @dataclass(frozen=True)
 class Claim:
@@ -129,6 +145,8 @@ def summarize_story(story_id: str, items: list[Item], llm: LLMClient) -> StorySu
         source = None if problem else _source_of(passage, sources)
         if problem is None and source is None:
             problem = "passage not found verbatim in any source of the story"
+        if problem is None and _only_about_the_listing(text):
+            problem = "claim is only about the listing: points, comments or a URL"
         if problem:
             summary.dropped.append(DroppedClaim(claim_id, story_id, text, passage, problem))
         else:
@@ -177,6 +195,13 @@ def _fields(raw: Any) -> tuple[str, str, str | None]:
         # An empty passage is a substring of everything, so it proves nothing.
         return text, passage, "passage is empty"
     return text, passage, None
+
+
+def _only_about_the_listing(text: str) -> bool:
+    """True when `text` states nothing but URLs and point or comment counts."""
+    rest = _COUNT.sub(" ", _URL.sub(" ", text))
+    words = re.findall(r"[a-z0-9']+", rest.lower())
+    return all(word in _LISTING_WORDS for word in words)
 
 
 def _source_of(passage: str, sources: list[Item]) -> Item | None:
