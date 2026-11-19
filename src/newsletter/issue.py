@@ -20,8 +20,10 @@ from newsletter.sources import (
     FeedFailure,
     HackerNewsSource,
     Item,
+    LinkedArticle,
     PageSource,
     RssSource,
+    read_linked,
 )
 from newsletter.sources.http import Fetch, http_get
 
@@ -137,6 +139,8 @@ class Gathered:
     """Story id to its items (its sources), closest to the topic first."""
     failures: list[FeedFailure]
     grouping: Grouping
+    linked: list[LinkedArticle] = field(default_factory=list)
+    """Link-only items whose article was read for their text, or skipped."""
 
 
 def gather_stories(
@@ -151,14 +155,17 @@ def gather_stories(
     cache: FeedCache | None = None,
 ) -> Gathered:
     """Read the feeds, then the pages, then Hacker News, keep the first `per_feed` items
-    of each, and group and rank them by `topic` with one embedding call.
+    of each, read the linked article of each link-only item, and group and rank them by
+    `topic` with one embedding call.
 
-    Every failed source is in `failures`; every item the grouping dropped or could not
+    Every failed source is in `failures`; every linked article read or skipped is in
+    `linked`; every item the grouping dropped or could not
     group is in `grouping.left_out`, and a failed embedding call is `grouping.error`.
     """
+    page_source = PageSource(fetch=fetch)
     collected = [
         RssSource(cache=cache, fetch=fetch).collect(feeds),
-        PageSource(fetch=fetch).collect(pages or []),
+        page_source.collect(pages or []),
     ]
     if hackernews is not None:
         source = HackerNewsSource(
@@ -166,9 +173,10 @@ def gather_stories(
         )
         collected.append(source.collect())
     items = first_per_feed([item for result in collected for item in result.items], per_feed)
-    grouping = group_items(items, llm, topic=topic)
+    linked = read_linked(items, page_source, keep=set(pages or []))
+    grouping = group_items(linked.items, llm, topic=topic)
     failures = [failure for result in collected for failure in result.failures]
-    return Gathered(grouping.stories, failures, grouping)
+    return Gathered(grouping.stories, failures, grouping, linked.articles)
 
 
 def make_issue(

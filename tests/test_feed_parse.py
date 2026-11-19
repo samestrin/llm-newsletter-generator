@@ -21,7 +21,10 @@ def test_rss_fixture_parses():
     first, second = feed.items
     assert first.title == "A new open model"
     assert first.link == "https://example.com/posts/open-model"
-    assert first.summary == "The model is open & small.\nSecond paragraph."
+    assert (
+        first.summary
+        == "The model is open & small.\nIt was trained on public data.\nSecond paragraph."
+    )
     assert first.published == datetime(2026, 11, 2, 9, 30, tzinfo=UTC)
     assert first.feed_url == "https://example.com/feed.xml"
     assert first.feed_title == "Example AI News"
@@ -30,7 +33,10 @@ def test_rss_fixture_parses():
 
 def test_rss_prefers_full_content_over_description():
     feed = parse_feed(load("rss.xml"), "https://example.com/feed.xml")
-    assert feed.items[1].summary == "Full text\nBenchmarks are hard."
+    assert (
+        feed.items[1].summary
+        == "Full text\nBenchmarks are hard. Most of them reward memory over skill."
+    )
     assert feed.items[1].published is None
 
 
@@ -50,7 +56,7 @@ def test_atom_fixture_parses():
     (item,) = feed.items
     assert item.title == "Scaling notes"
     assert item.link == "https://lab.example.org/scaling"
-    assert item.summary == "Notes on scaling."
+    assert item.summary == "Notes on scaling the lab's models past a trillion tokens."
     assert item.published == datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
     assert feed.problems == []
 

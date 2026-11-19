@@ -248,7 +248,13 @@ def _issue(args, env, fetch, llm_transport, voice_transport) -> int:
         llm.close()
 
     report = build_report(
-        gathered.failures, edition, stories, usage, voiced.report(), gathered.grouping
+        gathered.failures,
+        edition,
+        stories,
+        usage,
+        voiced.report(),
+        gathered.grouping,
+        linked=gathered.linked,
     )
     newsletter = Newsletter(args.title, args.date or date.today(), edition, stories, report)
     markdown = render_markdown(newsletter)

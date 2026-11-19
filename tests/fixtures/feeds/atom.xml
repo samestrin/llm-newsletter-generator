@@ -12,6 +12,6 @@
     <link rel="alternate" href="https://lab.example.org/scaling"/>
     <id>urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a</id>
     <updated>2026-11-01T12:00:00Z</updated>
-    <summary type="html">&lt;p&gt;Notes on &lt;a href="https://lab.example.org/x"&gt;scaling&lt;/a&gt;.&lt;/p&gt;</summary>
+    <summary type="html">&lt;p&gt;Notes on &lt;a href="https://lab.example.org/x"&gt;scaling&lt;/a&gt; the lab's models past a trillion tokens.&lt;/p&gt;</summary>
   </entry>
 </feed>

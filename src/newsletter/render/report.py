@@ -1,6 +1,7 @@
 """The run report: everything that failed, was left out or is in doubt, and what it cost.
 
-It is built from the sources' failures, the grouping step's error and the items it
+It is built from the sources' failures, the link-only items whose article was read or
+skipped, the grouping step's error and the items it
 left out, the edited issue (dropped claims, flagged claims,
 stories with nothing to show, the editor's own failure), the voice pass's
 `VoiceRun.report()` when there was one, and `LLMClient.report()`, whose steps and costs
@@ -14,7 +15,7 @@ from typing import Any
 from newsletter.editor import DroppedClaim, Edition
 from newsletter.editor.faithfulness import Status
 from newsletter.grouping import Grouping, LeftOut
-from newsletter.sources import FeedFailure, Item
+from newsletter.sources import FeedFailure, Item, LinkedArticle
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,8 @@ class FlaggedClaim:
 class RunReport:
     failed_sources: list[FeedFailure] = field(default_factory=list)
     """Sources (feeds, pages, Hacker News) that could not be read and entries left out."""
+    linked_articles: list[LinkedArticle] = field(default_factory=list)
+    """Link-only items whose linked article was read for their text, or skipped and why."""
     left_out: list[LeftOut] = field(default_factory=list)
     """Items the grouping step dropped or could not group with the others."""
     grouping_error: str | None = None
@@ -72,6 +75,7 @@ class RunReport:
         """True only when nothing failed, was left out or is flagged."""
         return not (
             self.failed_sources
+            or any(article.status == "skipped" for article in self.linked_articles)
             or self.left_out
             or self.grouping_error
             or self.dropped_stories
@@ -93,12 +97,15 @@ def build_report(
     usage: Mapping[str, Any],
     voice: Mapping[str, Any] | None = None,
     grouping: Grouping | None = None,
+    linked: list[LinkedArticle] | None = None,
 ) -> RunReport:
     """The report of one run. `stories` maps each story id to its source items, `usage`
     is `LLMClient.report()`, `voice` is `VoiceRun.report()` and `grouping` is the
-    `group_items` result the stories came from."""
+    `group_items` result the stories came from, and `linked` the link-only items whose
+    article was read or skipped."""
     report = RunReport(
         failed_sources=list(failures),
+        linked_articles=list(linked or []),
         left_out=list(grouping.left_out) if grouping else [],
         grouping_error=grouping.error if grouping else None,
         editor_error=edition.error,

@@ -46,12 +46,13 @@ class PageSource:
         result = SourceResult()
         for url in urls:
             try:
-                result.items.append(self._read(url))
+                result.items.append(self.read(url))
             except FetchError as error:
                 result.failures.append(FeedFailure(url, str(error)))
         return result
 
-    def _read(self, url: str) -> Item:
+    def read(self, url: str) -> Item:
+        """The page at `url` as one item; raises `FetchError` when it cannot be read."""
         check_url(url)
         if refusal := self.robots.refusal(url):
             raise FetchError(refusal)

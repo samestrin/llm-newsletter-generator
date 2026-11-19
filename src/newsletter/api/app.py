@@ -120,6 +120,7 @@ class RunReport(BaseModel):
 
     ok: bool | None = None
     failed_sources: list[dict[str, Any]] | None = None
+    linked_articles: list[dict[str, Any]] | None = None
     left_out: list[dict[str, Any]] | None = None
     grouping_error: str | None = None
     dropped_stories: list[dict[str, Any]] | None = None

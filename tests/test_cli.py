@@ -467,13 +467,19 @@ HN_ITEMS = {
         "url": "https://mystery.example.org/launch",
     },
 }
+HN_PAGES = {
+    PAGE: "page.html",
+    "https://ml.example.io/posts/falcon-9": "falcon-9.html",
+    "https://mystery.example.org/launch": "mystery.html",
+}
 
 
 def run_web(url, headers, timeout):
     if url == NEWS:
         return HttpResponse(200, {}, (RUN_FIXTURES / "feed.xml").read_bytes())
-    if url == PAGE:
-        body = (RUN_FIXTURES / "page.html").read_bytes()
+    if url in HN_PAGES:
+        # The page source's page, and the articles the Hacker News stories link to.
+        body = (RUN_FIXTURES / HN_PAGES[url]).read_bytes()
         return HttpResponse(200, {"content-type": "text/html; charset=utf-8"}, body)
     if url == f"{HN}/topstories.json":
         return HttpResponse(200, {}, b"[1, 2, 3]")
@@ -531,6 +537,9 @@ def test_issue_from_a_config_groups_copies_ranks_by_topic_and_reports_what_faile
     # The failed Hacker News story and the item that could not be grouped are reported.
     assert f"{HN}/item/2.json" in report and "HTTP 404" in report
     assert "A mystery launch" in report and "ungrouped" in report
+    # The Hacker News stories carry only a title: their linked articles were read.
+    assert "**Linked articles**" in report
+    assert "(<https://ml.example.io/posts/falcon-9>): fetched" in report
     page = html.read_text(encoding="utf-8").split("Run report")[1]
     assert "A mystery launch" in page and "ungrouped" in page
     assert code == 1
