@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Hacker News stories, hnrss entries and other link-only items (under 50 characters of their own text once the title, URLs and points and comments lines are taken out) get the linked article's main text as their passage, read with the web page source's timeout, 10 MB cap, redirect and robots.txt rules. `RunReport.linked_articles` lists each article read (`fetched`) and each one that could not be read (`skipped`, with why), in the Markdown and HTML run report and on the review page; a skipped item is never summarized from its title or metadata and makes the run not ok. A claim that states only a URL or a points, votes or comments count is dropped ("claim is only about the listing"), and the claims prompt asks for none. The README recommends `NEWSLETTER_TIMEOUT=300` for a reasoning model.
 - The review page's Model calls table shows each step's Tokens in and Tokens out again: it read `input_tokens` and `output_tokens`, but the API sends `prompt_tokens` and `completion_tokens`. A contract test renders the seed sample's report as the API serves it (`web/src/contract/seed-report.json`, kept equal to the API's answer by `tests/test_web_contract.py`).
 
 ## 1.1.0 - 2026-11-17

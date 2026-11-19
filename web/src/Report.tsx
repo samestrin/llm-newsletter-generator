@@ -142,6 +142,16 @@ function ReportBody({ report }: { report: Report }) {
         )}
       />
       <List
+        title="Linked articles"
+        items={report.linked_articles}
+        show={(a) => (
+          <>
+            {a.title} (<code>{a.link}</code>): {a.status}
+            {a.reason ? `, ${a.reason}` : ""}
+          </>
+        )}
+      />
+      <List
         title="Dropped stories"
         items={report.dropped_stories}
         show={(s) => (

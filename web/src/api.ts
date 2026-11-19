@@ -13,6 +13,7 @@ export type Flag = {
 export type Report = {
   ok?: boolean;
   failed_sources?: { url: string; reason: string }[];
+  linked_articles?: { title: string; link: string; status: string; reason?: string | null }[];
   dropped_stories?: { story_id: string; title: string; link: string; reason: string }[];
   dropped_claims?: { id: string; story_id: string; text: string; passage?: string; reason: string }[];
   flagged_claims?: Flag[];
