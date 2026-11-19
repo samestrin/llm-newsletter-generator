@@ -178,6 +178,21 @@ describe("the run report", () => {
     expect(report).toHaveTextContent("1 step cost unknown");
   });
 
+  it("lists the linked articles read for link-only items, and the skipped ones with why", async () => {
+    const linked = {
+      ok: false,
+      linked_articles: [
+        { title: "Open model ships", link: "https://a.example/open-model", status: "fetched", reason: null },
+        { title: "Gone story", link: "https://gone.example/x", status: "skipped", reason: "HTTP 503" },
+      ],
+    };
+    await openDraft(fakeApi(makeDraft({ report: linked })));
+    const report = screen.getByRole("region", { name: "Run report" });
+    expect(report).toHaveTextContent("Linked articles (2)");
+    expect(report).toHaveTextContent("Open model ships (https://a.example/open-model): fetched");
+    expect(report).toHaveTextContent("Gone story (https://gone.example/x): skipped, HTTP 503");
+  });
+
   it("says when nothing went wrong", async () => {
     const clean = {
       ok: true,
