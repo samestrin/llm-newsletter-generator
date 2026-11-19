@@ -9,6 +9,7 @@ from newsletter.editor import (
     summarize_stories,
     summarize_story,
 )
+from newsletter.issue import load_prompt
 from newsletter.llm import LLMClient, Settings
 from newsletter.sources import Item
 
@@ -281,3 +282,70 @@ def test_each_story_is_its_own_fast_step():
         ("claims-s1", "fast"),
         ("claims-s2", "fast"),
     ]
+
+
+# Claims about the aggregator that listed the story (its points, comments, URLs) are not
+# facts of the story: the code drops them, whatever the prompt said.
+
+HN_ITEM = Item(
+    title="Open model ships",
+    link="https://a.example/open-model",
+    summary=(
+        "Article URL: https://a.example/open-model\n"
+        "Comments URL: https://news.ycombinator.com/item?id=46012345\n"
+        "Points: 710\n"
+        "# Comments: 312\n"
+        "An open-weights model was released today under the Apache 2.0 license."
+    ),
+    published=None,
+    feed_url="https://hnrss.org/newest?points=300",
+    feed_title="Hacker News: Newest",
+    rights=None,
+)
+
+# The claims the fast model wrote in the owner's run of 2026-11-18 (run d1706f44).
+AGGREGATOR_CLAIMS = [
+    claim("The story has 710 points", "Points: 710"),
+    claim("The story has 312 comments.", "# Comments: 312"),
+    claim(
+        "The comments URL is https://news.ycombinator.com/item?id=46012345",
+        "Comments URL: https://news.ycombinator.com/item?id=46012345",
+    ),
+    claim("The article URL is https://a.example/open-model.", "https://a.example/open-model"),
+    claim("It received 710 upvotes on Hacker News.", "Points: 710"),
+    claim("https://a.example/open-model", "https://a.example/open-model"),
+]
+
+
+@pytest.mark.parametrize("raw", AGGREGATOR_CLAIMS, ids=lambda raw: raw["text"])
+def test_a_claim_that_is_only_points_comments_or_a_url_is_dropped(raw):
+    summary = summarize_story("s1", [HN_ITEM], make_llm(FakeModel({"claims": [raw]})))
+
+    assert summary.claims == []
+    [dropped] = summary.dropped
+    assert dropped.text == raw["text"]
+    assert dropped.reason == "claim is only about the listing: points, comments or a URL"
+
+
+GOOD_CLAIMS = [
+    claim("The model is licensed under Apache 2.0.", "under the Apache 2.0 license"),
+    claim("The lab released a 3B model.", "released a 3B parameter model on Tuesday"),
+    claim("It scores 71 on the benchmark.", "scores 71 on the benchmark"),
+    claim("The model scored 71 points on the benchmark.", "scores 71 on the benchmark"),
+    claim("The repository has 710 stars.", "It runs on a laptop"),
+    claim("Readers left 312 comments praising the laptop build.", "It runs on a laptop"),
+]
+
+
+@pytest.mark.parametrize("raw", GOOD_CLAIMS, ids=lambda raw: raw["text"])
+def test_a_claim_about_the_story_itself_is_not_dropped_by_the_listing_check(raw):
+    source = Item(**{**vars(FIRST), "summary": FIRST.summary + "\n" + HN_ITEM.summary})
+    summary = summarize_story("s1", [source], make_llm(FakeModel({"claims": [raw]})))
+
+    assert summary.dropped == []
+    assert [c.text for c in summary.claims] == [raw["text"]]
+
+
+def test_the_claims_prompt_asks_for_no_claims_about_the_listing():
+    template = load_prompt("claims")
+    assert "points" in template and "comment counts" in template and "URLs" in template

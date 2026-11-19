@@ -88,6 +88,10 @@ def test_a_run_reads_feeds_pages_and_hacker_news_and_groups_them():
     report = content["report"]
     assert [f["url"] for f in report["failed_sources"]] == [f"{HN}/item/2.json"]
     assert [entry["title"] for entry in report["left_out"]] == ["A mystery launch"]
+    assert [(a["link"], a["status"]) for a in report["linked_articles"]] == [
+        ("https://ml.example.io/posts/falcon-9", "fetched"),
+        ("https://mystery.example.org/launch", "fetched"),
+    ]
     assert report["left_out"][0]["reason"].startswith("ungrouped:")
     assert report["grouping_error"] is None
     assert report["ok"] is False

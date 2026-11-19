@@ -57,6 +57,14 @@ Every feed was read, every story and claim was used, and every claim was support
 {% endfor %}
 
 {% endif %}
+{% if linked %}
+**Linked articles**
+
+{% for article, url in linked %}
+- {{ link(article.title or "(no title)", url)|markdown }}: {{ article.status }}{% if article.reason %}, {{ article.reason }}{% endif +%}
+{% endfor %}
+
+{% endif %}
 {% if report.grouping_error %}
 **Grouping failed:** {{ report.grouping_error }}
 

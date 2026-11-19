@@ -78,6 +78,14 @@
 {% endfor %}
 </ul>
 {% endif %}
+{% if linked %}
+<p style="margin:0 0 4px;font-weight:bold;">Linked articles</p>
+<ul style="margin:0 0 12px;padding-left:20px;">
+{% for article, url in linked %}
+<li>{{ link(article.title or "(no title)", url) }}: {{ article.status }}{% if article.reason %}, {{ article.reason }}{% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
 {% if report.grouping_error %}
 <p style="margin:0 0 12px;"><strong>Grouping failed:</strong> {{ report.grouping_error }}</p>
 {% endif %}

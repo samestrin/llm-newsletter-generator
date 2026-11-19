@@ -163,6 +163,7 @@ def _context(newsletter: Newsletter) -> dict[str, Any]:
         "report": report,
         "dropped_stories": [(d, safe_url(d.link)) for d in report.dropped_stories],
         "left_out": [(entry, safe_url(entry.link)) for entry in report.left_out],
+        "linked": [(article, safe_url(article.link)) for article in report.linked_articles],
         "steps": [_step_row(step) for step in report.steps],
         "total": _total(report),
         "voice": _voice(report.voice),

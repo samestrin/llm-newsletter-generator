@@ -55,7 +55,13 @@ def run_issue(
     edition = edit_issue(checked, llm)
     voiced = voice_edition(edition, llm, voice, transport=voice_transport)
     report = build_report(
-        gathered.failures, edition, stories, llm.report(), voiced.report(), gathered.grouping
+        gathered.failures,
+        edition,
+        stories,
+        llm.report(),
+        voiced.report(),
+        gathered.grouping,
+        linked=gathered.linked,
     )
     issue_date = request.issue_date or date.today()
     text = render_markdown(Newsletter(request.title, issue_date, edition, stories, report))

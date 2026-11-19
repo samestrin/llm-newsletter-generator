@@ -10,13 +10,13 @@
       <title>A new open model</title>
       <link>https://example.com/posts/open-model</link>
       <pubDate>Mon, 02 Nov 2026 09:30:00 GMT</pubDate>
-      <description><![CDATA[<p>The model is <b>open</b> &amp; small.</p><script>alert("x")</script><p>Second paragraph.</p>]]></description>
+      <description><![CDATA[<p>The model is <b>open</b> &amp; small.</p><script>alert("x")</script><p>It was trained on public data.</p><p>Second paragraph.</p>]]></description>
     </item>
     <item>
       <title>Benchmarks revisited</title>
       <link>https://example.com/posts/benchmarks</link>
       <description>Plain text summary.</description>
-      <content:encoded><![CDATA[<div><h2>Full text</h2><p>Benchmarks are <i>hard</i>.</p><style>p{color:red}</style></div>]]></content:encoded>
+      <content:encoded><![CDATA[<div><h2>Full text</h2><p>Benchmarks are <i>hard</i>. Most of them reward memory over skill.</p><style>p{color:red}</style></div>]]></content:encoded>
     </item>
     <item>
       <title>An item with no link</title>
