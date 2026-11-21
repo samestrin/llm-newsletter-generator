@@ -1,5 +1,6 @@
 """The issue rendered as Markdown and HTML email, with its run report."""
 
+from newsletter.render.email import render_email
 from newsletter.render.render import (
     FLAG_LABELS,
     Newsletter,
@@ -18,6 +19,7 @@ __all__ = [
     "RunReport",
     "build_report",
     "markdown_text",
+    "render_email",
     "render_html",
     "render_markdown",
     "safe_url",

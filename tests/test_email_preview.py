@@ -10,6 +10,7 @@ sends mail; the app registers no route that sends.
 import html as html_escape
 import re
 import socket
+import time
 
 import pytest
 from fastapi.routing import APIRoute
@@ -82,7 +83,7 @@ def test_script_tags_and_javascript_links_come_out_escaped_and_unlinked():
     text = (
         "# Issue\n\n"
         '<script>alert("x")</script>\n\n'
-        "<div onclick=\"steal()\">a block</div>\n\n"
+        '<div onclick="steal()">a block</div>\n\n'
         "[click](javascript:alert(1)) [upper](JaVaScRiPt:alert(1)) "
         "[tab](<java\tscript:alert(1)>) [data](data:text/html;base64,PHNjcmlwdD4=) "
         "[file](file:///etc/passwd) [ok](https://example.org/a).\n"
@@ -91,7 +92,7 @@ def test_script_tags_and_javascript_links_come_out_escaped_and_unlinked():
 
     assert "<script" not in html
     assert "&lt;script&gt;" in html
-    assert "<div" not in html
+    assert "<div onclick" not in html
     assert "&lt;div onclick=" in html  # shown as escaped text, not an attribute
     assert 'href="javascript:' not in html.lower()
     assert 'href="java\tscript:' not in html
@@ -100,6 +101,7 @@ def test_script_tags_and_javascript_links_come_out_escaped_and_unlinked():
     assert 'href="https://example.org/a"' in html
     # The refused links are shown as their text, with no anchor: only the ok link is one.
     assert html.count("<a ") == 1
+    assert "[click](javascript:alert(1))" in html
     for text_shown in ("click", "upper", "tab", "data", "file"):
         assert text_shown in html
 
@@ -109,6 +111,26 @@ def test_only_http_and_https_autolinks_are_linked():
     assert 'href="https://example.org/a"' in html
     assert 'href="http://example.org/b"' in html
     assert 'href="ftp:' not in html
+
+
+def test_encoded_and_reference_javascript_links_are_unlinked():
+    text = (
+        "[entity](&#106;avascript:alert(1)) [percent](%6aavascript:alert(1)) "
+        "[empty]() [ref]\n\n[ref]: javascript:alert(1)\n"
+    )
+    html = render_email(text)
+    assert "<a " not in html  # no link in the text is safe, so no anchor at all
+    assert "href=" not in html
+    assert "[ref]: javascript:alert(1)" in html  # the definition shows as text
+
+
+def test_a_one_megabyte_edit_renders_bounded():
+    """The edit route accepts up to 1 MB of text; the preview must not hang on it."""
+    text = "# T\n\n" + "*a* [l](https://example.org) <b>x</b> " * 26_000
+    start = time.monotonic()
+    html = render_email(text[:1_000_000])
+    assert time.monotonic() - start < 30
+    assert html.startswith("<!DOCTYPE html>")
 
 
 def test_an_image_is_shown_as_its_alt_text_so_the_preview_fetches_nothing():
@@ -132,16 +154,23 @@ def test_the_preview_uses_the_issue_shell(tmp_path):
         '<html lang="en">',
         'name="viewport"',
         'class="container"',
-        'width:600px;max-width:600px;',
+        "width:600px;max-width:600px;",
         "Georgia,'Times New Roman',serif",
     ):
         assert marker in html, marker
 
 
 def test_the_title_is_the_first_heading_escaped():
-    html = render_email('# A <b>title</b> & more\n\ntext\n')
+    html = render_email("# A <b>title</b> & more\n\ntext\n")
     assert "<title>A &lt;b&gt;title&lt;/b&gt; &amp; more</title>" in html
     assert "<title>Newsletter</title>" in render_email("no heading here\n")
+
+
+def test_the_title_flattens_formatting_and_line_breaks():
+    html = render_email("A *bold* `code`\ntitle\n===\n\nbody\n")  # a two-line setext h1
+    assert "<title>A bold code title</title>" in html
+    html = render_email("# An ![alt text](https://example.org/i.png) image\n")
+    assert "<title>An alt text image</title>" in html
 
 
 def test_empty_text_still_renders_the_shell():

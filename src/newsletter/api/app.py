@@ -1,4 +1,5 @@
-"""The HTTP API: start a run, read its status, list, read, edit and approve drafts.
+"""The HTTP API: start a run, read its status, list, read, edit and approve drafts,
+and preview an approved draft as an HTML email. Nothing here sends mail.
 
 Every request but `GET /api/health` needs `Authorization: Bearer $NEWSLETTER_API_TOKEN`.
 A write (any method but GET, HEAD and OPTIONS) also needs an `Origin` in the allowed
@@ -42,6 +43,7 @@ from newsletter.api.store import (
     redactor,
 )
 from newsletter.config import SourcesConfig
+from newsletter.render import render_email
 
 log = logging.getLogger(__name__)
 
@@ -196,6 +198,12 @@ class ErrorBody(BaseModel):
     """An error: the reason only, never the request."""
 
     detail: str
+
+
+class EmailPreview(BaseModel):
+    """The approved draft's current text as an HTML email preview. Nothing is sent."""
+
+    html: str
 
 
 class ValidationProblem(BaseModel):
@@ -426,6 +434,26 @@ def create_app(
             return _view(_found(drafts.approve, draft_id, body.sha256))
         except Conflict as error:
             raise HTTPException(409, str(error)) from None
+
+    @app.get(
+        "/api/drafts/{draft_id}/email",
+        dependencies=[Depends(guard)],
+        response_model=EmailPreview,
+        responses={
+            **UNAUTHORIZED,
+            **NOT_FOUND,
+            409: {
+                "description": "The draft's current text is not approved.",
+                "model": ErrorBody,
+            },
+        },
+    )
+    def draft_email(draft_id: str) -> dict[str, str]:
+        """The approved text as an HTML email, in the issue's shell. Nothing is sent."""
+        draft = _found(drafts.get, draft_id)
+        if not is_approved(draft):
+            raise HTTPException(409, "the draft's current text is not approved; approve it first")
+        return {"html": render_email(draft["text"])}
 
     return app
 
