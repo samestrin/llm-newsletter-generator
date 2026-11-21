@@ -1,6 +1,7 @@
 """Runs as background jobs, each with a status and a timeout.
 
 A run goes `queued`, `running`, then `done` with its draft id or `error` with why. A
+done run whose editor failed carries the report's plain `editor_message` too. A
 thread cannot be killed, so a run past its timeout is reported as an error at once and
 whatever it returns later is thrown away; no draft appears for a run reported as failed.
 Each model and feed request has its own timeout, so the thread itself ends soon after.
@@ -64,6 +65,7 @@ class Jobs:
                 "started_at": None,
                 "finished_at": None,
                 "progress": waiting_steps(),
+                "editor_message": None,
             }
             self.runs.save(run)
             self._finished[run["id"]] = threading.Event()
@@ -120,7 +122,14 @@ class Jobs:
                     if outcome:  # Timed out already: its result is not used.
                         return
                     draft = self.drafts.create(content, run_id=run["id"])
-                    outcome.update(status="done", draft_id=draft["id"])
+                    report = content.get("report")
+                    outcome.update(
+                        status="done",
+                        draft_id=draft["id"],
+                        editor_message=report.get("editor_message")
+                        if isinstance(report, dict)
+                        else None,
+                    )
                     stamp = now()
                     steps["done"].update(state="done", ended_at=stamp)
                     steps["done"]["started_at"] = steps["done"]["started_at"] or stamp

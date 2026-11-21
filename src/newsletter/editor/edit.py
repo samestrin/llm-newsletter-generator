@@ -72,6 +72,21 @@ RESPONSE_FORMAT = {
 }
 
 
+EDITOR_TIMED_OUT = (
+    "The editor did not finish in time. Your sources were read and checked; "
+    "try again, or edit the draft by hand."
+)
+EDITOR_FAILED = (
+    "The editor did not finish. Your sources were read and checked; "
+    "try again, or edit the draft by hand."
+)
+NOTHING_TO_EDIT = (
+    "The editor had no supported claims to write from. Your sources were read and "
+    "checked; edit the draft by hand."
+)
+"""The plain sentences a failed editor pass gives the reader, never the raw error."""
+
+
 class InvalidEdit(ValueError):
     """The editor's reply cannot be used; `problems` says why, one reason per item."""
 
@@ -117,10 +132,16 @@ class Edition:
     """Why each rejected reply was rejected, kept even when the retry was good."""
     error: str | None = None
     """Why there is no edit, when the call failed or both replies were rejected."""
+    message: str | None = None
+    """The same failure in one plain sentence built here, never from the error."""
 
     def report(self) -> dict[str, Any]:
         """The editor's failure and rejected replies, for the run report."""
-        return {"editor_error": self.error, "editor_rejections": list(self.rejections)}
+        return {
+            "editor_error": self.error,
+            "editor_message": self.message,
+            "editor_rejections": list(self.rejections),
+        }
 
 
 def edit_issue(run: CheckRun, llm: LLMClient) -> Edition:
@@ -130,6 +151,7 @@ def edit_issue(run: CheckRun, llm: LLMClient) -> Edition:
     editable = [story for story in run.stories if story.supported]
     if not editable:
         edition.error = "no supported claims to edit from"
+        edition.message = NOTHING_TO_EDIT
         return edition
 
     prompt = fill(load_prompt("editor"), stories=_stories_block(editable))
@@ -142,6 +164,7 @@ def edit_issue(run: CheckRun, llm: LLMClient) -> Edition:
             reply = llm.complete(step, messages, tier="reasoning", response_format=RESPONSE_FORMAT)
         except LLMError as error:
             edition.error = str(error)
+            edition.message = EDITOR_TIMED_OUT if error.timed_out else EDITOR_FAILED
             return edition
         # Parsed apart from the call: a ConfigError is a ValueError too.
         try:
@@ -157,6 +180,7 @@ def edit_issue(run: CheckRun, llm: LLMClient) -> Edition:
             continue
         return _apply(edition, draft)
     edition.error = f"editor output rejected twice; last: {edition.rejections[-1]}"
+    edition.message = EDITOR_FAILED
     return edition
 
 

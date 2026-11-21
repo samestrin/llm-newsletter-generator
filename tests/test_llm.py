@@ -128,7 +128,9 @@ def test_settings_defaults():
 
 
 def test_settings_read_the_reasoning_timeout_apart_from_the_others():
-    settings = Settings.from_env({"NEWSLETTER_TIMEOUT": "30", "NEWSLETTER_REASONING_TIMEOUT": "600"})
+    settings = Settings.from_env(
+        {"NEWSLETTER_TIMEOUT": "30", "NEWSLETTER_REASONING_TIMEOUT": "600"}
+    )
     assert settings.timeout_for("fast") == 30.0
     assert settings.timeout_for("embedding") == 30.0
     assert settings.timeout_for("reasoning") == 600.0

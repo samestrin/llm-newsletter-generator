@@ -55,6 +55,9 @@ class RunReport:
     dropped_claims: list[DroppedClaim] = field(default_factory=list)
     flagged_claims: list[FlaggedClaim] = field(default_factory=list)
     editor_error: str | None = None
+    """The editor's raw error, for the report details only."""
+    editor_message: str | None = None
+    """The editor's failure in one plain sentence, built in code: what a reader sees."""
     editor_rejections: list[str] = field(default_factory=list)
     steps: list[dict[str, Any]] = field(default_factory=list)
     """`LLMClient.report()["steps"]`: step, tier, model, tokens, cost (None if unknown)."""
@@ -109,6 +112,7 @@ def build_report(
         left_out=list(grouping.left_out) if grouping else [],
         grouping_error=grouping.error if grouping else None,
         editor_error=edition.error,
+        editor_message=edition.message,
         editor_rejections=list(edition.rejections),
         steps=[dict(step) for step in usage.get("steps", [])],
         total_cost=usage.get("total_cost", 0.0),
