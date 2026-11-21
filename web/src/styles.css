@@ -425,3 +425,51 @@ nav .refresh {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* A run's live progress: one row per step, its state in words and an icon, its counts. */
+.steps {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+.step {
+  display: grid;
+  grid-template-columns: 1.5em 1fr auto auto;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.step-state,
+.step-time,
+.step-detail {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.step progress,
+.step-detail {
+  grid-column: 2 / -1;
+  width: 100%;
+  margin: 0;
+}
+.step-detail ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+.step-running .step-label {
+  font-weight: 600;
+}
+.step-done .step-icon {
+  color: var(--color-good);
+}
+.step-failed .step-icon,
+.step-failed .step-state {
+  color: var(--color-bad);
+}
+.step-skipped .step-label,
+.step-waiting .step-label {
+  color: var(--color-text-muted);
+}
+.progress .state button + button {
+  margin-left: var(--space-2);
+}
