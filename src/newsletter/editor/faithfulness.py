@@ -7,6 +7,7 @@ and every claim stays on its story in order, so a flagged claim is shown as flag
 never dropped out of sight. Flagged claims and failed checks are listed for the run report.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -97,9 +98,27 @@ class CheckRun:
         }
 
 
-def check_claims(run: ClaimsRun, llm: LLMClient) -> CheckRun:
-    """Check every claim of every story; dropped claims and story errors are carried over."""
-    return CheckRun([_check_story(summary, llm) for summary in run.summaries])
+def check_claims(
+    run: ClaimsRun, llm: LLMClient, *, on_check: Callable[[int, int], None] | None = None
+) -> CheckRun:
+    """Check every claim of every story; dropped claims and story errors are carried over.
+
+    `on_check` hears how many claims are checked and how many there are, once before the
+    first check and again after each."""
+    total = sum(len(summary.claims) for summary in run.summaries)
+    checked = 0
+
+    def check(claim: Claim) -> CheckedClaim:
+        nonlocal checked
+        result = check_claim(claim, llm)
+        checked += 1
+        if on_check:
+            on_check(checked, total)
+        return result
+
+    if on_check:
+        on_check(0, total)
+    return CheckRun([_check_story(summary, check) for summary in run.summaries])
 
 
 def check_claim(claim: Claim, llm: LLMClient) -> CheckedClaim:
@@ -140,10 +159,10 @@ def parse_check(reply: str) -> tuple[bool, str]:
     return supported, reason.strip()
 
 
-def _check_story(summary: StorySummary, llm: LLMClient) -> CheckedStory:
+def _check_story(summary: StorySummary, check: Callable[[Claim], CheckedClaim]) -> CheckedStory:
     return CheckedStory(
         summary.story_id,
-        [check_claim(claim, llm) for claim in summary.claims],
+        [check(claim) for claim in summary.claims],
         list(summary.dropped),
         summary.error,
     )

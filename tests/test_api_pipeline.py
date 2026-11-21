@@ -228,7 +228,11 @@ class Recorder:
 def test_a_run_reports_the_start_and_end_of_each_stage_in_order():
     progress = Recorder()
     run_issue(request(), replay(), fetch=web, voice=VoiceSettings(), progress=progress)
-    states = [(step, state) for step, state, _ in progress.events]
+    # A stage counting as it goes reports `running` again with each count: one entry each.
+    states = []
+    for step, state, _ in progress.events:
+        if not states or states[-1] != (step, state):
+            states.append((step, state))
     expected = [(stage, state) for stage in STAGES for state in ("running", "done")]
     assert states == [*expected, ("done", "running")]
     assert all(isinstance(detail, str | None) for _, _, detail in progress.events)
@@ -286,7 +290,9 @@ class Counts:
         self.events = []
 
     def __call__(self, step, state, *, detail=None, done=None, total=None):
-        self.events.append({"step": step, "state": state, "detail": detail, "done": done, "total": total})
+        self.events.append(
+            {"step": step, "state": state, "detail": detail, "done": done, "total": total}
+        )
 
     def of(self, step):
         return [event for event in self.events if event["step"] == step]
@@ -361,4 +367,9 @@ def test_a_stage_with_nothing_to_count_says_so():
 
 
 def test_a_counted_run_without_a_progress_callback_is_unchanged():
-    assert counted_run(Counts()) == counted_run()
+    def timeless(content):  # A model call's `seconds` is wall-clock time.
+        for step in content["report"]["steps"]:
+            step.pop("seconds")
+        return content
+
+    assert timeless(counted_run(Counts())) == timeless(counted_run())

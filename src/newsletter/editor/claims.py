@@ -9,7 +9,7 @@ run report, and a summary call that fails or cannot be read is an error on the s
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -109,9 +109,21 @@ class ClaimsRun:
         }
 
 
-def summarize_stories(stories: Mapping[str, list[Item]], llm: LLMClient) -> ClaimsRun:
-    """One fast-model call per story, keyed by story id, each story given as its sources."""
-    return ClaimsRun([summarize_story(sid, items, llm) for sid, items in stories.items()])
+def summarize_stories(
+    stories: Mapping[str, list[Item]],
+    llm: LLMClient,
+    *,
+    on_story: Callable[[int, int], None] | None = None,
+) -> ClaimsRun:
+    """One fast-model call per story, keyed by story id, each story given as its sources.
+
+    `on_story` hears the number of each story and how many there are, before its call."""
+    summaries = []
+    for number, (sid, items) in enumerate(stories.items(), start=1):
+        if on_story:
+            on_story(number, len(stories))
+        summaries.append(summarize_story(sid, items, llm))
+    return ClaimsRun(summaries)
 
 
 def summarize_story(story_id: str, items: list[Item], llm: LLMClient) -> StorySummary:

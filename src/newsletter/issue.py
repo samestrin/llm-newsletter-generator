@@ -9,6 +9,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
+from functools import partial
 from importlib.resources import files
 from typing import Any
 
@@ -24,6 +25,7 @@ from newsletter.sources import (
     LinkedArticle,
     PageSource,
     RssSource,
+    SourceResult,
     read_linked,
 )
 from newsletter.sources.http import Fetch, http_get
@@ -163,36 +165,45 @@ def gather_stories(
     Every failed source is in `failures`; every linked article read or skipped is in
     `linked`; every item the grouping dropped or could not
     group is in `grouping.left_out`, and a failed embedding call is `grouping.error`.
-    `progress` hears the start and end of the feeds, the articles and the grouping.
+    `progress` hears the start and end of the feeds, the articles and the grouping, and
+    the feeds and articles counted `done` of `total` as each is read.
     """
-    progress("feeds", "running")
     page_source = PageSource(fetch=fetch)
-    collected = [
-        RssSource(cache=cache, fetch=fetch).collect(feeds),
-        page_source.collect(pages or []),
-    ]
+    rss = RssSource(cache=cache, fetch=fetch)
+    reads = [partial(rss.collect, [url]) for url in feeds]
+    reads += [partial(page_source.collect, [url]) for url in pages or []]
     if hackernews is not None:
         source = HackerNewsSource(
             min_score=hackernews.min_score, limit=hackernews.limit, fetch=fetch
         )
-        collected.append(source.collect())
+        reads.append(source.collect)
+
+    progress("feeds", "running", done=0, total=len(reads))
+    collected: list[SourceResult] = []
+    for read in reads:
+        collected.append(read())
+        progress(
+            "feeds",
+            "running",
+            detail=_feeds_detail(collected, len(reads)),
+            done=len(collected),
+            total=len(reads),
+        )
     items = first_per_feed([item for result in collected for item in result.items], per_feed)
     failures = [failure for result in collected for failure in result.failures]
     progress(
         "feeds",
         "done",
-        detail=f"{plural(len(items), 'item')} read, {len(failures)} left out",
+        detail=_feeds_detail(collected, len(reads)),
+        done=len(reads),
+        total=len(reads),
     )
 
-    progress("articles", "running")
-    linked = read_linked(items, page_source, keep=set(pages or []))
-    fetched = sum(1 for article in linked.articles if article.status == "fetched")
-    skipped = len(linked.articles) - fetched
-    progress(
-        "articles",
-        "done",
-        detail=f"{plural(fetched, 'linked article')} read, {skipped} left out",
-    )
+    def on_article(articles: list[LinkedArticle], total: int) -> None:
+        progress("articles", "running", **_articles_counts(articles, total))
+
+    linked = read_linked(items, page_source, keep=set(pages or []), on_article=on_article)
+    progress("articles", "done", **_articles_counts(linked.articles, len(linked.articles)))
 
     progress("grouping", "running")
     grouping = group_items(linked.items, llm, topic=topic)
@@ -203,6 +214,26 @@ def gather_stories(
         detail=f"{grouped} from {plural(len(linked.items), 'item')}",
     )
     return Gathered(grouping.stories, failures, grouping, linked.articles)
+
+
+def _feeds_detail(collected: list[SourceResult], total: int) -> str:
+    """`3 of 4 loaded, 1 failed: <url> <reason>`. A source failed when it gave no item and
+    a failure; a feed that loaded with some entries left out is loaded."""
+    failed = [result.failures[0] for result in collected if result.failures and not result.items]
+    detail = f"{len(collected) - len(failed)} of {total} loaded"
+    if failed:
+        listed = "; ".join(f"{failure.url} {failure.reason}" for failure in failed)
+        detail += f", {len(failed)} failed: {listed}"
+    return detail
+
+
+def _articles_counts(articles: list[LinkedArticle], total: int) -> dict[str, Any]:
+    """`12 of 15 fetched, 2 left out: the linked article could not be read`."""
+    skipped = sum(1 for article in articles if article.status == "skipped")
+    detail = f"{len(articles) - skipped} of {total} fetched"
+    if skipped:
+        detail += f", {skipped} left out: the linked article could not be read"
+    return {"detail": detail, "done": len(articles), "total": total}
 
 
 def make_issue(
