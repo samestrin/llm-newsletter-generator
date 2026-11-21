@@ -15,6 +15,7 @@ from typing import Any
 from newsletter.config import HackerNewsConfig
 from newsletter.grouping import Embedder, Grouping, group_items
 from newsletter.llm import LLMClient, LLMError
+from newsletter.progress import Progress, no_progress, plural
 from newsletter.sources import (
     FeedCache,
     FeedFailure,
@@ -153,6 +154,7 @@ def gather_stories(
     per_feed: int | None = None,
     fetch: Fetch = http_get,
     cache: FeedCache | None = None,
+    progress: Progress = no_progress,
 ) -> Gathered:
     """Read the feeds, then the pages, then Hacker News, keep the first `per_feed` items
     of each, read the linked article of each link-only item, and group and rank them by
@@ -161,7 +163,9 @@ def gather_stories(
     Every failed source is in `failures`; every linked article read or skipped is in
     `linked`; every item the grouping dropped or could not
     group is in `grouping.left_out`, and a failed embedding call is `grouping.error`.
+    `progress` hears the start and end of the feeds, the articles and the grouping.
     """
+    progress("feeds", "running")
     page_source = PageSource(fetch=fetch)
     collected = [
         RssSource(cache=cache, fetch=fetch).collect(feeds),
@@ -173,9 +177,31 @@ def gather_stories(
         )
         collected.append(source.collect())
     items = first_per_feed([item for result in collected for item in result.items], per_feed)
-    linked = read_linked(items, page_source, keep=set(pages or []))
-    grouping = group_items(linked.items, llm, topic=topic)
     failures = [failure for result in collected for failure in result.failures]
+    progress(
+        "feeds",
+        "done",
+        detail=f"{plural(len(items), 'item')} read, {len(failures)} left out",
+    )
+
+    progress("articles", "running")
+    linked = read_linked(items, page_source, keep=set(pages or []))
+    fetched = sum(1 for article in linked.articles if article.status == "fetched")
+    skipped = len(linked.articles) - fetched
+    progress(
+        "articles",
+        "done",
+        detail=f"{plural(fetched, 'linked article')} read, {skipped} left out",
+    )
+
+    progress("grouping", "running")
+    grouping = group_items(linked.items, llm, topic=topic)
+    grouped = plural(len(grouping.stories), "story", "stories")
+    progress(
+        "grouping",
+        "failed" if grouping.error else "done",
+        detail=f"{grouped} from {plural(len(linked.items), 'item')}",
+    )
     return Gathered(grouping.stories, failures, grouping, linked.articles)
 
 

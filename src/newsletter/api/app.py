@@ -83,8 +83,25 @@ class Health(BaseModel):
     ok: bool
 
 
+class ProgressStep(BaseModel):
+    """One step of a run: `waiting`, `running`, then `done`, `failed` or `skipped`.
+
+    `detail` says what the step did, in words built from counts, never a model's reply.
+    """
+
+    id: str
+    label: str
+    state: Literal["waiting", "running", "done", "failed", "skipped"]
+    done: int | None
+    total: int | None
+    detail: str | None
+    started_at: str | None
+    ended_at: str | None
+
+
 class RunView(BaseModel):
-    """A run's status: `queued`, `running`, then `done` with its draft id or `error`."""
+    """A run's status: `queued`, `running`, then `done` with its draft id or `error`,
+    and the progress of each of its steps."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -97,6 +114,8 @@ class RunView(BaseModel):
     created_at: str
     started_at: str | None
     finished_at: str | None
+    progress: list[ProgressStep] = Field(default_factory=list)
+    """Empty for a run from before progress was kept."""
 
 
 class FlaggedClaim(BaseModel):

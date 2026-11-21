@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from newsletter.progress import end_steps
+
 log = logging.getLogger(__name__)
 
 _ID = re.compile(r"[0-9a-f]{32}")
@@ -188,4 +190,5 @@ class RunStore:
                     error="the server restarted before the run finished",
                     finished_at=now(),
                 )
+                end_steps(run.get("progress", []), run["finished_at"])
                 self.save(run)
