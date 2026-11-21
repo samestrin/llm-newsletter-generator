@@ -21,7 +21,7 @@ ADDED_NUMBER = (
     "The new chip uses less power than the old one.",
     "unsupported",
     "The passage gives no figure for the saving.",
-    'The article does not say this. The checking model\'s reason: "The passage gives no '
+    "The article does not say this. The checking model's reason: \"The passage gives no "
     'figure for the saving."',
 )
 NO_NUMBERS = (
@@ -29,7 +29,7 @@ NO_NUMBERS = (
     "The team published the result in a peer reviewed journal on Thursday.",
     "unsupported",
     "The passage says nothing about habitability.",
-    'The article does not say this. The checking model\'s reason: "The passage says nothing '
+    "The article does not say this. The checking model's reason: \"The passage says nothing "
     'about habitability."',
 )
 
@@ -58,9 +58,8 @@ def _recorded_flags() -> list[tuple[str, str, str, str]]:
             if step.startswith("check-") and isinstance(content, dict):
                 if content.get("supported") is not True:
                     raw = claims[step.removeprefix("check-")]
-                    flags.append(
-                        (f"{path.parent.name}/{step}", raw["text"], raw["passage"], content["reason"])
-                    )
+                    name = f"{path.parent.name}/{step}"
+                    flags.append((name, raw["text"], raw["passage"], content["reason"]))
     return flags
 
 
@@ -68,20 +67,20 @@ RECORDED_EXPECTED = {
     "open-models-week/check-s1.c3": "The article says 71; the draft said 95.",
     # Both say 15: the number is there, only the month differs, so no number sentence.
     "open-models-week/check-s2.c2": (
-        'The article does not say this. The checking model\'s reason: "The passage gives '
+        "The article does not say this. The checking model's reason: \"The passage gives "
         '15 December."'
     ),
     # "ten times" and "twice" are words, not figures.
     "open-models-week/check-s3.c2": (
-        'The article does not say this. The checking model\'s reason: "The passage says '
+        "The article does not say this. The checking model's reason: \"The passage says "
         'twice, not ten times."'
     ),
     "science-weekly/check-s1.c3": (
-        'The article does not say this. The checking model\'s reason: "The passage says '
+        "The article does not say this. The checking model's reason: \"The passage says "
         'nothing about habitability."'
     ),
     "science-weekly/check-s2.c3": (
-        'The article does not say this. The checking model\'s reason: "The passage says it '
+        "The article does not say this. The checking model's reason: \"The passage says it "
         'has not been tested."'
     ),
 }
@@ -129,7 +128,10 @@ def test_two_changed_numbers_give_two_sentences():
         "Revenue rose 8% to $35 million in the quarter.",
         "unsupported",
         "Wrong figures.",
-    ) == "The article says 8%; the draft said 12%. The article says $35 million; the draft said $40 million."
+    ) == (
+        "The article says 8%; the draft said 12%. "
+        "The article says $35 million; the draft said $40 million."
+    )
 
 
 def test_an_unchecked_claim_says_so_without_the_error():
@@ -159,7 +161,8 @@ def test_a_reason_with_a_figure_in_neither_text_falls_back_to_the_plain_status()
 
 
 def test_an_empty_reason_gives_the_status_alone():
-    assert explain("A claim.", "A passage.", "unsupported", "  ") == "The article does not say this."
+    sentence = explain("A claim.", "A passage.", "unsupported", "  ")
+    assert sentence == "The article does not say this."
 
 
 EVERY_PAIR = [CHANGED_NUMBER, ADDED_NUMBER, NO_NUMBERS] + [

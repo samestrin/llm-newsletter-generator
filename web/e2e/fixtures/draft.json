@@ -9,7 +9,9 @@
       "text": "Tiny-3B scores 95 on the MMLU benchmark.",
       "status": "unsupported",
       "reason": "The passage gives 71, not 95.",
-      "source_url": "https://models.example.org/posts/tiny-3b"
+      "source_url": "https://models.example.org/posts/tiny-3b",
+      "passage": "It scores 71 on the MMLU benchmark and runs on a laptop with 16 GB of memory.",
+      "explanation": "The article says 71; the draft said 95."
     },
     {
       "id": "s2.c2",
@@ -17,7 +19,9 @@
       "text": "Responses are due by 15 January.",
       "status": "unsupported",
       "reason": "The passage gives 15 December.",
-      "source_url": "https://regulator.example.gov/news/model-reporting"
+      "source_url": "https://regulator.example.gov/news/model-reporting",
+      "passage": "Responses are due by 15 December.",
+      "explanation": "The article does not say this. The checking model's reason: \"The passage gives 15 December.\""
     },
     {
       "id": "s3.c2",
@@ -25,7 +29,9 @@
       "text": "Northwind says the N200 delivers ten times the throughput of its previous chip.",
       "status": "unsupported",
       "reason": "The passage says twice, not ten times.",
-      "source_url": "https://northwind.example.com/n200"
+      "source_url": "https://northwind.example.com/n200",
+      "passage": "The company says it delivers twice the throughput of its previous chip at the same power.",
+      "explanation": "The article does not say this. The checking model's reason: \"The passage says twice, not ten times.\""
     }
   ],
   "report": {
@@ -42,7 +48,9 @@
         "text": "Tiny-3B scores 95 on the MMLU benchmark.",
         "status": "unsupported",
         "reason": "The passage gives 71, not 95.",
-        "source_url": "https://models.example.org/posts/tiny-3b"
+        "source_url": "https://models.example.org/posts/tiny-3b",
+        "passage": "It scores 71 on the MMLU benchmark and runs on a laptop with 16 GB of memory.",
+        "explanation": "The article says 71; the draft said 95."
       },
       {
         "id": "s2.c2",
@@ -50,7 +58,9 @@
         "text": "Responses are due by 15 January.",
         "status": "unsupported",
         "reason": "The passage gives 15 December.",
-        "source_url": "https://regulator.example.gov/news/model-reporting"
+        "source_url": "https://regulator.example.gov/news/model-reporting",
+        "passage": "Responses are due by 15 December.",
+        "explanation": "The article does not say this. The checking model's reason: \"The passage gives 15 December.\""
       },
       {
         "id": "s3.c2",
@@ -58,7 +68,9 @@
         "text": "Northwind says the N200 delivers ten times the throughput of its previous chip.",
         "status": "unsupported",
         "reason": "The passage says twice, not ten times.",
-        "source_url": "https://northwind.example.com/n200"
+        "source_url": "https://northwind.example.com/n200",
+        "passage": "The company says it delivers twice the throughput of its previous chip at the same power.",
+        "explanation": "The article does not say this. The checking model's reason: \"The passage says twice, not ten times.\""
       }
     ],
     "editor_error": null,
