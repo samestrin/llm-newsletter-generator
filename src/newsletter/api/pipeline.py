@@ -16,6 +16,7 @@ from newsletter.config import HackerNewsConfig
 from newsletter.editor import check_claims, edit_issue, summarize_stories
 from newsletter.issue import gather_stories
 from newsletter.llm import LLMClient, Settings
+from newsletter.progress import Progress, no_progress, plural
 from newsletter.render import Newsletter, build_report, render_markdown
 from newsletter.sources.http import Fetch, http_get
 from newsletter.voice import VoiceSettings, voice_edition
@@ -39,7 +40,10 @@ def run_issue(
     voice: VoiceSettings,
     fetch: Fetch = http_get,
     voice_transport: httpx.BaseTransport | None = None,
+    progress: Progress = no_progress,
 ) -> dict:
+    """`progress` hears the start and end of each stage, then `done` as running: the
+    caller marks it done once the draft is saved."""
     gathered = gather_stories(
         request.feeds,
         pages=request.pages,
@@ -48,11 +52,34 @@ def run_issue(
         topic=request.topic,
         per_feed=request.per_feed,
         fetch=fetch,
+        progress=progress,
     )
     stories = gathered.stories
+
+    progress("claims", "running")
     claims = summarize_stories(stories, llm)
+    written = sum(len(summary.claims) for summary in claims.summaries)
+    progress(
+        "claims",
+        "done",
+        detail=f"{plural(written, 'claim')} from {plural(len(stories), 'story', 'stories')}",
+    )
+
+    progress("check", "running")
     checked = check_claims(claims, llm)
+    checks = [claim for story in checked.stories for claim in story.claims]
+    flagged = sum(1 for claim in checks if claim.flagged)
+    progress("check", "done", detail=f"{plural(len(checks), 'claim')} checked, {flagged} flagged")
+
+    progress("editor", "running")
     edition = edit_issue(checked, llm)
+    if edition.error:
+        progress("editor", "failed")
+    else:
+        edited = plural(len(edition.stories), "story", "stories")
+        progress("editor", "done", detail=f"{edited} in the issue")
+
+    progress("done", "running")
     voiced = voice_edition(edition, llm, voice, transport=voice_transport)
     report = build_report(
         gathered.failures,
@@ -77,10 +104,10 @@ def run_issue(
 def default_runner(env: Mapping[str, str]):
     """The runner the API uses: settings read from `env` at each run, a fresh client each."""
 
-    def run(request: RunRequest) -> dict:
+    def run(request: RunRequest, progress: Progress = no_progress) -> dict:
         llm = LLMClient(Settings.from_env(env))
         try:
-            return run_issue(request, llm, voice=VoiceSettings.from_env(env))
+            return run_issue(request, llm, voice=VoiceSettings.from_env(env), progress=progress)
         finally:
             llm.close()
 

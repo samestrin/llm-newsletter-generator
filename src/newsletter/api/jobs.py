@@ -5,6 +5,9 @@ thread cannot be killed, so a run past its timeout is reported as an error at on
 whatever it returns later is thrown away; no draft appears for a run reported as failed.
 Each model and feed request has its own timeout, so the thread itself ends soon after.
 One run at a time, counting a timed-out one still finishing, so runs cannot pile up.
+
+While it goes, `run["progress"]` lists every step with its state, saved at each event
+the runner reports; once the run is over, later events are thrown away like its result.
 """
 
 import logging
@@ -14,10 +17,11 @@ from typing import Any
 
 from newsletter.api.pipeline import RunRequest
 from newsletter.api.store import DraftStore, RunStore, new_id, now
+from newsletter.progress import Progress, State, end_steps, waiting_steps
 
 log = logging.getLogger(__name__)
 
-Runner = Callable[[RunRequest], dict[str, Any]]
+Runner = Callable[[RunRequest, Progress], dict[str, Any]]
 
 
 class Busy(RuntimeError):
@@ -59,6 +63,7 @@ class Jobs:
                 "created_at": now(),
                 "started_at": None,
                 "finished_at": None,
+                "progress": waiting_steps(),
             }
             self.runs.save(run)
             self._finished[run["id"]] = threading.Event()
@@ -77,15 +82,48 @@ class Jobs:
     def _watch(self, run: dict[str, Any], request: RunRequest) -> None:
         outcome: dict[str, Any] = {}
         lock = threading.Lock()
+        steps = {step["id"]: step for step in run["progress"]}
+
+        def progress(
+            step: str,
+            state: State,
+            *,
+            detail: str | None = None,
+            done: int | None = None,
+            total: int | None = None,
+        ) -> None:
+            with lock:
+                if outcome:  # Over already: a late event changes nothing.
+                    return
+                entry = steps.get(step)
+                if entry is None:
+                    log.warning("run %s: no step %r to report", run["id"], step)
+                    return
+                stamp = now()
+                entry["state"] = state
+                if entry["started_at"] is None:
+                    entry["started_at"] = stamp
+                if state != "running":
+                    entry["ended_at"] = stamp
+                if detail is not None:
+                    entry["detail"] = self.redact(detail)
+                if done is not None:
+                    entry["done"] = done
+                if total is not None:
+                    entry["total"] = total
+                self.runs.save(run)
 
         def work() -> None:
             try:
-                content = self.redact(self.runner(request))
+                content = self.redact(self.runner(request, progress))
                 with lock:
                     if outcome:  # Timed out already: its result is not used.
                         return
                     draft = self.drafts.create(content, run_id=run["id"])
                     outcome.update(status="done", draft_id=draft["id"])
+                    stamp = now()
+                    steps["done"].update(state="done", ended_at=stamp)
+                    steps["done"]["started_at"] = steps["done"]["started_at"] or stamp
             except Exception as error:
                 message = self.redact(f"{type(error).__name__}: {error}")
                 with lock:
@@ -112,5 +150,6 @@ class Jobs:
                     log.error("run %s: %s", run["id"], message)
         with lock:
             run.update(outcome, finished_at=now())
+            end_steps(run["progress"], run["finished_at"])
             self.runs.save(run)
         self._finished[run["id"]].set()

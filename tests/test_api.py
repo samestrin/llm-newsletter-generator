@@ -987,3 +987,12 @@ def test_a_run_cut_off_by_a_restart_fails_its_running_step(tmp_path):
     assert after["status"] == "error"
     states = [step["state"] for step in after["progress"]]
     assert states == ["failed", *["skipped"] * 6]
+
+
+def test_an_unknown_step_is_logged_and_changes_nothing(tmp_path, caplog):
+    with caplog.at_level(logging.WARNING):
+        run, steps, _ = progress_of(tmp_path, Emits([("nope", "running", {})]))
+    assert run["status"] == "done"
+    assert "no step 'nope' to report" in caplog.text
+    assert [step["id"] for step in run["progress"]] == list(steps)
+    assert len(steps) == 7
