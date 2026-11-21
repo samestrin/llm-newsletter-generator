@@ -320,6 +320,83 @@ describe("the start form", () => {
     expect(onStarted).not.toHaveBeenCalled();
   });
 
+  it("drops a check's answer when the row was edited while it ran", async () => {
+    const { api, user } = renderForm();
+    await enter(user, 1, SLOW);
+    within(row(1)).getByText("Checking…");
+    await user.type(field(1), "x");
+    await act(async () => {
+      api.release();
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(api.calls.filter((c) => c.url === "/api/feeds/check")).toHaveLength(1);
+    expect(field(1)).toHaveValue(`${SLOW}x`);
+    expect(within(row(1)).queryByText(/^OK/)).toBeNull();
+    expect(make()).toBeDisabled();
+  });
+
+  it("does not check a blank row when the visitor leaves it", async () => {
+    const { api, user } = renderForm();
+    await user.click(field(1));
+    await user.tab();
+    await user.type(field(1), "   ");
+    await user.tab();
+    await act(async () => vi.advanceTimersByTimeAsync(50));
+    expect(api.calls.some((c) => c.url === "/api/feeds/check")).toBe(false);
+    expect(within(row(1)).queryByText("Checking…")).toBeNull();
+  });
+
+  it("an OK answer with no item count says 0 items", async () => {
+    const api = demoApi();
+    const inner = api.fetch.getMockImplementation()!;
+    api.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      url === "/api/feeds/check" ? new Response(JSON.stringify({ ok: true }), { status: 200 }) : inner(url, init),
+    );
+    const { user } = renderForm(api);
+    await enter(user, 1, GOOD);
+    expect(await within(row(1)).findByText("OK, 0 items")).toBeInTheDocument();
+    expect(row(1)).not.toHaveTextContent("undefined");
+  });
+
+  it("a preset with no feeds leaves the rows as they are", async () => {
+    const api = demoApi();
+    const inner = api.fetch.getMockImplementation()!;
+    api.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      url === "/api/presets"
+        ? new Response(JSON.stringify([{ id: "none", label: "Nothing", feeds: [] }]), { status: 200 })
+        : inner(url, init),
+    );
+    const { user } = renderForm(api);
+    await enter(user, 1, GOOD);
+    await within(row(1)).findByText("OK, 20 items");
+    await user.click(await screen.findByRole("button", { name: "Nothing" }));
+    expect(screen.getAllByRole("group", { name: /^Feed \d$/ })).toHaveLength(1);
+    expect(field(1)).toHaveValue(GOOD);
+    expect(within(row(1)).getByText("OK, 20 items")).toBeInTheDocument();
+  });
+
+  it("a 409 with no retry_after or Retry-After waits 60 s before Try again", async () => {
+    const api = demoApi();
+    const inner = api.fetch.getMockImplementation()!;
+    api.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      url === "/api/runs"
+        ? new Response(JSON.stringify({ detail: "a run is already going" }), { status: 409 })
+        : inner(url, init),
+    );
+    const { user } = renderForm(api);
+    await enter(user, 1, GOOD);
+    await within(row(1)).findByText("OK, 20 items");
+    await user.click(make());
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("You can try again in 60 s.");
+    const retry = within(alert).getByRole("button", { name: "Try again" });
+    expect(retry).toBeDisabled();
+    for (let n = 0; n < 59; n++) await act(async () => vi.advanceTimersByTime(1000));
+    expect(retry).toBeDisabled();
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(retry).toBeEnabled();
+  });
+
   it('"See an example" is a secondary button that calls onExample', async () => {
     const onExample = vi.fn();
     const { user } = renderForm(demoApi(), onExample);
