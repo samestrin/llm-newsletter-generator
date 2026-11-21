@@ -134,7 +134,12 @@ class FlaggedClaim(BaseModel):
     text: str | None = None
     status: str | None = None
     reason: str | None = None
+    """The check's own reason: the model's, or why the check failed."""
     source_url: str | None = None
+    passage: str | None = None
+    """The source text the claim was tied to. Absent from drafts made before it was kept."""
+    explanation: str | None = None
+    """Why it is flagged, in plain words built in code. Absent from older drafts."""
 
 
 class RunReport(BaseModel):

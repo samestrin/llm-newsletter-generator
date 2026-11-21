@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from newsletter.editor import DroppedClaim, Edition
+from newsletter.editor.explain import explain
 from newsletter.editor.faithfulness import Status
 from newsletter.grouping import Grouping, LeftOut
 from newsletter.sources import FeedFailure, Item, LinkedArticle
@@ -38,7 +39,12 @@ class FlaggedClaim:
     text: str
     status: Status
     reason: str
+    """The check's own reason: the model's, or why the check failed."""
     source_url: str
+    passage: str = ""
+    """The source text the claim was tied to (`Claim.passage`)."""
+    explanation: str = ""
+    """Why it is flagged, in plain words built in code (`editor.explain`)."""
 
 
 @dataclass
@@ -123,7 +129,16 @@ def build_report(
     for story in edition.stories:
         report.dropped_claims += story.dropped
         report.flagged_claims += [
-            FlaggedClaim(c.id, story.story_id, c.claim.text, c.status, c.reason, c.claim.source_url)
+            FlaggedClaim(
+                c.id,
+                story.story_id,
+                c.claim.text,
+                c.status,
+                c.reason,
+                c.claim.source_url,
+                c.claim.passage,
+                explain(c.claim.text, c.claim.passage, c.status, c.reason),
+            )
             for c in story.claims
             if c.flagged
         ]

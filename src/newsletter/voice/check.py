@@ -39,13 +39,22 @@ def extract_facts(text: str) -> Facts:
     # Quotes are read whole from the text as written, links and all.
     quotes = tuple(next(filter(None, match.groups())) for match in _QUOTE.finditer(text))
     urls = tuple(match.group().rstrip(_URL_TRAILING) for match in _URL.finditer(text))
-    # Links and claim ids are cut out before numbers are read, so the 42 in a URL or the
-    # 1 in `s1.c1` is not counted again as a number.
-    rest = _URL.sub(" ", text)
-    claim_ids = tuple(_CLAIM_ID.findall(rest))
-    rest = _CLAIM_ID.sub(" ", rest)
-    numbers = tuple(_NUMBER.findall(rest))
+    claim_ids = tuple(_CLAIM_ID.findall(_blank(_URL, text)))
+    numbers = tuple(match.group() for match in number_matches(text))
     return Facts(urls, quotes, numbers, claim_ids)
+
+
+def number_matches(text: str) -> list[re.Match[str]]:
+    """Each number of `text`, as `extract_facts` reads it, with its place in the text.
+
+    Links and claim ids are blanked out before numbers are read, so the 42 in a URL or
+    the 1 in `s1.c1` is not counted again as a number. Blanks keep their length, so a
+    match's place is its place in `text`, and its `string` is the blanked text."""
+    return list(_NUMBER.finditer(_blank(_CLAIM_ID, _blank(_URL, text))))
+
+
+def _blank(pattern: re.Pattern[str], text: str) -> str:
+    return pattern.sub(lambda match: " " * len(match.group()), text)
 
 
 def compare_facts(before: str, after: str) -> list[str]:

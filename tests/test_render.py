@@ -416,6 +416,18 @@ def test_the_report_lists_flagged_claims_and_dropped_stories():
     assert report.ok is False
 
 
+def test_each_flagged_claim_carries_its_passage_source_and_explanation():
+    flags = {f.id: f for f in newsletter().report.flagged_claims}
+    assert flags["s1.c2"].passage == "passage of s1.c2"
+    assert flags["s1.c2"].source_url == S1_OTHER
+    assert flags["s1.c2"].explanation == (
+        'The article does not say this. The checking model\'s reason: "the passage says so"'
+    )
+    assert flags["s2.c2"].explanation == "This claim could not be checked."
+    reported = newsletter().report.to_dict()["flagged_claims"][0]
+    assert {"passage", "explanation", "source_url"} <= set(reported)
+
+
 def test_a_story_whose_claims_were_all_dropped_is_a_dropped_story():
     story = CheckedStory("s1", [], [DROPPED])
     report = build_report([], Edition([story]), STORIES, {})

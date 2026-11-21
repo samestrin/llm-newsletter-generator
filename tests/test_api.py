@@ -388,6 +388,26 @@ def test_drafts_are_listed_newest_first(client):
     assert [d["id"] for d in listed] == [second["id"], first["id"]]
 
 
+def test_a_draft_saved_before_flags_had_explanations_still_loads(client, tmp_path):
+    draft = make_draft(client)
+    path = tmp_path / "data" / "drafts" / f"{draft['id']}.json"
+    saved = json.loads(path.read_text("utf-8"))
+    saved["flags"] = [
+        {
+            "id": "s1.c2",
+            "story_id": "s1",
+            "text": "A claim",
+            "status": "unsupported",
+            "reason": "No.",
+            "source_url": "https://example.org/a",
+        }
+    ]
+    path.write_text(json.dumps(saved), "utf-8")
+    response = client.get(f"/api/drafts/{draft['id']}", headers=headers())
+    assert response.status_code == 200
+    assert response.json()["flags"] == saved["flags"]
+
+
 def test_an_unreadable_draft_file_is_skipped_and_logged(client, tmp_path, caplog):
     draft = make_draft(client)
     (tmp_path / "data" / "drafts" / ("f" * 32 + ".json")).write_text("{broken", "utf-8")
@@ -603,7 +623,11 @@ def test_seed_sample_lists_one_draft_with_a_flagged_claim_and_a_report(tmp_path)
         draft = client.get(f"/api/drafts/{listed[0]['id']}", headers=headers()).json()
         assert draft["text"].startswith("# Open models week")
         assert draft["flags"]
-        assert draft["report"]["flagged_claims"]
+        assert draft["report"]["flagged_claims"] == draft["flags"]
+        for flag in draft["flags"]:
+            assert flag["passage"]
+            assert flag["explanation"]
+            assert flag["source_url"]
         assert draft["report"]["steps"]
         run = client.get(f"/api/runs/{draft['run_id']}", headers=headers()).json()
     assert run["status"] == "done"

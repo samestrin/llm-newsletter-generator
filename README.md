@@ -113,7 +113,7 @@ When `YOURVOICE_API_KEY` is set, the editor's prose is rewritten in the writer's
 
 ### The API
 
-`newsletter serve` runs an HTTP API for drafting and reviewing issues. A run reads the feeds (or, started with `--config FILE`, the sources in that file when the run names no feeds), groups and ranks the stories, then the editor checks each claim against its source and writes the issue, then the voice pass rewrites the editor's prose, then the issue is rendered. Each run is a background job with a status and a timeout. Its result is a draft: the rendered Markdown, the flagged claims and the run report, kept as a JSON file in the data dir, so it survives a restart. Approving a draft stores the sha256 of its text. Any edit clears the approval.
+`newsletter serve` runs an HTTP API for drafting and reviewing issues. A run reads the feeds (or, started with `--config FILE`, the sources in that file when the run names no feeds), groups and ranks the stories, then the editor checks each claim against its source and writes the issue, then the voice pass rewrites the editor's prose, then the issue is rendered. Each run is a background job with a status and a timeout. Its result is a draft: the rendered Markdown, the flagged claims (each with its passage, its source link and an `explanation` built in code, such as "The article says 71; the draft said 95.") and the run report, kept as a JSON file in the data dir, so it survives a restart. Approving a draft stores the sha256 of its text. Any edit clears the approval.
 
 ```bash
 export NEWSLETTER_API_TOKEN=$(openssl rand -hex 32)
