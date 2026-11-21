@@ -149,9 +149,16 @@ textarea {
   margin: 0 auto;
   padding: var(--space-4);
 }
+/* In demo mode the page opens on the form: on a phone the earlier drafts come after it. */
+.layout-demo nav {
+  order: 2;
+}
 @media (min-width: 48rem) {
   .layout-split {
     grid-template-columns: 18rem minmax(0, 1fr);
+  }
+  .layout-demo nav {
+    order: 0;
   }
 }
 main {
@@ -232,6 +239,70 @@ textarea {
 }
 .connect button {
   justify-self: start;
+}
+
+nav h2 {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+/* The start form: feed rows (address, Remove, the check's answer), presets, focus. */
+.start {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 40rem;
+}
+.start h2,
+.start .intro {
+  margin: 0;
+}
+.start > button,
+.start-actions {
+  justify-self: start;
+}
+.presets,
+.start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.feed-rows {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.feed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0 var(--space-2);
+}
+.feed-check {
+  grid-column: 1 / -1;
+  min-height: 1.5em;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+.feed-check-ok {
+  color: var(--color-good);
+}
+.feed-check-error {
+  color: var(--color-bad);
+}
+.hint {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+button.link-button {
+  padding: var(--space-2) 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  text-decoration: underline;
 }
 
 nav ul {

@@ -1,4 +1,4 @@
-/** The review page's calls to `newsletter serve`: list, read, edit and approve drafts. */
+/** The page's calls to `newsletter serve`: check feeds, start a run, list, read, edit and approve drafts. */
 import { modelHeaders, type ModelCredentials } from "./modelAccess";
 
 /** One entry of `GET /api/providers` (plan 08's `providers.json`); it holds no secrets. */
@@ -74,14 +74,81 @@ export type Draft = {
 
 export type DraftSummary = Omit<Draft, "text" | "flags" | "report" | "approval"> & { flags: number };
 
+/** A feed set from `GET /api/presets`: a shortcut the form copies into its rows. */
+export type Preset = { id: string; label: string; feeds: string[] };
+
+/** `POST /api/feeds/check`: `error` is a plain sentence when `ok` is false. */
+export type FeedCheck = { ok: boolean; title?: string | null; items?: number; error?: string | null };
+
+/** A run as `POST /api/runs` and `GET /api/runs/{id}` return it. */
+export type Run = {
+  id: string;
+  status: "queued" | "running" | "done" | "error";
+  error: string | null;
+  draft_id: string | null;
+  feeds: string[];
+  title: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  /** Demo mode only, in the `POST /api/runs` answer: proves the drafts it makes are ours. */
+  owner_token?: string | null;
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Seconds to wait before asking again, from a 409 or 429 (`retry_after` or `Retry-After`). */
+    readonly retryAfter: number | null = null,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/**
+ * What this browser made on a demo-mode server, kept in session storage: the owner token
+ * the server issued with a run (sent back as `X-Owner-Token`, so the API shows us our
+ * drafts) and the ids of our runs and drafts. Never a key or demo code.
+ */
+export type Mine = { owner_token: string | null; runs: string[]; drafts: string[] };
+
+export const MINE_KEY = "newsletter.mine";
+
+const strings = (value: unknown) =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+
+export function loadMine(): Mine {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(MINE_KEY) ?? "null");
+    return {
+      owner_token: typeof value?.owner_token === "string" && value.owner_token ? value.owner_token : null,
+      runs: strings(value?.runs),
+      drafts: strings(value?.drafts),
+    };
+  } catch {
+    // Blocked storage or a malformed value: nothing is ours yet.
+    return { owner_token: null, runs: [], drafts: [] };
+  }
+}
+
+function saveMine(mine: Mine) {
+  try {
+    sessionStorage.setItem(MINE_KEY, JSON.stringify(mine));
+  } catch {
+    // Blocked storage: this visit still works, the list just will not hold our drafts.
+  }
+}
+
+/** Keep a started run's id, and the owner token when the server issued one. */
+export function rememberRun(run: Run): void {
+  const mine = loadMine();
+  saveMine({
+    owner_token: run.owner_token || mine.owner_token,
+    runs: mine.runs.includes(run.id) ? mine.runs : [...mine.runs, run.id],
+    drafts: run.draft_id && !mine.drafts.includes(run.draft_id) ? [...mine.drafts, run.draft_id] : mine.drafts,
+  });
 }
 
 /** The hex sha256 of the text's UTF-8 bytes, as the API's `text_sha256` computes it. */
@@ -117,6 +184,8 @@ export function createApi(access: Access, base = "", onUnauthorized?: (error: Ap
 
   async function call<T>(method: string, path: string, body?: object): Promise<T> {
     const headers: Record<string, string> = { ...credentials };
+    const owner = "model" in access ? loadMine().owner_token : null;
+    if (owner) headers["X-Owner-Token"] = owner;
     if (body) headers["Content-Type"] = "application/json";
     let response: Response;
     try {
@@ -134,7 +203,12 @@ export function createApi(access: Access, base = "", onUnauthorized?: (error: Ap
       // A message that echoes the secret is never shown: the page would render it. A secret
       // under 4 characters is not looked for: it would match ordinary words.
       const shown = typeof detail === "string" && !(secret.length >= 4 && detail.includes(secret));
-      const error = new ApiError(response.status, shown ? detail : `the API answered ${response.status}`);
+      const wait = Number(data?.retry_after ?? response.headers.get("Retry-After") ?? NaN);
+      const error = new ApiError(
+        response.status,
+        shown ? detail : `the API answered ${response.status}`,
+        Number.isFinite(wait) && wait >= 0 ? wait : null,
+      );
       if (response.status === 401) onUnauthorized?.(error);
       throw error;
     }
@@ -142,6 +216,10 @@ export function createApi(access: Access, base = "", onUnauthorized?: (error: Ap
   }
 
   return {
+    presets: () => call<Preset[]>("GET", "/api/presets"),
+    checkFeed: (url: string) => call<FeedCheck>("POST", "/api/feeds/check", { url }),
+    /** Start a run; a busy server answers 409 with `retryAfter` on the error. */
+    startRun: (run: { feeds: string[]; focus?: string }) => call<Run>("POST", "/api/runs", run),
     listDrafts: () => call<DraftSummary[]>("GET", "/api/drafts"),
     getDraft: (id: string) => call<Draft>("GET", `/api/drafts/${encodeURIComponent(id)}`),
     saveText: (id: string, text: string) =>

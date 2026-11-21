@@ -129,7 +129,13 @@ describe("the key panel on a demo-mode server", () => {
       await screen.findByRole("region", { name: "Model key" });
 
       const withKey = api.calls.filter((c) => c.url !== "/api/providers");
-      expect(withKey.map((c) => c.method)).toEqual(["GET", "GET", "PUT"]);
+      // The form asks for the presets once the drafts are listed: it carries the key too.
+      expect(withKey.map((c) => `${c.method} ${c.url}`)).toEqual([
+        "GET /api/drafts",
+        "GET /api/presets",
+        "GET /api/drafts/0123456789abcdef0123456789abcdef",
+        "PUT /api/drafts/0123456789abcdef0123456789abcdef",
+      ]);
       for (const call of api.calls) {
         expect(call.url).not.toContain(KEY);
         expect(call.body).not.toContain(KEY);
