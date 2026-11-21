@@ -1,4 +1,4 @@
-import type { Draft } from "./api";
+import type { Draft, Provider } from "./api";
 
 /** A draft as `GET /api/drafts/{id}` returns it, with markup in the text on purpose. */
 export const MARKUP = '<img src=x onerror="alert(1)"><b>bold</b><script>alert(2)</script>';
@@ -62,3 +62,52 @@ export function makeDraft(overrides: Partial<Draft> = {}): Draft {
     ...overrides,
   };
 }
+
+/** `GET /api/providers` as plan 08's `providers.json` serves it: no secrets, Synthetic without embeddings. */
+export const PROVIDERS: Provider[] = [
+  {
+    id: "demo",
+    label: "Demo code",
+    kind: "demo",
+    base_url: "https://demo.example.com/v1",
+    fast_model: "demo-fast",
+    reasoning_model: "demo-reasoning",
+    embedding_model: "demo-embedding",
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    kind: "key",
+    base_url: "https://api.openai.com/v1",
+    fast_model: "gpt-5-nano",
+    reasoning_model: "gpt-5-mini",
+    embedding_model: "text-embedding-3-small",
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    kind: "key",
+    base_url: "https://openrouter.ai/api/v1",
+    fast_model: "qwen/qwen3.7-flash",
+    reasoning_model: "qwen/qwen3.7-plus",
+    embedding_model: "thenlper/gte-base",
+  },
+  {
+    id: "alibaba",
+    label: "Alibaba",
+    kind: "key",
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    fast_model: "qwen-flash",
+    reasoning_model: "qwen-plus",
+    embedding_model: "text-embedding-v4",
+  },
+  {
+    id: "synthetic",
+    label: "Synthetic",
+    kind: "key",
+    base_url: "https://api.synthetic.new/openai/v1",
+    fast_model: "hf:zai-org/GLM-5.3-Flash",
+    reasoning_model: "hf:zai-org/GLM-5.3",
+    embedding_model: null,
+  },
+];
