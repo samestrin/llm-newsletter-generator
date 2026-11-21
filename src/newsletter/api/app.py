@@ -268,7 +268,8 @@ def create_app(
         version=__version__,
         description=(
             "Generate text-only newsletters from RSS feeds using LLMs: start a run, read "
-            "its status, list, read, edit and approve drafts. Every route but "
+            "its status, list, read, edit and approve drafts, and preview an approved "
+            "draft as an HTML email. Nothing here sends mail. Every route but "
             "`/api/health` needs the bearer token. The spec and the reference at "
             "`/api/docs` are readable without it; they hold route names and schemas only."
         ),
