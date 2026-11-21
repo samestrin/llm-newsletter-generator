@@ -6,7 +6,8 @@
 // take the demo code or OpenRouter key below as `X-Model-*` headers instead of the token.
 // In demo mode it also serves plan 08.1's `GET /api/presets`, `POST /api/feeds/check`
 // (answers from FEEDS below) and `POST /api/runs` (409 with `retry_after` while `busy`,
-// set by `POST /__busy`; otherwise a queued run with an owner token).
+// set by `POST /__busy`; otherwise a queued run with an owner token) and `GET /api/runs/{id}`
+// (that run, fetching its feeds: one of two loaded, one failed).
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -14,6 +15,7 @@ const PORT = Number(process.env.FAKE_API_PORT ?? 8787);
 const TOKEN = process.env.FAKE_API_TOKEN ?? "e2e-token";
 const ORIGINS = (process.env.FAKE_API_ORIGINS ?? "").split(",").filter(Boolean);
 const ID = "0123456789abcdef0123456789abcdef";
+const RUN_ID = "run00000000000000000000000000001";
 const DEMO_CODE = "e2e-demo-code";
 const OPENROUTER_KEY = "sk-or-e2e-key";
 const provider = (id, label, kind, embedding_model) => ({
@@ -159,7 +161,7 @@ createServer(async (req, res) => {
     }
     const stamp = new Date().toISOString();
     return send(res, 202, {
-      id: "run00000000000000000000000000001",
+      id: RUN_ID,
       status: "queued",
       error: null,
       draft_id: null,
@@ -169,6 +171,38 @@ createServer(async (req, res) => {
       started_at: null,
       finished_at: null,
       owner_token: "e2e-owner-token",
+    });
+  }
+  if (keys && method === "GET" && url === `/api/runs/${RUN_ID}`) {
+    const step = (id, label, fields = {}) => ({
+      id, label, state: "waiting", done: null, total: null, detail: null, started_at: null, ended_at: null, ...fields,
+    });
+    const stamp = new Date().toISOString();
+    return send(res, 200, {
+      id: RUN_ID,
+      status: "running",
+      error: null,
+      draft_id: null,
+      feeds: ["https://good.example.com/feed.xml", "https://down.example.com/feed.xml"],
+      title: "Newsletter",
+      created_at: stamp,
+      started_at: stamp,
+      finished_at: null,
+      progress: [
+        step("feeds", "Fetching feeds", {
+          state: "running",
+          done: 2,
+          total: 2,
+          detail: "1 of 2 loaded, 1 failed: https://down.example.com/feed.xml HTTP 503",
+          started_at: stamp,
+        }),
+        step("articles", "Reading articles"),
+        step("grouping", "Grouping and ranking stories"),
+        step("claims", "Writing claims"),
+        step("check", "Checking claims against sources"),
+        step("editor", "Editing the issue"),
+        step("done", "Done"),
+      ],
     });
   }
   if (method === "GET" && url === "/api/drafts") {

@@ -3,8 +3,10 @@ import {
   ApiError,
   createApi,
   listProviders,
+  loadCurrentRun,
   loadMine,
   rememberRun,
+  saveCurrentRun,
   type Access,
   type Api,
   type Draft,
@@ -21,6 +23,7 @@ import {
   type ModelCredentials,
   type StoredCredentials,
 } from "./modelAccess";
+import { Progress } from "./Progress";
 import { RunReport } from "./Report";
 import { StartForm } from "./StartForm";
 
@@ -54,8 +57,9 @@ export default function App() {
   const [drafts, setDrafts] = useState<Loaded<DraftSummary[]>>({ state: "idle" });
   const [draft, setDraft] = useState<Loaded<Draft>>({ state: "idle" });
   const [draftId, setDraftId] = useState<string | null>(null);
-  // The run this visit started from the form; its live progress is the next screen's.
-  const [run, setRun] = useState<Run | null>(null);
+  // The id of the run this tab started and is watching; kept across a reload, so its live
+  // progress shows again once the page has its key back.
+  const [run, setRun] = useState<string | null>(loadCurrentRun);
   // Only the draft opened last may fill the page, whatever order the answers come in.
   const latest = useRef<string | null>(null);
   // With providers, a 401 is the key panel's to explain; the list does not say it again.
@@ -121,18 +125,24 @@ export default function App() {
     setPanel({ open: true, error: null });
   }
 
-  /** Back to the form: no draft open, no run shown. */
+  /** Back to the form, or to the run this tab is still watching: no draft open. */
   function showForm() {
     latest.current = null;
     setDraftId(null);
     setDraft({ state: "idle" });
-    setRun(null);
+    setRun(loadCurrentRun());
   }
 
   function started(made: Run) {
     rememberRun(made);
+    saveCurrentRun(made.id);
     showForm();
-    setRun(made);
+  }
+
+  /** The run made its draft: open it, and list it with the others. */
+  function finished(id: string) {
+    void open(id);
+    if (api) void loadList(api);
   }
 
   async function open(id: string) {
@@ -212,7 +222,7 @@ export default function App() {
           <nav aria-label={demo ? "Earlier drafts" : "Drafts"}>
             {demo ? (
               <>
-                <button type="button" onClick={showForm} aria-current={!draftId && !run ? "page" : undefined}>
+                <button type="button" onClick={showForm} aria-current={!draftId ? "page" : undefined}>
                   Make a newsletter
                 </button>
                 <h2>Earlier drafts</h2>
@@ -286,9 +296,7 @@ export default function App() {
               {listStatus}
             </form>
           ) : run ? (
-            <p role="status" className="state">
-              Making your newsletter…
-            </p>
+            <Progress key={run} api={api} runId={run} onDone={finished} onStartOver={showForm} />
           ) : draft.state === "ready" ? (
             <DraftView key={draft.value.id} api={api} draft={draft.value} onChange={changed} />
           ) : draft.state === "loading" ? (

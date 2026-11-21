@@ -80,6 +80,19 @@ export type Preset = { id: string; label: string; feeds: string[] };
 /** `POST /api/feeds/check`: `error` is a plain sentence when `ok` is false. */
 export type FeedCheck = { ok: boolean; title?: string | null; items?: number; error?: string | null };
 
+/** One step of a run's live progress (plan 08's `ProgressStep`). */
+export type ProgressStep = {
+  id: string;
+  label: string;
+  state: "waiting" | "running" | "done" | "failed" | "skipped";
+  done: number | null;
+  total: number | null;
+  /** Built by the server from counts, URLs and fetch reasons, never a model's reply. */
+  detail: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+};
+
 /** A run as `POST /api/runs` and `GET /api/runs/{id}` return it. */
 export type Run = {
   id: string;
@@ -93,6 +106,10 @@ export type Run = {
   finished_at: string | null;
   /** Demo mode only, in the `POST /api/runs` answer: proves the drafts it makes are ours. */
   owner_token?: string | null;
+  /** Every step in order; empty or missing for a run from before progress was kept. */
+  progress?: ProgressStep[];
+  /** A plain sentence for the visitor when the run failed, if the server has one. */
+  editor_message?: string | null;
 };
 
 export class ApiError extends Error {
@@ -149,6 +166,37 @@ export function rememberRun(run: Run): void {
     runs: mine.runs.includes(run.id) ? mine.runs : [...mine.runs, run.id],
     drafts: run.draft_id && !mine.drafts.includes(run.draft_id) ? [...mine.drafts, run.draft_id] : mine.drafts,
   });
+}
+
+/**
+ * The run this tab is watching, kept in session storage so a reload resumes it: its id
+ * only, never a key, demo code or owner token.
+ */
+export const RUN_KEY = "newsletter.run";
+
+export function loadCurrentRun(): string | null {
+  try {
+    const id = sessionStorage.getItem(RUN_KEY);
+    return id ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCurrentRun(id: string): void {
+  try {
+    sessionStorage.setItem(RUN_KEY, id);
+  } catch {
+    // Blocked storage: the run still shows, a reload just will not resume it.
+  }
+}
+
+export function clearCurrentRun(): void {
+  try {
+    sessionStorage.removeItem(RUN_KEY);
+  } catch {
+    // Blocked storage: nothing was kept.
+  }
 }
 
 /** The hex sha256 of the text's UTF-8 bytes, as the API's `text_sha256` computes it. */
@@ -220,6 +268,7 @@ export function createApi(access: Access, base = "", onUnauthorized?: (error: Ap
     checkFeed: (url: string) => call<FeedCheck>("POST", "/api/feeds/check", { url }),
     /** Start a run; a busy server answers 409 with `retryAfter` on the error. */
     startRun: (run: { feeds: string[]; focus?: string }) => call<Run>("POST", "/api/runs", run),
+    getRun: (id: string) => call<Run>("GET", `/api/runs/${encodeURIComponent(id)}`),
     listDrafts: () => call<DraftSummary[]>("GET", "/api/drafts"),
     getDraft: (id: string) => call<Draft>("GET", `/api/drafts/${encodeURIComponent(id)}`),
     saveText: (id: string, text: string) =>

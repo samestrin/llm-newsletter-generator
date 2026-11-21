@@ -38,8 +38,19 @@ test("the form checks each feed, then starts a run with the focus", async ({ pag
     feeds: ["https://good.example.com/feed.xml", "https://also.example.com/rss"],
     focus: "practical AI tools",
   });
-  await expect(page.getByText("Making your newsletter…")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Making your newsletter…" })).toBeVisible();
+  const feeds = page.getByRole("list", { name: "Steps" }).getByRole("listitem").first();
+  await expect(feeds).toContainText("Fetching feeds");
+  await expect(feeds).toContainText("Running");
+  await expect(feeds.getByRole("list", { name: "Feeds that failed" })).toContainText("https://down.example.com/feed.xml HTTP 503");
+  await expect(page.getByRole("progressbar", { name: "Fetching feeds: 2 of 2" })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("e2e-owner-token");
+  const after = await new AxeBuilder({ page }).analyze();
+  expect(after.violations.filter((v) => v.impact === "serious" || v.impact === "critical")).toEqual([]);
+  // A reload resumes the same run from its stored id.
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Making your newsletter…" })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("newsletter.run"))).toBe("run00000000000000000000000000001");
 });
 
 test("a busy server shows the friendly text and a retry", async ({ page, request }) => {

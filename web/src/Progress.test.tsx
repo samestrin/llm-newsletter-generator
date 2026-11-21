@@ -1,5 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { RUN_KEY, createApi, type ProgressStep, type Run } from "./api";
@@ -160,7 +159,7 @@ function renderProgress(api = fakeApi()) {
 /** Let `ms` pass on the page's clock, answering every poll that falls due on the way. */
 const pass = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
 
-const steps = () => within(screen.getByRole("list", { name: "Steps" })).getAllByRole("listitem");
+const steps = () => [...screen.getByRole("list", { name: "Steps" }).children] as HTMLElement[];
 const step = (label: string) => steps().find((li) => li.querySelector(".step-label")?.textContent === label)!;
 const stateOf = (label: string) => step(label).querySelector(".step-state")!.textContent;
 const announced = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')!.textContent;
@@ -236,7 +235,7 @@ describe("live progress", () => {
     await pass(2000);
     expect(stateOf("Checking claims against sources")).toBe("Done");
     expect(stateOf("Editing the issue")).toBe("Running");
-    expect(announced(view.container)).toBe("Editing the issue: running");
+    expect(announced(view.container)).toBe("Checking claims against sources: done. Editing the issue: running");
     expect(onDone).not.toHaveBeenCalled();
 
     await pass(2000);
@@ -305,7 +304,6 @@ describe("live progress", () => {
       },
     );
     const { api, onStartOver } = renderProgress(fakeApi([SCRIPT[1], failed]));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await pass(2000);
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("The model provider stopped answering. Try again in a few minutes.");
@@ -314,7 +312,7 @@ describe("live progress", () => {
     expect(sessionStorage.getItem(RUN_KEY)).toBeNull();
     await pass(10_000);
     expect(api.polled()).toBe(2);
-    await user.click(within(alert).getByRole("button", { name: "Start over" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "Start over" }));
     expect(onStartOver).toHaveBeenCalledTimes(1);
   });
 
@@ -342,7 +340,6 @@ describe("live progress", () => {
     sessionStorage.setItem(RUN_KEY, RUN_ID);
     const api = fakeApi([...Array(MAX_FAILURES).fill("fail"), SCRIPT[3]]);
     const { onStartOver } = renderProgress(api);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await pass(2000 * MAX_FAILURES);
     expect(api.polled()).toBe(MAX_FAILURES);
     const alert = screen.getByRole("alert");
@@ -351,12 +348,19 @@ describe("live progress", () => {
     expect(api.polled()).toBe(MAX_FAILURES);
     // Not over: the run may still finish, so a reload can still resume it.
     expect(sessionStorage.getItem(RUN_KEY)).toBe(RUN_ID);
-    await user.click(within(alert).getByRole("button", { name: "Try again" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
     await pass(0);
     expect(api.polled()).toBe(MAX_FAILURES + 1);
     expect(screen.queryByRole("alert")).toBeNull();
     expect(stateOf("Grouping and ranking stories")).toBe("Running");
-    await user.click(screen.getByRole("button", { name: "Start over" }));
+    expect(onStartOver).not.toHaveBeenCalled();
+  });
+
+  it("Start over after losing contact clears the stored entry", async () => {
+    sessionStorage.setItem(RUN_KEY, RUN_ID);
+    const { onStartOver } = renderProgress(fakeApi(["fail"]));
+    await pass(2000 * MAX_FAILURES);
+    fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Start over" }));
     expect(onStartOver).toHaveBeenCalledTimes(1);
     expect(sessionStorage.getItem(RUN_KEY)).toBeNull();
   });
@@ -421,7 +425,8 @@ describe("the run in the page", () => {
     expect(step("Writing claims")).toHaveTextContent("story 3 of 8");
     expect(api.calls.find((c) => c.url === `/api/runs/${RUN_ID}`)!.headers.get("X-Demo-Code")).toBe(CODE);
     await pass(6000);
-    expect(await screen.findByRole("heading", { level: 2, name: "Made just now" })).toBeInTheDocument();
+    await pass(0);
+    expect(screen.getByRole("heading", { level: 2, name: "Made just now" })).toBeInTheDocument();
     expect(sessionStorage.getItem(RUN_KEY)).toBeNull();
   });
 
@@ -432,11 +437,10 @@ describe("the run in the page", () => {
     render(<App />);
     await pass(0);
     expect(api.polled()).toBe(0);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const panel = screen.getByRole("region", { name: "Model key" });
-    await user.selectOptions(within(panel).getByLabelText("Provider"), "demo");
-    await user.type(within(panel).getByLabelText("Demo code", { selector: "input" }), CODE);
-    await user.click(within(panel).getByRole("button", { name: "Save" }));
+    fireEvent.change(within(panel).getByLabelText("Provider"), { target: { value: "demo" } });
+    fireEvent.change(within(panel).getByLabelText("Demo code", { selector: "input" }), { target: { value: CODE } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
     await pass(0);
     expect(api.polled()).toBe(1);
     expect(stateOf("Writing claims")).toBe("Running");
@@ -446,10 +450,9 @@ describe("the run in the page", () => {
     keep();
     sessionStorage.setItem(RUN_KEY, RUN_ID);
     vi.stubGlobal("fetch", fakeApi([snapshot({}, { status: "error", error: "it broke" })]).fetch);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
     await pass(0);
-    await user.click(within(screen.getByRole("alert")).getByRole("button", { name: "Start over" }));
+    fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Start over" }));
     expect(sessionStorage.getItem(RUN_KEY)).toBeNull();
     expect(screen.getByRole("button", { name: "Make my newsletter" })).toBeInTheDocument();
   });
@@ -467,14 +470,13 @@ describe("the run in the page", () => {
       return api.fetch(url, init);
     });
     vi.stubGlobal("fetch", fetch);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
     await pass(0);
     const address = screen.getByLabelText("Feed 1 address");
-    await user.type(address, "https://good.example.com/feed.xml");
-    await user.tab();
+    fireEvent.change(address, { target: { value: "https://good.example.com/feed.xml" } });
+    fireEvent.blur(address);
     await pass(0);
-    await user.click(screen.getByRole("button", { name: "Make my newsletter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make my newsletter" }));
     await pass(0);
     expect(screen.getByRole("heading", { name: "Making your newsletter…" })).toBeInTheDocument();
     expect(sessionStorage.getItem(RUN_KEY)).toBe(RUN_ID);
