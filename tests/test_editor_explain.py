@@ -148,6 +148,33 @@ def test_an_unchecked_claim_still_gets_the_number_sentence():
     )
 
 
+def test_a_number_inside_a_link_is_neither_placed_there_nor_given_its_words():
+    # The 40 of the link is not a number; the claim's 40 is about watts, the passage's
+    # 71 about requests, so they share no words and are not paired.
+    sentence = explain(
+        "See https://x.org/40. The chip draws 40 watts.",
+        "The site x.org says 71 requests.",
+        "unsupported",
+        "Different thing.",
+    )
+    assert (
+        sentence
+        == 'The article does not say this. The checking model\'s reason: "Different thing."'
+    )
+
+
+def test_a_number_inside_a_claim_id_is_not_taken_for_the_claim_number():
+    assert (
+        explain(
+            "Per s3.c95 the model scores 95 on MMLU.",
+            "The model scores 71 on MMLU.",
+            "unsupported",
+            "",
+        )
+        == "The article says 71; the draft said 95."
+    )
+
+
 def test_a_reason_with_a_figure_in_neither_text_falls_back_to_the_plain_status():
     assert (
         explain(
