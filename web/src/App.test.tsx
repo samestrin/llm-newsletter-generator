@@ -56,7 +56,7 @@ async function openDraft(api = fakeApi(makeDraft())) {
   vi.stubGlobal("fetch", api.fetch);
   const user = userEvent.setup();
   const view = render(<App />);
-  await user.type(screen.getByLabelText("API token"), "good-token");
+  await user.type(await screen.findByLabelText("API token"), "good-token");
   await user.click(screen.getByRole("button", { name: "Connect" }));
   await user.click(await screen.findByRole("button", { name: /AI Weekly/ }));
   await screen.findByRole("heading", { level: 2, name: "AI Weekly" });
@@ -71,7 +71,7 @@ describe("connecting", () => {
     vi.stubGlobal("fetch", fakeApi(makeDraft()).fetch);
     const user = userEvent.setup();
     render(<App />);
-    await user.type(screen.getByLabelText("API token"), "good-token");
+    await user.type(await screen.findByLabelText("API token"), "good-token");
     await user.click(screen.getByRole("button", { name: "Connect" }));
     const item = await screen.findByRole("button", { name: /AI Weekly/ });
     expect(item).toHaveTextContent("2026-11-03");
@@ -83,7 +83,7 @@ describe("connecting", () => {
     vi.stubGlobal("fetch", fakeApi(makeDraft()).fetch);
     const user = userEvent.setup();
     render(<App />);
-    await user.type(screen.getByLabelText("API token"), "bad");
+    await user.type(await screen.findByLabelText("API token"), "bad");
     await user.click(screen.getByRole("button", { name: "Connect" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("missing or wrong token");
     expect(screen.getByLabelText("API token")).toBeInTheDocument();
@@ -308,17 +308,19 @@ describe("edit and approve", () => {
 /** A fetch whose replies the test hands out one at a time, to see the page while it waits. */
 function heldFetch() {
   const waiting: { url: string; reply: (status: number, body: unknown) => void }[] = [];
-  const fetch = vi.fn(
-    (url: string) =>
-      new Promise<Response>((resolve) => {
-        waiting.push({
-          url,
-          reply: (status, body) =>
-            resolve(
-              new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }),
-            ),
-        });
-      }),
+  const fetch = vi.fn((url: string) =>
+    // Today's server has no providers list: the page is in server-key mode.
+    url === "/api/providers"
+      ? Promise.resolve(new Response(JSON.stringify({ detail: "not found" }), { status: 404 }))
+      : new Promise<Response>((resolve) => {
+          waiting.push({
+            url,
+            reply: (status, body) =>
+              resolve(
+                new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }),
+              ),
+          });
+        }),
   );
   return {
     fetch,
@@ -339,7 +341,7 @@ async function connect(held: ReturnType<typeof heldFetch>, drafts: Draft[] = [ma
   vi.stubGlobal("fetch", held.fetch);
   const user = userEvent.setup();
   render(<App />);
-  await user.type(screen.getByLabelText("API token"), "good-token");
+  await user.type(await screen.findByLabelText("API token"), "good-token");
   await user.click(screen.getByRole("button", { name: "Connect" }));
   await held.reply("/api/drafts", 200, drafts.map(summary));
   await screen.findByRole("navigation", { name: "Drafts" });
@@ -352,7 +354,7 @@ describe("the draft list's states", () => {
     vi.stubGlobal("fetch", held.fetch);
     const user = userEvent.setup();
     render(<App />);
-    await user.type(screen.getByLabelText("API token"), "good-token");
+    await user.type(await screen.findByLabelText("API token"), "good-token");
     await user.click(screen.getByRole("button", { name: "Connect" }));
     expect(screen.getByRole("status")).toHaveTextContent("Loading the drafts…");
     expect(screen.getByRole("button", { name: "Connect" })).toBeDisabled();
@@ -375,7 +377,7 @@ describe("the draft list's states", () => {
     vi.stubGlobal("fetch", held.fetch);
     const user = userEvent.setup();
     render(<App />);
-    await user.type(screen.getByLabelText("API token"), "good-token");
+    await user.type(await screen.findByLabelText("API token"), "good-token");
     await user.click(screen.getByRole("button", { name: "Connect" }));
     await held.reply("/api/drafts", 500, {});
     expect(await screen.findByRole("alert")).toHaveTextContent(

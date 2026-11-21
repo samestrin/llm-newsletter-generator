@@ -1,4 +1,23 @@
 /** The review page's calls to `newsletter serve`: list, read, edit and approve drafts. */
+import { modelHeaders, type ModelCredentials } from "./modelAccess";
+
+/** One entry of `GET /api/providers` (plan 08's `providers.json`); it holds no secrets. */
+export type Provider = {
+  id: string;
+  label: string;
+  kind: "key" | "demo";
+  base_url: string;
+  fast_model: string;
+  reasoning_model: string;
+  /** `null` when the provider has no embedding model: stories are then not grouped by meaning. */
+  embedding_model: string | null;
+};
+
+/**
+ * How the page reaches the API: the review host's token (server-key mode, sent as
+ * `Authorization`), or the visitor's key or demo code (sent as the `X-Model-*` headers).
+ */
+export type Access = { token: string } | { model: ModelCredentials };
 
 export type Flag = {
   id: string;
@@ -74,9 +93,30 @@ export async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function createApi(token: string, base = "") {
+/**
+ * The providers a visitor may pick, asked with no credentials. `null` means the server is
+ * in server-key mode: it answered no list (today's server has no such route), an empty one,
+ * or nothing at all.
+ */
+export async function listProviders(base = ""): Promise<Provider[] | null> {
+  try {
+    const response = await fetch(`${base}/api/providers`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return Array.isArray(data) && data.length > 0 ? (data as Provider[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `onUnauthorized` hears every 401, so the page can ask for the key or token again. */
+export function createApi(access: Access, base = "", onUnauthorized?: (error: ApiError) => void) {
+  const secret = "token" in access ? access.token : access.model.secret;
+  const credentials: Record<string, string> =
+    "token" in access ? { Authorization: `Bearer ${access.token}` } : modelHeaders(access.model);
+
   async function call<T>(method: string, path: string, body?: object): Promise<T> {
-    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    const headers: Record<string, string> = { ...credentials };
     if (body) headers["Content-Type"] = "application/json";
     let response: Response;
     try {
@@ -91,10 +131,12 @@ export function createApi(token: string, base = "") {
     const data = await response.json().catch(() => undefined);
     if (!response.ok) {
       const detail = data?.detail;
-      throw new ApiError(
-        response.status,
-        typeof detail === "string" ? detail : `the API answered ${response.status}`,
-      );
+      // A message that echoes the secret is never shown: the page would render it. A secret
+      // under 4 characters is not looked for: it would match ordinary words.
+      const shown = typeof detail === "string" && !(secret.length >= 4 && detail.includes(secret));
+      const error = new ApiError(response.status, shown ? detail : `the API answered ${response.status}`);
+      if (response.status === 401) onUnauthorized?.(error);
+      throw error;
     }
     return data as T;
   }
