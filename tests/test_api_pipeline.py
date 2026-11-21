@@ -228,7 +228,11 @@ class Recorder:
 def test_a_run_reports_the_start_and_end_of_each_stage_in_order():
     progress = Recorder()
     run_issue(request(), replay(), fetch=web, voice=VoiceSettings(), progress=progress)
-    states = [(step, state) for step, state, _ in progress.events]
+    # A stage counting as it goes reports `running` again with each count: one entry each.
+    states = []
+    for step, state, _ in progress.events:
+        if not states or states[-1] != (step, state):
+            states.append((step, state))
     expected = [(stage, state) for stage in STAGES for state in ("running", "done")]
     assert states == [*expected, ("done", "running")]
     assert all(isinstance(detail, str | None) for _, _, detail in progress.events)
@@ -273,3 +277,99 @@ def test_a_failed_embedding_call_reports_the_grouping_as_failed():
     assert content["report"]["grouping_error"]
     grouping = [state for step, state, _ in progress.events if step == "grouping"]
     assert grouping == ["running", "failed"]
+
+
+# Live progress: the counts inside each stage, `done` of `total` and a detail as it goes.
+
+GONE = "https://gone.example.org/feed.xml"
+MYSTERY = "https://mystery.example.org/launch"
+
+
+class Counts:
+    def __init__(self):
+        self.events = []
+
+    def __call__(self, step, state, *, detail=None, done=None, total=None):
+        self.events.append(
+            {"step": step, "state": state, "detail": detail, "done": done, "total": total}
+        )
+
+    def of(self, step):
+        return [event for event in self.events if event["step"] == step]
+
+
+def mystery_gone(url, headers, timeout):
+    """The run's fake web, with the article one Hacker News story links to gone."""
+    return HttpResponse(404) if url == MYSTERY else run_web(url, headers, timeout)
+
+
+def counted_run(progress=None) -> dict:
+    llm = LLMClient(Settings.from_env(ENV), transport=model(embed=by_meaning))
+    run = request(
+        feeds=[NEWS, GONE],
+        pages=[PAGE],
+        hackernews=HackerNewsConfig(min_score=100),
+        topic="open-weight language models",
+    )
+    extra = {} if progress is None else {"progress": progress}
+    return run_issue(run, llm, fetch=mystery_gone, voice=VoiceSettings(), **extra)
+
+
+def test_each_stage_ends_with_counts_equal_to_the_real_totals():
+    progress = Counts()
+    report = counted_run(progress)["report"]
+    last = {event["step"]: event for event in progress.events}
+    calls = [step["step"] for step in report["steps"]]
+
+    # Two feeds, one page and Hacker News: four sources, the gone feed failed.
+    (gone,) = [f for f in report["failed_sources"] if f["url"] == GONE]
+    assert (last["feeds"]["done"], last["feeds"]["total"]) == (4, 4)
+    assert last["feeds"]["detail"] == f"3 of 4 loaded, 1 failed: {GONE} {gone['reason']}"
+
+    # Two Hacker News stories link out; the mystery article could not be read.
+    statuses = [a["status"] for a in report["linked_articles"]]
+    assert statuses == ["fetched", "skipped"]
+    assert (last["articles"]["done"], last["articles"]["total"]) == (2, 2)
+    assert last["articles"]["detail"] == (
+        "1 of 2 fetched, 1 left out: the linked article could not be read"
+    )
+
+    stories = sum(1 for call in calls if call.startswith("claims-"))
+    checks = sum(1 for call in calls if call.startswith("check-"))
+    assert stories and checks
+    assert (last["claims"]["done"], last["claims"]["total"]) == (stories, stories)
+    assert (last["check"]["done"], last["check"]["total"]) == (checks, checks)
+    assert f"story {stories} of {stories}" in [e["detail"] for e in progress.of("claims")]
+    assert f"{checks} of {checks}" in [e["detail"] for e in progress.of("check")]
+
+
+def test_counts_only_go_up_and_each_total_never_changes():
+    progress = Counts()
+    counted_run(progress)
+    for step in ("feeds", "articles", "claims", "check"):
+        events = progress.of(step)
+        dones = [e["done"] for e in events if e["done"] is not None]
+        totals = {e["total"] for e in events if e["total"] is not None}
+        assert len(dones) > 2, step  # Counted as it goes, not only at the end.
+        assert dones == sorted(dones), step
+        assert dones[0] == 0, step
+        assert len(totals) == 1 and dones[-1] == totals.pop(), step
+
+
+def test_a_stage_with_nothing_to_count_says_so():
+    progress = Counts()
+    run_issue(request(), replay(), fetch=web, voice=VoiceSettings(), progress=progress)
+    articles = progress.of("articles")[-1]
+    assert (articles["done"], articles["total"]) == (0, 0)
+    assert articles["detail"] == "0 of 0 fetched"
+    feeds = progress.of("feeds")[-1]
+    assert feeds["detail"] == "1 of 1 loaded"
+
+
+def test_a_counted_run_without_a_progress_callback_is_unchanged():
+    def timeless(content):  # A model call's `seconds` is wall-clock time.
+        for step in content["report"]["steps"]:
+            step.pop("seconds")
+        return content
+
+    assert timeless(counted_run(Counts())) == timeless(counted_run())

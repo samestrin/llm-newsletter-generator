@@ -787,12 +787,16 @@ class SteppedRunner:
     """The real pipeline with the recorded model and feeds, pausing after every progress
     event until the test has polled the run."""
 
-    def __init__(self, llm):
+    def __init__(self, llm, fetch=None, **changes):
         self.llm = llm
+        self.fetch = fetch
+        self.changes = changes
         self.emitted = threading.Semaphore(0)
         self.go = threading.Semaphore(0)
 
     def __call__(self, request, progress=None):
+        from dataclasses import replace
+
         from newsletter.api.pipeline import run_issue
         from newsletter.voice import VoiceSettings
         from test_api_pipeline import web
@@ -802,14 +806,19 @@ class SteppedRunner:
             self.emitted.release()
             assert self.go.acquire(timeout=10)
 
-        return run_issue(request, self.llm, fetch=web, voice=VoiceSettings(), progress=report)
+        request = replace(request, **self.changes)
+        fetch = self.fetch or web
+        return run_issue(request, self.llm, fetch=fetch, voice=VoiceSettings(), progress=report)
 
 
-def poll_every_step(tmp_path, llm) -> tuple[list[list[dict]], dict]:
+def poll_every_step(
+    tmp_path, llm, feeds=None, fetch=None, **changes
+) -> tuple[list[list[dict]], dict]:
     from test_api_pipeline import CASE
 
-    runner = SteppedRunner(llm)
-    body = {"feeds": [CASE.feed_url], "title": "Open models week", "topic": "AI models"}
+    runner = SteppedRunner(llm, fetch, **changes)
+    feeds = feeds or [CASE.feed_url]
+    body = {"feeds": feeds, "title": "Open models week", "topic": "AI models"}
     seen = []
     with TestClient(create_app(make_settings(tmp_path), runner=runner)) as client:
         started = client.post("/api/runs", json=body, headers=headers())
@@ -874,6 +883,57 @@ def test_a_polled_run_whose_editor_fails_shows_the_editor_failed(tmp_path):
     assert final["status"] == "done"
     assert states_of(seen, "Editing the issue") == ["waiting", "running", "failed"]
     assert states_of(seen, "Done") == ["waiting", "running", "done"]
+
+
+def test_a_polled_run_counts_each_stage_up_to_its_real_totals(tmp_path):
+    from newsletter.llm import LLMClient, Settings
+    from test_api_pipeline import GONE, mystery_gone
+    from test_cli import ENV, NEWS, PAGE, by_meaning, model
+
+    llm = LLMClient(Settings.from_env(ENV), transport=model(embed=by_meaning))
+    seen, final = poll_every_step(
+        tmp_path,
+        llm,
+        feeds=[NEWS, GONE],
+        fetch=mystery_gone,
+        pages=[PAGE],
+        hackernews=HackerNewsConfig(min_score=100),
+        topic="open-weight language models",
+    )
+    assert final["status"] == "done", final
+    report = client_draft_report(tmp_path, final["draft_id"])
+    calls = [step["step"] for step in report["steps"]]
+    stories = sum(1 for call in calls if call.startswith("claims-"))
+    checks = sum(1 for call in calls if call.startswith("check-"))
+    steps = {step["id"]: step for step in final["progress"]}
+
+    assert (steps["feeds"]["done"], steps["feeds"]["total"]) == (4, 4)
+    assert steps["feeds"]["detail"] == f"3 of 4 loaded, 1 failed: {GONE} HTTP 404"
+    assert (steps["articles"]["done"], steps["articles"]["total"]) == (2, 2)
+    assert steps["articles"]["detail"] == (
+        "1 of 2 fetched, 1 left out: the linked article could not be read"
+    )
+    assert (steps["claims"]["done"], steps["claims"]["total"]) == (stories, stories)
+    assert (steps["check"]["done"], steps["check"]["total"]) == (checks, checks)
+
+    # Polled as it went: every count only goes up, every total stays put.
+    for step in ("feeds", "articles", "claims", "check"):
+        counts = [
+            (entry["done"], entry["total"])
+            for progress in seen
+            for entry in progress
+            if entry["id"] == step and entry["done"] is not None
+        ]
+        assert len({done for done, _ in counts}) > 2, step
+        assert [done for done, _ in counts] == sorted(done for done, _ in counts), step
+        assert len({total for _, total in counts}) == 1, step
+
+
+def client_draft_report(tmp_path, draft_id: str) -> dict:
+    with TestClient(create_app(make_settings(tmp_path))) as client:
+        draft = client.get(f"/api/drafts/{draft_id}", headers=headers())
+        assert draft.status_code == 200, draft.text
+        return draft.json()["report"]
 
 
 def test_no_model_text_or_key_appears_in_any_progress_detail(tmp_path):

@@ -42,8 +42,9 @@ def run_issue(
     voice_transport: httpx.BaseTransport | None = None,
     progress: Progress = no_progress,
 ) -> dict:
-    """`progress` hears the start and end of each stage, then `done` as running: the
-    caller marks it done once the draft is saved."""
+    """`progress` hears the start and end of each stage, with the feeds, articles, claims
+    and checks counted `done` of `total` as they go, then `done` as running: the caller
+    marks it done once the draft is saved."""
     gathered = gather_stories(
         request.feeds,
         pages=request.pages,
@@ -56,20 +57,35 @@ def run_issue(
     )
     stories = gathered.stories
 
-    progress("claims", "running")
-    claims = summarize_stories(stories, llm)
+    def on_story(number: int, total: int) -> None:
+        progress(
+            "claims", "running", detail=f"story {number} of {total}", done=number - 1, total=total
+        )
+
+    progress("claims", "running", done=0, total=len(stories))
+    claims = summarize_stories(stories, llm, on_story=on_story)
     written = sum(len(summary.claims) for summary in claims.summaries)
     progress(
         "claims",
         "done",
         detail=f"{plural(written, 'claim')} from {plural(len(stories), 'story', 'stories')}",
+        done=len(stories),
+        total=len(stories),
     )
 
-    progress("check", "running")
-    checked = check_claims(claims, llm)
+    def on_check(done: int, total: int) -> None:
+        progress("check", "running", detail=f"{done} of {total}", done=done, total=total)
+
+    checked = check_claims(claims, llm, on_check=on_check)
     checks = [claim for story in checked.stories for claim in story.claims]
     flagged = sum(1 for claim in checks if claim.flagged)
-    progress("check", "done", detail=f"{plural(len(checks), 'claim')} checked, {flagged} flagged")
+    progress(
+        "check",
+        "done",
+        detail=f"{plural(len(checks), 'claim')} checked, {flagged} flagged",
+        done=len(checks),
+        total=len(checks),
+    )
 
     progress("editor", "running")
     edition = edit_issue(checked, llm)

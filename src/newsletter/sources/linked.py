@@ -8,7 +8,7 @@ recorded for the run report.
 """
 
 import re
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass, field, replace
 from typing import Literal
 
@@ -65,19 +65,34 @@ def is_link_only(item: Item) -> bool:
     return len(own_text(item)) < MIN_TEXT_CHARS
 
 
-def read_linked(items: Iterable[Item], pages: PageSource, *, keep: Collection[str] = ()) -> Linked:
+def read_linked(
+    items: Iterable[Item],
+    pages: PageSource,
+    *,
+    keep: Collection[str] = (),
+    on_article: Callable[[list[LinkedArticle], int], None] | None = None,
+) -> Linked:
     """Each link-only item with its article's main text as its summary; an item from a
-    feed in `keep` (a web page already read) is left as it is."""
+    feed in `keep` (a web page already read) is left as it is.
+
+    `on_article` hears the articles read or skipped so far and how many there are to read,
+    once before the first and again after each."""
+    items = list(items)
+    to_read = [item.feed_url not in keep and is_link_only(item) for item in items]
     linked = Linked()
-    for item in items:
-        if item.feed_url in keep or not is_link_only(item):
+    if on_article:
+        on_article(linked.articles, sum(to_read))
+    for item, link_only in zip(items, to_read, strict=True):
+        if not link_only:
             linked.items.append(item)
             continue
         try:
             article = pages.read(item.link)
         except FetchError as error:
             linked.articles.append(LinkedArticle(item.title, item.link, "skipped", str(error)))
-            continue
-        linked.items.append(replace(item, link=article.link, summary=article.summary))
-        linked.articles.append(LinkedArticle(item.title, article.link, "fetched", None))
+        else:
+            linked.items.append(replace(item, link=article.link, summary=article.summary))
+            linked.articles.append(LinkedArticle(item.title, article.link, "fetched", None))
+        if on_article:
+            on_article(linked.articles, sum(to_read))
     return linked
