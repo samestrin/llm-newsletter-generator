@@ -3,11 +3,14 @@ import {
   ApiError,
   createApi,
   listProviders,
+  loadMine,
+  rememberRun,
   type Access,
   type Api,
   type Draft,
   type DraftSummary,
   type Provider,
+  type Run,
 } from "./api";
 import { DraftView } from "./DraftView";
 import { KeyPanel } from "./KeyPanel";
@@ -19,6 +22,7 @@ import {
   type StoredCredentials,
 } from "./modelAccess";
 import { RunReport } from "./Report";
+import { StartForm } from "./StartForm";
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? "";
 
@@ -50,6 +54,8 @@ export default function App() {
   const [drafts, setDrafts] = useState<Loaded<DraftSummary[]>>({ state: "idle" });
   const [draft, setDraft] = useState<Loaded<Draft>>({ state: "idle" });
   const [draftId, setDraftId] = useState<string | null>(null);
+  // The run this visit started from the form; its live progress is the next screen's.
+  const [run, setRun] = useState<Run | null>(null);
   // Only the draft opened last may fill the page, whatever order the answers come in.
   const latest = useRef<string | null>(null);
   // With providers, a 401 is the key panel's to explain; the list does not say it again.
@@ -111,14 +117,27 @@ export default function App() {
     setCredentials(null);
     setApi(null);
     setDrafts({ state: "idle" });
+    showForm();
+    setPanel({ open: true, error: null });
+  }
+
+  /** Back to the form: no draft open, no run shown. */
+  function showForm() {
     latest.current = null;
     setDraftId(null);
     setDraft({ state: "idle" });
-    setPanel({ open: true, error: null });
+    setRun(null);
+  }
+
+  function started(made: Run) {
+    rememberRun(made);
+    showForm();
+    setRun(made);
   }
 
   async function open(id: string) {
     if (!api) return;
+    setRun(null);
     latest.current = id;
     setDraftId(id);
     setDraft({ state: "loading" });
@@ -143,6 +162,14 @@ export default function App() {
           },
     );
   }
+
+  const demo = mode.kind === "keys";
+  // The seeded example: in demo mode the API lists it and this browser's drafts only, so it
+  // is the oldest listed draft this browser did not make.
+  const example =
+    demo && drafts.state === "ready"
+      ? drafts.value.filter((d) => !loadMine().drafts.includes(d.id)).at(-1)?.id
+      : undefined;
 
   const listStatus =
     drafts.state === "loading" ? (
@@ -180,10 +207,19 @@ export default function App() {
           onClose={() => setPanel({ open: false, error: null })}
         />
       )}
-      <div className={api ? "layout layout-split" : "layout"}>
+      <div className={api ? `layout layout-split${demo ? " layout-demo" : ""}` : "layout"}>
         {api && (
-          <nav aria-label="Drafts">
-            <h2 className="sr-only">Drafts</h2>
+          <nav aria-label={demo ? "Earlier drafts" : "Drafts"}>
+            {demo ? (
+              <>
+                <button type="button" onClick={showForm} aria-current={!draftId && !run ? "page" : undefined}>
+                  Make a newsletter
+                </button>
+                <h2>Earlier drafts</h2>
+              </>
+            ) : (
+              <h2 className="sr-only">Drafts</h2>
+            )}
             <button
               type="button"
               className="refresh"
@@ -195,7 +231,9 @@ export default function App() {
             {listStatus}
             {drafts.state === "ready" &&
               (drafts.value.length === 0 ? (
-                <p className="state">No drafts yet. Start a run with POST /api/runs, then refresh the list.</p>
+                <p className="state">
+                  {demo ? "No earlier drafts yet." : "No drafts yet. Start a run with POST /api/runs, then refresh the list."}
+                </p>
               ) : (
                 <ul>
                   {drafts.value.map((d) => (
@@ -247,6 +285,10 @@ export default function App() {
               </button>
               {listStatus}
             </form>
+          ) : run ? (
+            <p role="status" className="state">
+              Making your newsletter…
+            </p>
           ) : draft.state === "ready" ? (
             <DraftView key={draft.value.id} api={api} draft={draft.value} onChange={changed} />
           ) : draft.state === "loading" ? (
@@ -263,6 +305,8 @@ export default function App() {
                 Try again
               </button>
             </div>
+          ) : demo ? (
+            <StartForm api={api} onStarted={started} onExample={example ? () => open(example) : undefined} />
           ) : (
             drafts.state === "ready" &&
             drafts.value.length > 0 && <p className="state">Choose a draft to review.</p>

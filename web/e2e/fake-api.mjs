@@ -4,6 +4,9 @@
 // (title, text, flags, report...) in place of the seed's. `POST /__keys` turns on demo
 // mode until the next reset: `GET /api/providers` lists providers, and the draft endpoints
 // take the demo code or OpenRouter key below as `X-Model-*` headers instead of the token.
+// In demo mode it also serves plan 08.1's `GET /api/presets`, `POST /api/feeds/check`
+// (answers from FEEDS below) and `POST /api/runs` (409 with `retry_after` while `busy`,
+// set by `POST /__busy`; otherwise a queued run with an owner token).
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -29,7 +32,19 @@ const PROVIDERS = [
   provider("alibaba", "Alibaba", "key", "text-embedding-v4"),
   provider("synthetic", "Synthetic", "key", null),
 ];
+const FEEDS = {
+  "https://good.example.com/feed.xml": { ok: true, title: "Good news", items: 20, error: null },
+  "https://also.example.com/rss": { ok: true, title: "Also good", items: 4, error: null },
+  "https://down.example.com/feed.xml": { ok: false, title: null, items: 0, error: "This address did not answer" },
+  "https://page.example.com/": { ok: false, title: null, items: 0, error: "This is a web page, not a feed" },
+  "https://empty.example.com/feed.xml": { ok: false, title: null, items: 0, error: "This feed has no items" },
+};
+const PRESETS = [
+  { id: "ai", label: "AI news", feeds: ["https://good.example.com/feed.xml", "https://also.example.com/rss"] },
+  { id: "science", label: "Science", feeds: ["https://also.example.com/rss"] },
+];
 let keys = false;
+let busy = false;
 
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
@@ -96,6 +111,11 @@ createServer(async (req, res) => {
     }
     draft = { ...seed(), ...fields };
     keys = false;
+    busy = false;
+    return send(res, 200, { ok: true });
+  }
+  if (method === "POST" && url === "/__busy") {
+    busy = true;
     return send(res, 200, { ok: true });
   }
   if (method === "POST" && url === "/__keys") {
@@ -127,6 +147,29 @@ createServer(async (req, res) => {
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return send(res, 400, { detail: "the body must be a JSON object" });
     }
+  }
+  if (keys && method === "GET" && url === "/api/presets") return send(res, 200, PRESETS);
+  if (keys && method === "POST" && url === "/api/feeds/check") {
+    return send(res, 200, FEEDS[body.url] ?? FEEDS["https://down.example.com/feed.xml"]);
+  }
+  if (keys && method === "POST" && url === "/api/runs") {
+    if (busy) {
+      res.setHeader("Retry-After", "1");
+      return send(res, 409, { detail: "a run is already going", retry_after: 1 });
+    }
+    const stamp = new Date().toISOString();
+    return send(res, 202, {
+      id: "run00000000000000000000000000001",
+      status: "queued",
+      error: null,
+      draft_id: null,
+      feeds: body.feeds,
+      title: "Newsletter",
+      created_at: stamp,
+      started_at: null,
+      finished_at: null,
+      owner_token: "e2e-owner-token",
+    });
   }
   if (method === "GET" && url === "/api/drafts") {
     const { text: _t, report: _r, approval: _a, flags, ...summary } = draft;
