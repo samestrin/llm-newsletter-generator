@@ -210,3 +210,55 @@ def test_a_run_with_items_and_no_embedding_model_fails_with_the_setting_named():
     llm = LLMClient(Settings.from_env(env), transport=model())
     with pytest.raises(ConfigError, match="NEWSLETTER_EMBEDDING_MODEL"):
         run_issue(request(feeds=[NEWS]), llm, fetch=run_web, voice=VoiceSettings())
+
+
+# Live progress: the start and end of each stage, reported to an optional callback.
+
+STAGES = ["feeds", "articles", "grouping", "claims", "check", "editor"]
+
+
+class Recorder:
+    def __init__(self):
+        self.events = []
+
+    def __call__(self, step, state, *, detail=None, done=None, total=None):
+        self.events.append((step, state, detail))
+
+
+def test_a_run_reports_the_start_and_end_of_each_stage_in_order():
+    progress = Recorder()
+    run_issue(request(), replay(), fetch=web, voice=VoiceSettings(), progress=progress)
+    states = [(step, state) for step, state, _ in progress.events]
+    expected = [(stage, state) for stage in STAGES for state in ("running", "done")]
+    assert states == [*expected, ("done", "running")]
+    assert all(isinstance(detail, str | None) for _, _, detail in progress.events)
+
+
+def test_a_run_whose_editor_fails_reports_the_editor_as_failed():
+    recorded = {k: v for k, v in CASE.recorded.items() if not k.startswith("edit")}
+    llm = Replay(Settings(models=CASE.models), recorded)
+    progress = Recorder()
+    content = run_issue(request(), llm, fetch=web, voice=VoiceSettings(), progress=progress)
+    assert content["report"]["editor_error"]
+    editor = [state for step, state, _ in progress.events if step == "editor"]
+    assert editor == ["running", "failed"]
+
+
+def test_progress_details_hold_counts_and_no_model_text():
+    marker = "MODEL-WROTE-THIS"
+    progress = Recorder()
+    llm = replay({"edit": {"content": {**CASE.recorded["edit"]["content"], "lead": marker}}})
+    run_issue(request(), llm, fetch=web, voice=VoiceSettings(), progress=progress)
+    details = [detail for _, _, detail in progress.events if detail]
+    assert details, "every finished stage says what it did"
+    for detail in details:
+        assert marker not in detail
+        assert any(ch.isdigit() for ch in detail)
+
+
+def test_a_run_without_a_progress_callback_is_unchanged():
+    without = run_issue(request(), replay(), fetch=web, voice=VoiceSettings())
+    with_progress = run_issue(
+        request(), replay(), fetch=web, voice=VoiceSettings(), progress=Recorder()
+    )
+    assert with_progress == without

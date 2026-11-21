@@ -52,7 +52,7 @@ class FakeRunner:
         self.block = block
         self.requests = []
 
-    def __call__(self, request):
+    def __call__(self, request, progress=None):
         self.requests.append(request)
         if self.block is not None:
             self.block.wait(10)
@@ -767,3 +767,223 @@ def test_a_port_past_65535_is_refused():
 
     with pytest.raises(ConfigError, match="NEWSLETTER_API_PORT"):
         ApiSettings.from_env({"NEWSLETTER_API_PORT": "70000"})
+
+
+# Live progress: every step of a run, polled while it goes.
+
+LABELS = [
+    "Fetching feeds",
+    "Reading articles",
+    "Grouping and ranking stories",
+    "Writing claims",
+    "Checking claims against sources",
+    "Editing the issue",
+    "Done",
+]
+
+
+class SteppedRunner:
+    """The real pipeline with the recorded model and feeds, pausing after every progress
+    event until the test has polled the run."""
+
+    def __init__(self, llm):
+        self.llm = llm
+        self.emitted = threading.Semaphore(0)
+        self.go = threading.Semaphore(0)
+
+    def __call__(self, request, progress=None):
+        from newsletter.api.pipeline import run_issue
+        from newsletter.voice import VoiceSettings
+        from test_api_pipeline import web
+
+        def report(*args, **kwargs):
+            progress(*args, **kwargs)
+            self.emitted.release()
+            assert self.go.acquire(timeout=10)
+
+        return run_issue(request, self.llm, fetch=web, voice=VoiceSettings(), progress=report)
+
+
+def poll_every_step(tmp_path, llm) -> tuple[list[list[dict]], dict]:
+    from test_api_pipeline import CASE
+
+    runner = SteppedRunner(llm)
+    body = {"feeds": [CASE.feed_url], "title": "Open models week", "topic": "AI models"}
+    seen = []
+    with TestClient(create_app(make_settings(tmp_path), runner=runner)) as client:
+        started = client.post("/api/runs", json=body, headers=headers())
+        assert started.status_code == 202, started.text
+        run_id = started.json()["id"]
+        seen.append(started.json()["progress"])
+        while not client.app.state.jobs.wait(run_id, 0):
+            if runner.emitted.acquire(timeout=0.05):
+                seen.append(client.get(f"/api/runs/{run_id}", headers=headers()).json()["progress"])
+                runner.go.release()
+        final = client.get(f"/api/runs/{run_id}", headers=headers()).json()
+    seen.append(final["progress"])
+    return seen, final
+
+
+def states_of(seen: list[list[dict]], label: str) -> list[str]:
+    states = []
+    for progress in seen:
+        (step,) = [step for step in progress if step["label"] == label]
+        if not states or states[-1] != step["state"]:
+            states.append(step["state"])
+    return states
+
+
+def test_a_polled_run_shows_every_step_go_waiting_running_done_in_order(tmp_path):
+    from test_api_pipeline import replay
+
+    seen, final = poll_every_step(tmp_path, replay())
+    assert final["status"] == "done", final
+    assert [step["label"] for step in final["progress"]] == LABELS
+    assert all(step["state"] == "waiting" for step in seen[0])
+    for label in LABELS:
+        assert states_of(seen, label) == ["waiting", "running", "done"], label
+    # One step at a time, in the order of the list.
+    for progress in seen:
+        running = [i for i, step in enumerate(progress) if step["state"] == "running"]
+        assert len(running) <= 1
+        if running:
+            assert all(step["state"] == "done" for step in progress[: running[0]])
+            assert all(step["state"] == "waiting" for step in progress[running[0] + 1 :])
+    for step in final["progress"]:
+        assert step["started_at"] and step["ended_at"]
+        assert step["started_at"] <= step["ended_at"]
+        assert set(step) == {
+            "id",
+            "label",
+            "state",
+            "done",
+            "total",
+            "detail",
+            "started_at",
+            "ended_at",
+        }
+
+
+def test_a_polled_run_whose_editor_fails_shows_the_editor_failed(tmp_path):
+    from newsletter.llm import Settings
+    from test_api_pipeline import CASE, Replay
+
+    recorded = {k: v for k, v in CASE.recorded.items() if not k.startswith("edit")}
+    seen, final = poll_every_step(tmp_path, Replay(Settings(models=CASE.models), recorded))
+    assert final["status"] == "done"
+    assert states_of(seen, "Editing the issue") == ["waiting", "running", "failed"]
+    assert states_of(seen, "Done") == ["waiting", "running", "done"]
+
+
+def test_no_model_text_or_key_appears_in_any_progress_detail(tmp_path):
+    from test_api_pipeline import CASE, replay
+
+    model_text = f"MODEL-WROTE-THIS {LLM_KEY}"  # The key rides in the model's reply.
+    edit = {**CASE.recorded["edit"]["content"], "lead": model_text}
+    llm = replay({"edit": {"content": edit}})
+    seen, final = poll_every_step(tmp_path, llm)
+    details = [step["detail"] for progress in seen for step in progress if step["detail"]]
+    assert details
+    for detail in details:
+        assert "MODEL-WROTE-THIS" not in detail
+        for secret in (TOKEN, LLM_KEY, VOICE_KEY):
+            assert secret not in detail
+
+
+class Emits:
+    """A runner that reports the given progress events, then returns or raises."""
+
+    def __init__(self, events, result=CONTENT):
+        self.events = events
+        self.result = result
+
+    def __call__(self, request, progress=None):
+        for step, state, extra in self.events:
+            progress(step, state, **extra)
+        if isinstance(self.result, Exception):
+            raise self.result
+        return dict(self.result)
+
+
+def progress_of(tmp_path, runner, **changes) -> dict:
+    with TestClient(create_app(make_settings(tmp_path, **changes), runner=runner)) as client:
+        run = run_and_wait(client)
+        assert client.app.state.jobs.wait_idle(5)
+        stored = (tmp_path / "data" / "runs" / f"{run['id']}.json").read_text("utf-8")
+    return run, {step["id"]: step for step in run["progress"]}, stored
+
+
+def test_every_progress_detail_passes_through_the_redactor(tmp_path):
+    leaky = f"3 of 4 feeds, key {LLM_KEY} {VOICE_KEY} {TOKEN}"
+    events = [("feeds", "running", {}), ("feeds", "done", {"detail": leaky, "done": 3, "total": 4})]
+    run, steps, stored = progress_of(tmp_path, Emits(events))
+    assert steps["feeds"]["detail"] == "3 of 4 feeds, key [redacted] [redacted] [redacted]"
+    assert (steps["feeds"]["done"], steps["feeds"]["total"]) == (3, 4)
+    for secret in (TOKEN, LLM_KEY, VOICE_KEY):
+        assert secret not in stored
+
+
+def test_a_run_that_raises_fails_its_running_step_and_skips_the_rest(tmp_path):
+    events = [("feeds", "running", {}), ("feeds", "done", {}), ("articles", "running", {})]
+    run, steps, _ = progress_of(tmp_path, Emits(events, RuntimeError("boom")))
+    assert run["status"] == "error"
+    assert steps["feeds"]["state"] == "done"
+    assert steps["articles"]["state"] == "failed" and steps["articles"]["ended_at"]
+    assert {steps[i]["state"] for i in ("grouping", "claims", "check", "editor", "done")} == {
+        "skipped"
+    }
+
+
+def test_a_run_past_its_timeout_fails_its_running_step_and_ignores_later_events(tmp_path):
+    release = threading.Event()
+
+    def slow(request, progress=None):
+        progress("feeds", "running")
+        release.wait(10)
+        progress("feeds", "done", detail="late")
+        return dict(CONTENT)
+
+    settings = make_settings(tmp_path, NEWSLETTER_RUN_TIMEOUT="0.1")
+    with TestClient(create_app(settings, runner=slow)) as client:
+        run = run_and_wait(client)
+        release.set()
+        assert client.app.state.jobs.wait_idle(5)
+        after = client.get(f"/api/runs/{run['id']}", headers=headers()).json()
+    assert after == run
+    steps = {step["id"]: step for step in after["progress"]}
+    assert steps["feeds"]["state"] == "failed"
+    assert steps["feeds"]["detail"] is None
+    assert steps["done"]["state"] == "skipped"
+
+
+def test_a_runner_that_reports_nothing_still_ends_with_done(tmp_path):
+    run, steps, _ = progress_of(tmp_path, FakeRunner())
+    assert run["status"] == "done"
+    assert steps["done"]["state"] == "done"
+    assert all(steps[i]["state"] == "skipped" for i in list(steps)[:-1])
+
+
+def test_a_run_cut_off_by_a_restart_fails_its_running_step(tmp_path):
+    release = threading.Event()
+    settings = make_settings(tmp_path)
+
+    def stuck(request, progress=None):
+        progress("feeds", "running")
+        release.wait(10)
+        return dict(CONTENT)
+
+    app = create_app(settings, runner=stuck)
+    with TestClient(app) as client:
+        response = client.post("/api/runs", json=RUN, headers=headers())
+        run_id = response.json()["id"]
+        for _ in range(100):
+            got = client.get(f"/api/runs/{run_id}", headers=headers()).json()
+            if got["progress"][0]["state"] == "running":
+                break
+            threading.Event().wait(0.02)
+    with TestClient(create_app(settings, runner=FakeRunner())) as client:
+        after = client.get(f"/api/runs/{run_id}", headers=headers()).json()
+    release.set()
+    assert after["status"] == "error"
+    states = [step["state"] for step in after["progress"]]
+    assert states == ["failed", *["skipped"] * 6]
