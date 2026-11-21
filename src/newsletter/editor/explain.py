@@ -1,8 +1,9 @@
 """Why a claim is flagged, in one or two plain sentences built in code.
 
-The numbers are read with the voice check's extractor (`extract_facts`). When a number
-of the claim is missing from its passage and the passage has a different number near
-the same words, the sentence says both: "The article says 71; the draft said 95."
+The numbers are read with the voice check's extractor (`number_matches`: the numbers
+of `extract_facts`, with their places). When a number of the claim is missing from its
+passage and the passage has a different number near the same words, the sentence says
+both: "The article says 71; the draft said 95."
 Otherwise it says the check's status in plain words, then the checking model's reason,
 marked as the model's. Every figure in the sentence must be in the claim or the
 passage; when one is not (a model reason can say anything), the status is said alone.
@@ -11,7 +12,7 @@ passage; when one is not (a model reason can say anything), the status is said a
 import re
 
 from newsletter.editor.faithfulness import Status
-from newsletter.voice.check import extract_facts
+from newsletter.voice.check import extract_facts, number_matches
 
 PLAIN = {
     "unsupported": "The article does not say this.",
@@ -75,18 +76,20 @@ def _changed_numbers(claim: str, passage: str) -> str | None:
 
 
 def _numbers(text: str) -> list[tuple[str, frozenset[str], frozenset[str]]]:
-    """Each number of `text` in order, with the content words just before and after it."""
+    """Each number of `text` in order, with the content words just before and after it.
+
+    The words are read from the text the numbers were read from, links and claim ids
+    blanked, so a link's words are never a number's context."""
+    matches = number_matches(text)
+    blanked = matches[0].string if matches else text
     words: list[str] = []
     found: list[tuple[str, int]] = []
     at = 0
-    for number in extract_facts(text).numbers:
-        start = text.find(number, at)
-        if start < 0:
-            continue
-        words += _content_words(text[at:start])
-        found.append((number, len(words)))
-        at = start + len(number)
-    words += _content_words(text[at:])
+    for match in matches:
+        words += _content_words(blanked[at : match.start()])
+        found.append((match.group(), len(words)))
+        at = match.end()
+    words += _content_words(blanked[at:])
     return [
         (
             number,
