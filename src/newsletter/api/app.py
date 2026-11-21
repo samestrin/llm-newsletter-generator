@@ -118,6 +118,9 @@ class RunView(BaseModel):
     finished_at: str | None
     progress: list[ProgressStep] = Field(default_factory=list)
     """Empty for a run from before progress was kept."""
+    editor_message: str | None = None
+    """When the editor failed in a finished run, one plain sentence saying so; the raw
+    error is only in the draft's report, as `editor_error`."""
 
 
 class FlaggedClaim(BaseModel):
@@ -148,6 +151,7 @@ class RunReport(BaseModel):
     dropped_claims: list[dict[str, Any]] | None = None
     flagged_claims: list[dict[str, Any]] | None = None
     editor_error: str | None = None
+    editor_message: str | None = None
     editor_rejections: list[str] | None = None
     steps: list[dict[str, Any]] | None = None
     total_cost: float | None = None

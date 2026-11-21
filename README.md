@@ -93,7 +93,8 @@ The CLI talks to any OpenAI-compatible endpoint; all model settings come from th
 | `NEWSLETTER_REASONING_MODEL` | Model for the editor pass and the writer's voice; required by `newsletter issue` |
 | `NEWSLETTER_EMBEDDING_MODEL` | Model that groups copies of one story and ranks stories by the topic; required by `newsletter issue` and by a `serve` run |
 | `NEWSLETTER_<TIER>_PRICE_INPUT` / `NEWSLETTER_<TIER>_PRICE_OUTPUT` | USD per million tokens; without them the cost the server reports is used, else the cost is unknown |
-| `NEWSLETTER_TIMEOUT` | Seconds per request, default 60. A reasoning model can take minutes on the editor pass: set 300 for one, or the issue has no intro, themes or lead |
+| `NEWSLETTER_TIMEOUT` | Seconds per `fast` or `embedding` request, default 60 |
+| `NEWSLETTER_REASONING_TIMEOUT` | Seconds per `reasoning` request (the editor pass and the writer's voice), default 300: a reasoning model can take minutes to edit. An editor that runs out of time leaves the issue with no intro, themes or lead, says so in one plain sentence (`editor_message`, on the run and in the report) and keeps the raw error in the report's `editor_error` |
 | `NEWSLETTER_MAX_RETRIES` | Retries after a timeout, connection error, 408, 409, 429 or 5xx, default 2 |
 
 A tier's model is required only when that tier is used. The API key is never logged or reported.
@@ -133,7 +134,7 @@ Every call but the health check needs `Authorization: Bearer $NEWSLETTER_API_TOK
 | `NEWSLETTER_API_PORT` | Port, default 8000. `--port` overrides it |
 | `NEWSLETTER_API_ORIGINS` | Comma-separated origins allowed to write, default `http://127.0.0.1:<port>,http://localhost:<port>` |
 | `NEWSLETTER_DATA_DIR` | Where drafts and runs are kept, default `$XDG_DATA_HOME/newsletter` (`~/.local/share/newsletter`) |
-| `NEWSLETTER_RUN_TIMEOUT` | Seconds a run may take, default 900 |
+| `NEWSLETTER_RUN_TIMEOUT` | Seconds a whole run may take, every model call and retry included, default 900 |
 
 `uv run newsletter serve --seed-sample` writes the committed `open-models-week` sample, with its flagged claims and run report, as one draft at start: once, so a restart adds no second copy and an existing draft is never overwritten or re-approved. It needs no model key and no network, which is what the review deploy (`docker-compose.embassy.yml`, described in [`docs/deploy/embassy.md`](docs/deploy/embassy.md)) starts with.
 

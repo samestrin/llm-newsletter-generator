@@ -1080,3 +1080,44 @@ def test_a_second_running_event_keeps_when_the_step_started(tmp_path):
     assert first["started_at"] and second["started_at"] == first["started_at"]
     assert first["ended_at"] is None and second["ended_at"] is None
     assert (second["done"], second["total"]) == (3, 8)
+
+
+# A failed editor: the run says it in one plain sentence; the raw error is in the report.
+
+
+def test_a_run_whose_editor_timed_out_shows_the_plain_sentence_and_no_raw_error(tmp_path):
+    from newsletter.api.pipeline import run_issue
+    from newsletter.llm import LLMClient, Settings
+    from newsletter.voice import VoiceSettings
+    from test_api_pipeline import EDITOR_TIMED_OUT, editor_answers, timed_out
+    from test_cli import ENV, NEWS, run_web
+
+    llm = LLMClient(Settings.from_env(ENV), transport=editor_answers(timed_out))
+
+    def runner(request, progress):
+        return run_issue(request, llm, fetch=run_web, voice=VoiceSettings(), progress=progress)
+
+    with TestClient(create_app(make_settings(tmp_path), runner=runner)) as client:
+        run = run_and_wait(client, {**RUN, "feeds": [NEWS]})
+        draft = client.get(f"/api/drafts/{run['draft_id']}", headers=headers()).json()
+
+    assert run["status"] == "done", run
+    assert run["error"] is None
+    assert run["editor_message"] == EDITOR_TIMED_OUT
+    assert "timed out after" not in json.dumps(run)
+    assert draft["report"]["editor_message"] == EDITOR_TIMED_OUT
+    assert draft["report"]["editor_error"] == "edit: timed out after 300.0s"
+
+
+def test_a_run_whose_editor_finished_has_no_editor_message(client):
+    run = run_and_wait(client)
+    assert run["status"] == "done"
+    assert run["editor_message"] is None
+
+
+def test_a_run_that_failed_has_no_editor_message(tmp_path):
+    runner = FakeRunner(RuntimeError("boom"))
+    with TestClient(create_app(make_settings(tmp_path), runner=runner)) as client:
+        run = run_and_wait(client)
+    assert run["status"] == "error"
+    assert run["editor_message"] is None

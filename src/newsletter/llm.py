@@ -15,7 +15,8 @@ Environment:
     NEWSLETTER_<TIER>_PRICE_INPUT, NEWSLETTER_<TIER>_PRICE_OUTPUT
                                  USD per million tokens; without them the cost the
                                  server reports is used, else the cost is unknown
-    NEWSLETTER_TIMEOUT           seconds per request, default 60
+    NEWSLETTER_TIMEOUT           seconds per `fast` or `embedding` request, default 60
+    NEWSLETTER_REASONING_TIMEOUT seconds per `reasoning` request (the editor), default 300
     NEWSLETTER_MAX_RETRIES       retries after a timeout, connection error, 408, 409,
                                  429 or 5xx, default 2
 """
@@ -45,9 +46,11 @@ class ConfigError(ValueError):
 class LLMError(RuntimeError):
     """A model call failed: no usable result came back."""
 
-    def __init__(self, step: str, message: str):
+    def __init__(self, step: str, message: str, *, timed_out: bool = False):
         super().__init__(f"{step}: {message}")
         self.step = step
+        self.timed_out = timed_out
+        """True when the last attempt ran out of time."""
 
 
 @dataclass(frozen=True)
@@ -65,7 +68,13 @@ class Settings:
     models: dict[str, str] = field(default_factory=dict)
     prices: dict[str, Price] = field(default_factory=dict)
     timeout: float = 60.0
+    """Seconds per `fast` or `embedding` request."""
+    reasoning_timeout: float = 300.0
+    """Seconds per `reasoning` request: a reasoning model can take minutes to edit."""
     max_retries: int = 2
+
+    def timeout_for(self, tier: str) -> float:
+        return self.reasoning_timeout if tier == "reasoning" else self.timeout
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -82,6 +91,7 @@ class Settings:
             if price_in is not None or price_out is not None:
                 prices[tier] = Price(price_in or 0.0, price_out or 0.0)
         timeout = _number(env, "NEWSLETTER_TIMEOUT", float, minimum=0, exclusive=True)
+        reasoning = _number(env, "NEWSLETTER_REASONING_TIMEOUT", float, minimum=0, exclusive=True)
         max_retries = _number(env, "NEWSLETTER_MAX_RETRIES", int, minimum=0)
         return cls(
             base_url=(env.get("NEWSLETTER_BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
@@ -89,6 +99,7 @@ class Settings:
             models=models,
             prices=prices,
             timeout=60.0 if timeout is None else timeout,
+            reasoning_timeout=300.0 if reasoning is None else reasoning,
             max_retries=2 if max_retries is None else max_retries,
         )
 
@@ -124,9 +135,10 @@ class StepUsage:
 
 
 class _Failure(Exception):
-    def __init__(self, message: str, retry: bool):
+    def __init__(self, message: str, retry: bool, timed_out: bool = False):
         super().__init__(message)
         self.retry = retry
+        self.timed_out = timed_out
 
 
 class LLMClient:
@@ -215,7 +227,7 @@ class LLMClient:
         except _Failure as failure:
             record.error = self._redact(str(failure))
             log.error("step %s (%s) failed: %s", step, model, record.error)
-            raise LLMError(step, record.error) from None
+            raise LLMError(step, record.error, timed_out=failure.timed_out) from None
         finally:
             record.seconds = round(time.monotonic() - started, 3)
         record.ok = True
@@ -230,11 +242,12 @@ class LLMClient:
         return result
 
     def _post(self, record: StepUsage, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        timeout = self.settings.timeout_for(record.tier)
         attempts = 1 + self.settings.max_retries
         for attempt in range(1, attempts + 1):
             record.attempts = attempt
             try:
-                return self._attempt(path, payload)
+                return self._attempt(path, payload, timeout)
             except _Failure as failure:
                 if not failure.retry or attempt == attempts:
                     raise
@@ -248,11 +261,11 @@ class LLMClient:
                 time.sleep(self.retry_backoff * 2 ** (attempt - 1))
         raise AssertionError("unreachable")
 
-    def _attempt(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _attempt(self, path: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
         try:
-            response = self._http.post(path, json=payload)
+            response = self._http.post(path, json=payload, timeout=timeout)
         except httpx.TimeoutException:
-            raise _Failure(f"timed out after {self.settings.timeout}s", retry=True) from None
+            raise _Failure(f"timed out after {timeout}s", retry=True, timed_out=True) from None
         except httpx.TransportError as exc:
             raise _Failure(f"request failed: {type(exc).__name__}: {exc}", retry=True) from None
         if response.status_code >= 400:

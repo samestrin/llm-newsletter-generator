@@ -16,6 +16,7 @@ from newsletter.editor import (
     edit_issue,
     parse_edit,
 )
+from newsletter.editor.edit import EDITOR_FAILED
 from newsletter.llm import ConfigError, LLMClient, Settings
 
 
@@ -172,7 +173,11 @@ def test_stories_are_in_the_editors_order_and_a_story_with_no_supported_claim_fo
 def test_the_report_of_a_clean_edit_has_no_error_and_no_rejections():
     edition = edit_issue(check_run(), make_llm(FakeModel(VALID)))
 
-    assert edition.report() == {"editor_error": None, "editor_rejections": []}
+    assert edition.report() == {
+        "editor_error": None,
+        "editor_message": None,
+        "editor_rejections": [],
+    }
 
 
 # The validator.
@@ -311,6 +316,7 @@ def test_output_citing_an_unsupported_id_twice_is_reported_as_an_error():
     assert [s.story_id for s in edition.stories] == ["s1", "s2", "s3"]
     assert edition.report() == {
         "editor_error": edition.error,
+        "editor_message": EDITOR_FAILED,
         "editor_rejections": edition.rejections,
     }
 
