@@ -1,6 +1,23 @@
-import { useRef, useState, type FormEvent } from "react";
-import { createApi, type Api, type Draft, type DraftSummary } from "./api";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  ApiError,
+  createApi,
+  listProviders,
+  type Access,
+  type Api,
+  type Draft,
+  type DraftSummary,
+  type Provider,
+} from "./api";
 import { DraftView } from "./DraftView";
+import { KeyPanel } from "./KeyPanel";
+import {
+  clearCredentials,
+  loadCredentials,
+  saveCredentials,
+  type ModelCredentials,
+  type StoredCredentials,
+} from "./modelAccess";
 import { RunReport } from "./Report";
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? "";
@@ -14,15 +31,54 @@ type Loaded<T> =
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** The token is kept in memory only: reloading the page asks for it again. */
+/**
+ * How the server wants to be reached: still asking, the review host's token (server-key
+ * mode), or a visitor's key or demo code for one of its providers.
+ */
+type Mode = { kind: "checking" } | { kind: "token" } | { kind: "keys"; providers: Provider[] };
+
+/**
+ * In server-key mode the token is kept in memory only: reloading the page asks for it again.
+ * With providers, the key panel keeps the visitor's key or demo code (see `modelAccess`).
+ */
 export default function App() {
+  const [mode, setMode] = useState<Mode>({ kind: "checking" });
   const [api, setApi] = useState<Api | null>(null);
   const [token, setToken] = useState("");
+  const [credentials, setCredentials] = useState<StoredCredentials | null>(null);
+  const [panel, setPanel] = useState<{ open: boolean; error: string | null }>({ open: false, error: null });
   const [drafts, setDrafts] = useState<Loaded<DraftSummary[]>>({ state: "idle" });
   const [draft, setDraft] = useState<Loaded<Draft>>({ state: "idle" });
   const [draftId, setDraftId] = useState<string | null>(null);
   // Only the draft opened last may fill the page, whatever order the answers come in.
   const latest = useRef<string | null>(null);
+  // With providers, a 401 is the key panel's to explain; the list does not say it again.
+  const keyed = useRef(false);
+
+  // A refused key or code: say why (the API names the header, never the value) and ask again.
+  const refused = (error: ApiError) => setPanel({ open: true, error: error.message });
+  const keyApi = (model: ModelCredentials) => createApi({ model } satisfies Access, API_BASE, refused);
+
+  useEffect(() => {
+    let live = true;
+    void listProviders(API_BASE).then((providers) => {
+      if (!live) return;
+      if (!providers) {
+        setMode({ kind: "token" });
+        return;
+      }
+      keyed.current = true;
+      setMode({ kind: "keys", providers });
+      const saved = loadCredentials();
+      setCredentials(saved);
+      if (saved) void loadList(keyApi(saved));
+      else setPanel({ open: true, error: null });
+    });
+    return () => {
+      live = false;
+    };
+    // Once, on the first visit: the providers do not change while the page is open.
+  }, []);
 
   async function loadList(client: Api) {
     setDrafts({ state: "loading" });
@@ -30,13 +86,35 @@ export default function App() {
       setDrafts({ state: "ready", value: await client.listDrafts() });
       setApi(client);
     } catch (e) {
-      setDrafts({ state: "error", message: message(e) });
+      setDrafts(
+        keyed.current && e instanceof ApiError && e.status === 401
+          ? { state: "idle" }
+          : { state: "error", message: message(e) },
+      );
     }
   }
 
   function connect(event: FormEvent) {
     event.preventDefault();
-    void loadList(createApi(token, API_BASE));
+    void loadList(createApi({ token }, API_BASE));
+  }
+
+  function saveKey(model: ModelCredentials, remember: boolean) {
+    saveCredentials(model, remember);
+    setCredentials({ ...model, remember });
+    setPanel({ open: false, error: null });
+    void loadList(keyApi(model));
+  }
+
+  function clearKey() {
+    clearCredentials();
+    setCredentials(null);
+    setApi(null);
+    setDrafts({ state: "idle" });
+    latest.current = null;
+    setDraftId(null);
+    setDraft({ state: "idle" });
+    setPanel({ open: true, error: null });
   }
 
   async function open(id: string) {
@@ -83,8 +161,25 @@ export default function App() {
         Skip to main content
       </a>
       <header className="site-header">
-        <h1>Newsletter review</h1>
+        <div className="site-header-bar">
+          <h1>Newsletter review</h1>
+          {mode.kind === "keys" && (
+            <button type="button" aria-expanded={panel.open} onClick={() => setPanel({ open: true, error: null })}>
+              Key
+            </button>
+          )}
+        </div>
       </header>
+      {mode.kind === "keys" && panel.open && (
+        <KeyPanel
+          providers={mode.providers}
+          stored={credentials}
+          error={panel.error}
+          onSave={saveKey}
+          onClear={clearKey}
+          onClose={() => setPanel({ open: false, error: null })}
+        />
+      )}
       <div className={api ? "layout layout-split" : "layout"}>
         {api && (
           <nav aria-label="Drafts">
@@ -120,7 +215,23 @@ export default function App() {
           </nav>
         )}
         <main id="main" tabIndex={-1} aria-busy={draft.state === "loading" || undefined}>
-          {!api ? (
+          {mode.kind === "checking" ? (
+            <p role="status" className="state">
+              Loading…
+            </p>
+          ) : !api && mode.kind === "keys" ? (
+            <>
+              {listStatus}
+              {drafts.state === "error" && credentials && (
+                <button type="button" onClick={() => loadList(keyApi(credentials))}>
+                  Try again
+                </button>
+              )}
+              {!panel.open && !credentials && (
+                <p className="state">Add a key or a demo code with the Key button to start.</p>
+              )}
+            </>
+          ) : !api ? (
             <form onSubmit={connect} className="connect">
               <label>
                 API token

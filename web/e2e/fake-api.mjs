@@ -1,7 +1,9 @@
 // A fake of `newsletter serve` for the browser test: the same draft endpoints and the
 // same write rules (token, then Origin, then a JSON object body), drafts kept in memory.
 // `POST /__reset` puts the one draft back as it started, with any fields in its JSON body
-// (title, text, flags, report...) in place of the seed's.
+// (title, text, flags, report...) in place of the seed's. `POST /__keys` turns on demo
+// mode until the next reset: `GET /api/providers` lists providers, and the draft endpoints
+// take the demo code or OpenRouter key below as `X-Model-*` headers instead of the token.
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -9,6 +11,25 @@ const PORT = Number(process.env.FAKE_API_PORT ?? 8787);
 const TOKEN = process.env.FAKE_API_TOKEN ?? "e2e-token";
 const ORIGINS = (process.env.FAKE_API_ORIGINS ?? "").split(",").filter(Boolean);
 const ID = "0123456789abcdef0123456789abcdef";
+const DEMO_CODE = "e2e-demo-code";
+const OPENROUTER_KEY = "sk-or-e2e-key";
+const provider = (id, label, kind, embedding_model) => ({
+  id,
+  label,
+  kind,
+  base_url: `https://${id}.example.com/v1`,
+  fast_model: `${id}-fast`,
+  reasoning_model: `${id}-reasoning`,
+  embedding_model,
+});
+const PROVIDERS = [
+  provider("demo", "Demo code", "demo", "demo-embedding"),
+  provider("openai", "OpenAI", "key", "text-embedding-3-small"),
+  provider("openrouter", "OpenRouter", "key", "thenlper/gte-base"),
+  provider("alibaba", "Alibaba", "key", "text-embedding-v4"),
+  provider("synthetic", "Synthetic", "key", null),
+];
+let keys = false;
 
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
@@ -74,9 +95,22 @@ createServer(async (req, res) => {
       // No body: the one draft as it started.
     }
     draft = { ...seed(), ...fields };
+    keys = false;
     return send(res, 200, { ok: true });
   }
-  if (req.headers.authorization !== `Bearer ${TOKEN}`) {
+  if (method === "POST" && url === "/__keys") {
+    keys = true;
+    return send(res, 200, { ok: true });
+  }
+  if (keys) {
+    if (method === "GET" && url === "/api/providers") return send(res, 200, PROVIDERS);
+    const preset = req.headers["x-model-preset"];
+    if (preset === "demo" ? req.headers["x-demo-code"] !== DEMO_CODE : req.headers["x-model-key"] !== OPENROUTER_KEY) {
+      return send(res, 401, {
+        detail: preset === "demo" ? "X-Demo-Code was not accepted" : "X-Model-Key was refused by the provider",
+      });
+    }
+  } else if (req.headers.authorization !== `Bearer ${TOKEN}`) {
     return send(res, 401, { detail: "missing or wrong token" });
   }
   let body;

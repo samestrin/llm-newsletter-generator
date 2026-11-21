@@ -151,6 +151,7 @@ describe("the key panel on a demo-mode server", () => {
     await screen.findByRole("button", { name: /AI Weekly/ });
     await user.click(screen.getByRole("button", { name: "Key" }));
     const panel = screen.getByRole("region", { name: "Model key" });
+    expect(within(panel).getByRole("heading", { name: "Model key" })).toHaveFocus();
     expect(within(panel).getByLabelText("Provider")).toHaveValue("openrouter");
     await user.click(within(panel).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("region", { name: "Model key" })).toBeNull();
@@ -205,6 +206,20 @@ describe("the key panel on a demo-mode server", () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(screen.getByRole("region", { name: "Model key" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Drafts" })).toBeNull();
+  });
+
+  it("offers Try again when the list fails for another reason, with the saved key", async () => {
+    stored("openrouter", KEY, false);
+    const api = keyApi();
+    const answer = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+    api.fetch.mockImplementationOnce(async () => answer(200, PROVIDERS));
+    api.fetch.mockImplementationOnce(async () => answer(503, { detail: "the API is busy" }));
+    const { user } = await start(api);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
+    expect(screen.queryByRole("region", { name: "Model key" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
+    expect(api.calls.filter((c) => c.url === "/api/drafts").at(-1)!.headers.get("X-Model-Key")).toBe(KEY);
   });
 
   it("says how to start when the panel is closed with no key", async () => {
