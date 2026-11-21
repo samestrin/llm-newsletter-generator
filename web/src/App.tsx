@@ -125,18 +125,19 @@ export default function App() {
     setPanel({ open: true, error: null });
   }
 
-  /** Back to the form, or to the run this tab is still watching: no draft open. */
-  function showForm() {
+  /** Back to the form, or to `watch` or the run this tab is still watching: no draft open. */
+  function showForm(watch: string | null = null) {
     latest.current = null;
     setDraftId(null);
     setDraft({ state: "idle" });
-    setRun(loadCurrentRun());
+    setRun(watch ?? loadCurrentRun());
   }
 
   function started(made: Run) {
     rememberRun(made);
     saveCurrentRun(made.id);
-    showForm();
+    // Watched from state, not read back from storage: blocked storage still shows the run.
+    showForm(made.id);
   }
 
   /** The run made its draft: open it, and list it with the others. */
@@ -222,7 +223,7 @@ export default function App() {
           <nav aria-label={demo ? "Earlier drafts" : "Drafts"}>
             {demo ? (
               <>
-                <button type="button" onClick={showForm} aria-current={!draftId ? "page" : undefined}>
+                <button type="button" onClick={() => showForm()} aria-current={!draftId ? "page" : undefined}>
                   Make a newsletter
                 </button>
                 <h2>Earlier drafts</h2>
@@ -296,7 +297,7 @@ export default function App() {
               {listStatus}
             </form>
           ) : run ? (
-            <Progress key={run} api={api} runId={run} onDone={finished} onStartOver={showForm} />
+            <Progress key={run} api={api} runId={run} onDone={finished} onStartOver={() => showForm()} />
           ) : draft.state === "ready" ? (
             <DraftView key={draft.value.id} api={api} draft={draft.value} onChange={changed} />
           ) : draft.state === "loading" ? (
