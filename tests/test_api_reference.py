@@ -30,6 +30,7 @@ GUARDED = {
     ("get", "/api/drafts/{draft_id}"),
     ("put", "/api/drafts/{draft_id}"),
     ("post", "/api/drafts/{draft_id}/approve"),
+    ("get", "/api/drafts/{draft_id}/email"),
 }
 # The response model each route must name in its success schema. A bare `assert
 # schema` would also pass FastAPI's inferred `{"type": "object",
@@ -42,6 +43,7 @@ SUCCESS_MODELS = {
     ("get", "/api/drafts/{draft_id}"): "DraftView",
     ("put", "/api/drafts/{draft_id}"): "DraftView",
     ("post", "/api/drafts/{draft_id}/approve"): "DraftView",
+    ("get", "/api/drafts/{draft_id}/email"): "EmailPreview",
 }
 WRITES = {
     ("post", "/api/runs"),
@@ -218,7 +220,11 @@ def test_the_error_responses_are_declared(spec):
         if key in WRITES:
             for code in ("400", "403", "415", "422", "503"):
                 assert code in responses, (key, code)
-        if key in {("post", "/api/runs"), ("post", "/api/drafts/{draft_id}/approve")}:
+        if key in {
+            ("post", "/api/runs"),
+            ("post", "/api/drafts/{draft_id}/approve"),
+            ("get", "/api/drafts/{draft_id}/email"),
+        }:
             assert "409" in responses, key
         if "{run_id}" in key[1] or "{draft_id}" in key[1]:
             assert "404" in responses, key

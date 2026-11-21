@@ -339,6 +339,7 @@ def test_is_approved_needs_an_approval_that_matches_the_text():
 @pytest.mark.parametrize("draft_id", ["nope", "../../etc/passwd", "0" * 31, "A" * 32])
 def test_an_unknown_draft_is_not_found(client, draft_id):
     assert client.get(f"/api/drafts/{draft_id}", headers=headers()).status_code == 404
+    assert client.get(f"/api/drafts/{draft_id}/email", headers=headers()).status_code == 404
     assert (
         client.put(f"/api/drafts/{draft_id}", json={"text": "x"}, headers=headers()).status_code
         == 404
