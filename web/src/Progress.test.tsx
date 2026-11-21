@@ -244,6 +244,18 @@ describe("live progress", () => {
     expect(api.polled()).toBe(8);
   });
 
+  it("lists each failed feed with its reason on its own line", async () => {
+    const detail = "1 of 3 loaded, 2 failed: https://a.example.com/feed.xml HTTP 503; https://b.example.com/rss timed out";
+    renderProgress(fakeApi([snapshot({ feeds: { state: "running", done: 3, total: 3, detail, started_at: at(0) } })]));
+    await pass(0);
+    expect(step("Fetching feeds")).toHaveTextContent("1 of 3 loaded, 2 failed:");
+    const failed = within(step("Fetching feeds")).getByRole("list", { name: "Feeds that failed" });
+    expect(within(failed).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "https://a.example.com/feed.xml HTTP 503",
+      "https://b.example.com/rss timed out",
+    ]);
+  });
+
   it("shows how long a running step has run, so a long step is visibly alive", async () => {
     renderProgress(fakeApi([SCRIPT[4]]));
     await pass(0);
@@ -457,8 +469,8 @@ describe("the run in the page", () => {
     expect(screen.getByRole("button", { name: "Make my newsletter" })).toBeInTheDocument();
   });
 
-  it("starting a run from the form stores its id only and shows its progress", async () => {
-    keep();
+  /** Fill one good feed on the form and press Make my newsletter. */
+  async function startFromForm() {
     const api = fakeApi([SCRIPT[1]]);
     const fetch = vi.fn(async (url: string, init: RequestInit = {}) => {
       if (init.method === "POST" && url === "/api/feeds/check") {
@@ -478,9 +490,29 @@ describe("the run in the page", () => {
     await pass(0);
     fireEvent.click(screen.getByRole("button", { name: "Make my newsletter" }));
     await pass(0);
+  }
+
+  it("starting a run from the form stores its id only and shows its progress", async () => {
+    keep();
+    await startFromForm();
     expect(screen.getByRole("heading", { name: "Making your newsletter…" })).toBeInTheDocument();
     expect(sessionStorage.getItem(RUN_KEY)).toBe(RUN_ID);
     expect(stateOf("Fetching feeds")).toBe("Running");
     expect(sessionStorage.getItem(RUN_KEY)).not.toContain(CODE);
+  });
+
+  it("shows the started run's progress even when session storage refuses writes", async () => {
+    keep();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    try {
+      await startFromForm();
+      expect(screen.getByRole("heading", { name: "Making your newsletter…" })).toBeInTheDocument();
+      expect(stateOf("Fetching feeds")).toBe("Running");
+      expect(sessionStorage.getItem(RUN_KEY)).toBeNull();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
