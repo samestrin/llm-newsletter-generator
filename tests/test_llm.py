@@ -14,7 +14,8 @@ class FakeServer:
     """A local OpenAI-compatible server whose replies each test scripts.
 
     `replies` is a list of (status, body) tuples consumed one per request; the
-    last one repeats. The status "hang" blocks until the test ends.
+    last one repeats. The status "hang" blocks until the test ends, and a third item
+    is seconds to wait before answering.
     """
 
     def __init__(self):
@@ -31,7 +32,9 @@ class FakeServer:
                     {"path": self.path, "headers": dict(self.headers), "body": body}
                 )
                 index = min(len(fake.requests), len(fake.replies)) - 1
-                status, reply = fake.replies[index]
+                status, reply, *delay = fake.replies[index]
+                if delay:
+                    fake.release.wait(delay[0])
                 if status == "hang":
                     fake.release.wait(10)
                     return
@@ -120,7 +123,15 @@ def test_settings_defaults():
     assert settings.base_url == "https://api.openai.com/v1"
     assert settings.api_key is None
     assert settings.timeout == 60.0
+    assert settings.reasoning_timeout == 300.0
     assert settings.max_retries == 2
+
+
+def test_settings_read_the_reasoning_timeout_apart_from_the_others():
+    settings = Settings.from_env({"NEWSLETTER_TIMEOUT": "30", "NEWSLETTER_REASONING_TIMEOUT": "600"})
+    assert settings.timeout_for("fast") == 30.0
+    assert settings.timeout_for("embedding") == 30.0
+    assert settings.timeout_for("reasoning") == 600.0
 
 
 def test_settings_fall_back_to_openai_api_key():
@@ -132,6 +143,8 @@ def test_settings_fall_back_to_openai_api_key():
     [
         ("NEWSLETTER_TIMEOUT", "soon"),
         ("NEWSLETTER_TIMEOUT", "0"),
+        ("NEWSLETTER_REASONING_TIMEOUT", "later"),
+        ("NEWSLETTER_REASONING_TIMEOUT", "0"),
         ("NEWSLETTER_MAX_RETRIES", "-1"),
         ("NEWSLETTER_MAX_RETRIES", "many"),
         ("NEWSLETTER_FAST_PRICE_INPUT", "cheap"),
@@ -332,6 +345,44 @@ def test_hung_endpoint_ends_in_an_error_after_bounded_retries(server):
         client.complete("summarize", [{"role": "user", "content": "x"}])
     assert len(server.requests) == 2
     assert client.records[-1].ok is False
+
+
+def test_a_slow_editor_within_the_reasoning_timeout_succeeds(server):
+    # Slower than the fast timeout, well within the reasoning one.
+    server.replies = [(200, chat_reply("Edited."), 0.4)]
+    client = make_client(
+        server,
+        NEWSLETTER_TIMEOUT="0.1",
+        NEWSLETTER_REASONING_TIMEOUT="5",
+        NEWSLETTER_MAX_RETRIES="0",
+    )
+    messages = [{"role": "user", "content": "x"}]
+    assert client.complete("edit", messages, tier="reasoning") == "Edited."
+    with pytest.raises(LLMError, match="timed out after 0.1s") as exc:
+        client.complete("summarize", messages)
+    assert exc.value.timed_out is True
+    assert [(r.step, r.ok) for r in client.records] == [("edit", True), ("summarize", False)]
+
+
+def test_a_reasoning_call_past_its_own_timeout_times_out(server):
+    server.replies = [("hang", None)]
+    client = make_client(
+        server,
+        NEWSLETTER_TIMEOUT="5",
+        NEWSLETTER_REASONING_TIMEOUT="0.2",
+        NEWSLETTER_MAX_RETRIES="0",
+    )
+    with pytest.raises(LLMError, match="timed out after 0.2s") as exc:
+        client.complete("edit", [{"role": "user", "content": "x"}], tier="reasoning")
+    assert exc.value.timed_out is True
+
+
+def test_an_error_that_is_not_a_timeout_says_so(server):
+    server.replies = [(401, {"error": "no"})]
+    client = make_client(server)
+    with pytest.raises(LLMError) as exc:
+        client.complete("edit", [{"role": "user", "content": "x"}], tier="reasoning")
+    assert exc.value.timed_out is False
 
 
 def test_server_errors_are_retried_then_succeed(server):

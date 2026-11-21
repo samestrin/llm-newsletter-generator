@@ -373,3 +373,68 @@ def test_a_counted_run_without_a_progress_callback_is_unchanged():
         return content
 
     assert timeless(counted_run(Counts())) == timeless(counted_run())
+
+
+# A failed editor: one plain sentence built in code, the raw error in the report only.
+
+EDITOR_TIMED_OUT = (
+    "The editor did not finish in time. Your sources were read and checked; "
+    "try again, or edit the draft by hand."
+)
+
+
+def editor_answers(fail):
+    """The fake model of `test_cli`, with its edit call replaced by `fail(request)`."""
+    inner = model()
+
+    def reply(request):
+        body = json.loads(request.content)
+        if (body.get("response_format") or {}).get("json_schema", {}).get("name") == "issue_edit":
+            return fail(request)
+        return inner.handle_request(request)
+
+    return httpx.MockTransport(reply)
+
+
+def timed_out(request):
+    raise httpx.ReadTimeout("read timed out", request=request)
+
+
+def test_a_timed_out_editor_gives_the_plain_sentence_and_the_raw_error_in_the_report():
+    llm = LLMClient(Settings.from_env(ENV), transport=editor_answers(timed_out))
+    content = run_issue(request(feeds=[NEWS]), llm, fetch=run_web, voice=VoiceSettings())
+
+    report = content["report"]
+    assert report["editor_message"] == EDITOR_TIMED_OUT
+    assert report["editor_error"] == "edit: timed out after 300.0s"
+    assert report["ok"] is False
+
+
+def test_an_editor_that_fails_otherwise_gives_a_plain_sentence_without_the_error():
+    down = editor_answers(lambda request: httpx.Response(500, json={"error": "down"}))
+    llm = LLMClient(Settings.from_env(ENV), transport=down)
+    content = run_issue(request(feeds=[NEWS]), llm, fetch=run_web, voice=VoiceSettings())
+
+    report = content["report"]
+    assert report["editor_error"].startswith("edit: HTTP 500")
+    assert report["editor_message"] == (
+        "The editor did not finish. Your sources were read and checked; "
+        "try again, or edit the draft by hand."
+    )
+
+
+def test_an_editor_with_nothing_to_edit_from_says_so_plainly():
+    llm = Replay(Settings(models=CASE.models), {})  # No claims: every claim call fails.
+    content = run_issue(request(), llm, fetch=web, voice=VoiceSettings())
+
+    assert content["report"]["editor_error"] == "no supported claims to edit from"
+    assert content["report"]["editor_message"] == (
+        "The editor had no supported claims to write from. Your sources were read and "
+        "checked; edit the draft by hand."
+    )
+
+
+def test_an_editor_that_finishes_has_no_message():
+    content = run_issue(request(), replay(), fetch=web, voice=VoiceSettings())
+    assert content["report"]["editor_error"] is None
+    assert content["report"]["editor_message"] is None
