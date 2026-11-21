@@ -262,3 +262,14 @@ def test_a_run_without_a_progress_callback_is_unchanged():
         request(), replay(), fetch=web, voice=VoiceSettings(), progress=Recorder()
     )
     assert with_progress == without
+
+
+def test_a_failed_embedding_call_reports_the_grouping_as_failed():
+    llm = LLMClient(Settings.from_env(ENV), transport=model(fail_models=("embed-1",)))
+    progress = Recorder()
+    content = run_issue(
+        request(feeds=[NEWS]), llm, fetch=run_web, voice=VoiceSettings(), progress=progress
+    )
+    assert content["report"]["grouping_error"]
+    grouping = [state for step, state, _ in progress.events if step == "grouping"]
+    assert grouping == ["running", "failed"]

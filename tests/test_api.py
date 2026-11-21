@@ -996,3 +996,26 @@ def test_an_unknown_step_is_logged_and_changes_nothing(tmp_path, caplog):
     assert "no step 'nope' to report" in caplog.text
     assert [step["id"] for step in run["progress"]] == list(steps)
     assert len(steps) == 7
+
+
+def test_a_second_running_event_keeps_when_the_step_started(tmp_path):
+    def stored_claims():
+        (path,) = (tmp_path / "data" / "runs").glob("*.json")
+        return json.loads(path.read_text("utf-8"))["progress"][3]
+
+    seen = []
+
+    def twice(request, progress=None):
+        progress("claims", "running", done=1, total=8)
+        seen.append(stored_claims())
+        threading.Event().wait(0.01)
+        progress("claims", "running", done=3, total=8)
+        seen.append(stored_claims())
+        return dict(CONTENT)
+
+    progress_of(tmp_path, twice)
+    first, second = seen
+    assert first["id"] == "claims"
+    assert first["started_at"] and second["started_at"] == first["started_at"]
+    assert first["ended_at"] is None and second["ended_at"] is None
+    assert (second["done"], second["total"]) == (3, 8)
