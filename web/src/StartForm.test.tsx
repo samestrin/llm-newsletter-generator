@@ -180,7 +180,7 @@ describe("the start form", () => {
       url === "/api/presets" ? new Response("{}", { status: 404 }) : inner(url, init),
     );
     renderForm(api);
-    await vi.waitFor(() => expect(api.calls.some((c) => c.url === "/api/presets")).toBe(true));
+    await vi.waitFor(() => expect(api.fetch.mock.calls.some(([url]) => url === "/api/presets")).toBe(true));
     expect(screen.queryByRole("group", { name: "Start from a preset" })).toBeNull();
     expect(field(1)).toBeInTheDocument();
   });
@@ -353,7 +353,8 @@ describe("the page in demo mode", () => {
     const { api, user } = await startApp(demoApi({ drafts: [MINE, SEEDED] }));
     await user.click(screen.getByRole("button", { name: "See an example" }));
     expect(await screen.findByRole("heading", { level: 2, name: "Open models week" })).toBeInTheDocument();
-    expect(api.calls.at(-1)!.url).toBe(`/api/drafts/${SEEDED.id}`);
+    const opened = api.calls.filter((c) => c.url.startsWith("/api/drafts/")).map((c) => c.url);
+    expect(opened).toEqual([`/api/drafts/${SEEDED.id}`]);
     await user.click(screen.getByRole("button", { name: "Make a newsletter" }));
     expect(screen.getByRole("button", { name: "Make my newsletter" })).toBeInTheDocument();
   });
