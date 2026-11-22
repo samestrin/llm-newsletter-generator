@@ -220,6 +220,17 @@ describe("the key panel on a demo-mode server", () => {
     expect(api.calls.at(-1)!.headers.get("X-Model-Key")).toBe(KEY);
   });
 
+  it("a new key that meets another failure is kept, so Try again uses it", async () => {
+    const api = keyApi();
+    const { user } = await start(api);
+    api.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "the API is busy" }), { status: 503 }));
+    await saveKey(user, "openrouter", KEY);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ preset: "openrouter", secret: KEY });
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
+  });
+
   it("Clear wipes both stores and leaves the panel open", async () => {
     stored("openrouter", KEY, true);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ preset: "demo", secret: CODE }));
