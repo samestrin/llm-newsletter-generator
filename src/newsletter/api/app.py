@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from newsletter import __version__
 from newsletter.api import seed
+from newsletter.api.credentials import PROVIDERS, public_providers
 from newsletter.api.jobs import Busy, Jobs, Runner
 from newsletter.api.pipeline import RunRequest, default_runner
 from newsletter.api.settings import ApiSettings
@@ -203,6 +204,21 @@ class DraftView(BaseModel):
     approved: bool
 
 
+class ProviderView(BaseModel):
+    """A model provider a visitor may pick: send its `id` as `X-Model-Preset` with a key
+    as `X-Model-Key`, or `demo` with `X-Demo-Code`. No secret: the file holds none."""
+
+    id: str
+    label: str
+    kind: Literal["key", "demo"]
+    base_url: str | None
+    """`None` for the demo provider: a demo code goes to the demo gateway."""
+    fast_model: str
+    reasoning_model: str
+    embedding_model: str | None
+    """`None` when the provider has no embedding model."""
+
+
 class ErrorBody(BaseModel):
     """An error: the reason only, never the request."""
 
@@ -294,7 +310,13 @@ def create_app(
         CORSMiddleware,
         allow_origins=list(settings.origins),
         allow_methods=["GET", "POST", "PUT"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Model-Preset",
+            "X-Model-Key",
+            "X-Demo-Code",
+        ],
     )
 
     # Declares the bearer scheme in the spec so the reference can send the token.
@@ -360,6 +382,16 @@ def create_app(
     def health() -> dict[str, bool]:
         """Report that the service is up. No token needed."""
         return {"ok": True}
+
+    @app.get(
+        "/api/providers",
+        dependencies=[Depends(guard)],
+        response_model=list[ProviderView],
+        responses=UNAUTHORIZED,
+    )
+    def list_providers() -> list[dict[str, Any]]:
+        """The model providers a run may use, from `providers.json`. Holds no secret."""
+        return public_providers(PROVIDERS)
 
     @app.post(
         "/api/runs",

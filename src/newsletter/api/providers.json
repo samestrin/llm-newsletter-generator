@@ -1,0 +1,49 @@
+{
+  "providers": [
+    {
+      "id": "demo",
+      "label": "Demo code",
+      "kind": "demo",
+      "base_url": null,
+      "fast_model": "demo-fast",
+      "reasoning_model": "demo-reasoning",
+      "embedding_model": "demo-embedding"
+    },
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "kind": "key",
+      "base_url": "https://api.openai.com/v1",
+      "fast_model": "gpt-5-nano",
+      "reasoning_model": "gpt-5-mini",
+      "embedding_model": "text-embedding-3-small"
+    },
+    {
+      "id": "openrouter",
+      "label": "OpenRouter",
+      "kind": "key",
+      "base_url": "https://openrouter.ai/api/v1",
+      "fast_model": "qwen/qwen3.7-flash",
+      "reasoning_model": "qwen/qwen3.7-plus",
+      "embedding_model": "thenlper/gte-base"
+    },
+    {
+      "id": "alibaba",
+      "label": "Alibaba (DashScope intl)",
+      "kind": "key",
+      "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      "fast_model": "qwen-flash",
+      "reasoning_model": "qwen-plus",
+      "embedding_model": "text-embedding-v4"
+    },
+    {
+      "id": "synthetic",
+      "label": "Synthetic",
+      "kind": "key",
+      "base_url": "https://api.synthetic.new/openai/v1",
+      "fast_model": "hf:zai-org/GLM-5.3-Flash",
+      "reasoning_model": "hf:zai-org/GLM-5.3",
+      "embedding_model": null
+    }
+  ]
+}

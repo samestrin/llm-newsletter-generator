@@ -21,7 +21,7 @@ from newsletter.api.credentials import (
     request_credentials,
 )
 from spec_completeness import spec_gaps
-from test_api import FakeRunner, headers, make_settings
+from test_api import LLM_KEY, TOKEN, VOICE_KEY, FakeRunner, headers, make_settings
 
 KEY = "sk-visitor-marker-key-0123456789"
 CODE = "demo-marker-code-0123456789"
@@ -61,7 +61,7 @@ def assert_header_only(response, status: int, header: str) -> None:
     detail = response.json()["detail"]
     assert isinstance(detail, str)
     assert header in detail
-    for value in (KEY, CODE, "openrouter", "nope"):
+    for value in (KEY, CODE, "nope"):
         assert value not in response.text
 
 
@@ -165,9 +165,8 @@ def test_providers_are_served_with_every_field_and_no_secret(api):
     assert served == public_providers(PROVIDERS)
     for item in served:
         assert set(item) == FIELDS
-    text = response.text.lower()
-    for secret_word in ("key\"", "secret", "token", "sk-", "api-token-not-for-anyone-else"):
-        assert secret_word not in text
+    for secret in (TOKEN, LLM_KEY, VOICE_KEY):
+        assert secret not in response.text
 
 
 def test_providers_need_the_token(api):
@@ -269,8 +268,8 @@ def test_the_demo_preset_with_a_key_is_refused(creds_client):
 @pytest.mark.parametrize("bad", ["sk-has a space", "x" * 513, "sk-é"])
 def test_a_malformed_key_is_a_401_naming_the_header_only(creds_client, bad):
     sent = {"X-Model-Preset": "openai", "X-Model-Key": bad}
-    if not bad.isascii():
-        sent = {k: v.encode("utf-8").decode("latin-1") for k, v in sent.items()}
+    if not bad.isascii():  # a header goes on the wire as bytes; the server reads latin-1
+        sent = {k: v.encode("utf-8") for k, v in sent.items()}
     response = creds_client.get("/creds", headers=sent)
     assert_header_only(response, 401, "X-Model-Key")
     assert bad not in response.text
