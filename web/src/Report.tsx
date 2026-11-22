@@ -34,10 +34,7 @@ function FlagIcon() {
       aria-hidden="true"
       focusable="false"
     >
-      <path
-        fill="currentColor"
-        d="M12 2 1 21h22L12 2Zm-1 7h2v6h-2V9Zm0 8h2v2h-2v-2Z"
-      />
+      <path fill="currentColor" d="M12 2 1 21h22L12 2Zm-1 7h2v6h-2V9Zm0 8h2v2h-2v-2Z" />
     </svg>
   );
 }
@@ -88,15 +85,7 @@ export function Flags({ flags }: { flags: Flag[] }) {
   );
 }
 
-function List<T>({
-  title,
-  items,
-  show,
-}: {
-  title: string;
-  items?: T[];
-  show: (item: T) => React.ReactNode;
-}) {
+function List<T>({ title, items, show }: { title: string; items?: T[]; show: (item: T) => React.ReactNode }) {
   if (!items?.length) return null;
   return (
     <>
@@ -115,18 +104,14 @@ function List<T>({
 const money = (cost: number) => `$${cost.toFixed(4)}`;
 
 /** Shows "could not be read" in place of a report that breaks while it renders. */
-class Unreadable extends Component<
-  { report: Report; children: ReactNode },
-  { failed: boolean }
-> {
+class Unreadable extends Component<{ report: Report; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
   }
   componentDidUpdate(previous: { report: Report }) {
     // A new report, from a reload or a save, gets its own try.
-    if (this.state.failed && previous.report !== this.props.report)
-      this.setState({ failed: false });
+    if (this.state.failed && previous.report !== this.props.report) this.setState({ failed: false });
   }
   render() {
     return this.state.failed ? <ReportError /> : this.props.children;
@@ -178,13 +163,9 @@ function ReportBody({ report }: { report: Report }) {
   return (
     <>
       <p className={report.ok === false ? "bad" : "good"}>
-        {report.ok === false
-          ? "Problems found"
-          : "Nothing failed, was left out or is flagged"}
+        {report.ok === false ? "Problems found" : "Nothing failed, was left out or is flagged"}
       </p>
-      {report.editor_error && (
-        <p className="bad">Editor failed: {report.editor_error}</p>
-      )}
+      {report.editor_error && <p className="bad">Editor failed: {report.editor_error}</p>}
       <List
         title="Failed sources"
         items={report.failed_sources}
@@ -222,11 +203,7 @@ function ReportBody({ report }: { report: Report }) {
           </>
         )}
       />
-      <List
-        title="Editor rejections"
-        items={report.editor_rejections}
-        show={(r) => r}
-      />
+      <List title="Editor rejections" items={report.editor_rejections} show={(r) => r} />
       <List title="Failed steps" items={report.failed_steps} show={(s) => s} />
       {voice && (
         <>
@@ -254,12 +231,7 @@ function ReportBody({ report }: { report: Report }) {
       {steps.length === 0 ? (
         <p>None.</p>
       ) : (
-        <div
-          className="table-scroll"
-          role="region"
-          aria-label="Model calls table"
-          tabIndex={0}
-        >
+        <div className="table-scroll" role="region" aria-label="Model calls table" tabIndex={0}>
           <table>
             <thead>
               <tr>
@@ -288,8 +260,7 @@ function ReportBody({ report }: { report: Report }) {
       )}
       <p>
         Total cost: {money(report.total_cost ?? 0)}
-        {unknown > 0 &&
-          ` (${unknown} step${unknown === 1 ? "" : "s"} cost unknown, not counted)`}
+        {unknown > 0 && ` (${unknown} step${unknown === 1 ? "" : "s"} cost unknown, not counted)`}
       </p>
     </>
   );

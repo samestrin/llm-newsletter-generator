@@ -39,25 +39,9 @@ export type Report = {
   /** What the visitor asked the issue to be about, if they gave a focus. */
   focus?: string | null;
   failed_sources?: { url: string; reason: string }[];
-  linked_articles?: {
-    title: string;
-    link: string;
-    status: string;
-    reason?: string | null;
-  }[];
-  dropped_stories?: {
-    story_id: string;
-    title: string;
-    link: string;
-    reason: string;
-  }[];
-  dropped_claims?: {
-    id: string;
-    story_id: string;
-    text: string;
-    passage?: string;
-    reason: string;
-  }[];
+  linked_articles?: { title: string; link: string; status: string; reason?: string | null }[];
+  dropped_stories?: { story_id: string; title: string; link: string; reason: string }[];
+  dropped_claims?: { id: string; story_id: string; text: string; passage?: string; reason: string }[];
   flagged_claims?: Flag[];
   editor_error?: string | null;
   editor_rejections?: string[];
@@ -97,21 +81,13 @@ export type Draft = {
   focus?: string | null;
 };
 
-export type DraftSummary = Omit<
-  Draft,
-  "text" | "flags" | "report" | "approval"
-> & { flags: number };
+export type DraftSummary = Omit<Draft, "text" | "flags" | "report" | "approval"> & { flags: number };
 
 /** A feed set from `GET /api/presets`: a shortcut the form copies into its rows. */
 export type Preset = { id: string; label: string; feeds: string[] };
 
 /** `POST /api/feeds/check`: `error` is a plain sentence when `ok` is false. */
-export type FeedCheck = {
-  ok: boolean;
-  title?: string | null;
-  items?: number;
-  error?: string | null;
-};
+export type FeedCheck = { ok: boolean; title?: string | null; items?: number; error?: string | null };
 
 /** One step of a run's live progress (plan 08's `ProgressStep`). */
 export type ProgressStep = {
@@ -162,27 +138,18 @@ export class ApiError extends Error {
  * the server issued with a run (sent back as `X-Owner-Token`, so the API shows us our
  * drafts) and the ids of our runs and drafts. Never a key or demo code.
  */
-export type Mine = {
-  owner_token: string | null;
-  runs: string[];
-  drafts: string[];
-};
+export type Mine = { owner_token: string | null; runs: string[]; drafts: string[] };
 
 export const MINE_KEY = "newsletter.mine";
 
 const strings = (value: unknown) =>
-  Array.isArray(value)
-    ? value.filter((v): v is string => typeof v === "string")
-    : [];
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 
 export function loadMine(): Mine {
   try {
     const value = JSON.parse(sessionStorage.getItem(MINE_KEY) ?? "null");
     return {
-      owner_token:
-        typeof value?.owner_token === "string" && value.owner_token
-          ? value.owner_token
-          : null,
+      owner_token: typeof value?.owner_token === "string" && value.owner_token ? value.owner_token : null,
       runs: strings(value?.runs),
       drafts: strings(value?.drafts),
     };
@@ -206,10 +173,7 @@ export function rememberRun(run: Run): void {
   saveMine({
     owner_token: run.owner_token || mine.owner_token,
     runs: mine.runs.includes(run.id) ? mine.runs : [...mine.runs, run.id],
-    drafts:
-      run.draft_id && !mine.drafts.includes(run.draft_id)
-        ? [...mine.drafts, run.draft_id]
-        : mine.drafts,
+    drafts: run.draft_id && !mine.drafts.includes(run.draft_id) ? [...mine.drafts, run.draft_id] : mine.drafts,
   });
 }
 
@@ -247,18 +211,10 @@ export function clearCurrentRun(): void {
 /** The hex sha256 of the text's UTF-8 bytes, as the API's `text_sha256` computes it. */
 export async function sha256Hex(text: string): Promise<string> {
   if (!globalThis.crypto?.subtle) {
-    throw new ApiError(
-      0,
-      "approving needs a secure page: open it on https, localhost or 127.0.0.1",
-    );
+    throw new ApiError(0, "approving needs a secure page: open it on https, localhost or 127.0.0.1");
   }
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(text),
-  );
-  return Array.from(new Uint8Array(digest), (b) =>
-    b.toString(16).padStart(2, "0"),
-  ).join("");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**
@@ -278,22 +234,12 @@ export async function listProviders(base = ""): Promise<Provider[] | null> {
 }
 
 /** `onUnauthorized` hears every 401, so the page can ask for the key or token again. */
-export function createApi(
-  access: Access,
-  base = "",
-  onUnauthorized?: (error: ApiError) => void,
-) {
+export function createApi(access: Access, base = "", onUnauthorized?: (error: ApiError) => void) {
   const secret = "token" in access ? access.token : access.model.secret;
   const credentials: Record<string, string> =
-    "token" in access
-      ? { Authorization: `Bearer ${access.token}` }
-      : modelHeaders(access.model);
+    "token" in access ? { Authorization: `Bearer ${access.token}` } : modelHeaders(access.model);
 
-  async function call<T>(
-    method: string,
-    path: string,
-    body?: object,
-  ): Promise<T> {
+  async function call<T>(method: string, path: string, body?: object): Promise<T> {
     const headers: Record<string, string> = { ...credentials };
     const owner = "model" in access ? loadMine().owner_token : null;
     if (owner) headers["X-Owner-Token"] = owner;
@@ -313,12 +259,8 @@ export function createApi(
       const detail = data?.detail;
       // A message that echoes the secret is never shown: the page would render it. A secret
       // under 4 characters is not looked for: it would match ordinary words.
-      const shown =
-        typeof detail === "string" &&
-        !(secret.length >= 4 && detail.includes(secret));
-      const wait = Number(
-        data?.retry_after ?? response.headers.get("Retry-After") ?? NaN,
-      );
+      const shown = typeof detail === "string" && !(secret.length >= 4 && detail.includes(secret));
+      const wait = Number(data?.retry_after ?? response.headers.get("Retry-After") ?? NaN);
       const error = new ApiError(
         response.status,
         shown ? detail : `the API answered ${response.status}`,
@@ -332,27 +274,19 @@ export function createApi(
 
   return {
     presets: () => call<Preset[]>("GET", "/api/presets"),
-    checkFeed: (url: string) =>
-      call<FeedCheck>("POST", "/api/feeds/check", { url }),
+    checkFeed: (url: string) => call<FeedCheck>("POST", "/api/feeds/check", { url }),
     /** Start a run; a busy server answers 409 with `retryAfter` on the error. */
-    startRun: (run: { feeds: string[]; focus?: string }) =>
-      call<Run>("POST", "/api/runs", run),
-    getRun: (id: string) =>
-      call<Run>("GET", `/api/runs/${encodeURIComponent(id)}`),
+    startRun: (run: { feeds: string[]; focus?: string }) => call<Run>("POST", "/api/runs", run),
+    getRun: (id: string) => call<Run>("GET", `/api/runs/${encodeURIComponent(id)}`),
     listDrafts: () => call<DraftSummary[]>("GET", "/api/drafts"),
-    getDraft: (id: string) =>
-      call<Draft>("GET", `/api/drafts/${encodeURIComponent(id)}`),
+    getDraft: (id: string) => call<Draft>("GET", `/api/drafts/${encodeURIComponent(id)}`),
     saveText: (id: string, text: string) =>
       call<Draft>("PUT", `/api/drafts/${encodeURIComponent(id)}`, { text }),
     /** Approve `draft.text` as read; the API refuses with 409 if it changed since. */
     approve: async (draft: Draft) =>
-      call<Draft>(
-        "POST",
-        `/api/drafts/${encodeURIComponent(draft.id)}/approve`,
-        {
-          sha256: await sha256Hex(draft.text),
-        },
-      ),
+      call<Draft>("POST", `/api/drafts/${encodeURIComponent(draft.id)}/approve`, {
+        sha256: await sha256Hex(draft.text),
+      }),
   };
 }
 

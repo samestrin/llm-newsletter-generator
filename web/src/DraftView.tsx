@@ -1,6 +1,5 @@
 import { createElement, useMemo, useState, type ReactNode } from "react";
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { Api, Draft, Flag } from "./api";
 import { FlagNote, Flags, RunReport, httpOnly } from "./Report";
 
@@ -30,9 +29,7 @@ const words = (text: string) => text.replace(/\s+/g, " ").trim();
  */
 function markFlags(flags: Flag[]) {
   return () => (tree: Node) => {
-    let left = flags
-      .map((flag, n) => ({ n, text: words(flag.text) }))
-      .filter((f) => f.text);
+    let left = flags.map((flag, n) => ({ n, text: words(flag.text) })).filter((f) => f.text);
     const visit = (node: Node) => {
       if (node.tagName === "li" && left.length) {
         const text = words(ownText(node));
@@ -85,9 +82,7 @@ function withFlags(flags: Flag[]): Components {
   return {
     ...BASE,
     li: ({ node, children, ...props }) => {
-      const places = String(
-        (node as Node | undefined)?.properties?.dataFlags ?? "",
-      );
+      const places = String((node as Node | undefined)?.properties?.dataFlags ?? "");
       const mine = places ? places.split(" ").map((n) => flags[Number(n)]) : [];
       return (
         <li {...props} className={mine.length ? "flagged-claim" : undefined}>
@@ -102,15 +97,7 @@ function withFlags(flags: Flag[]): Components {
 }
 
 /** One draft: the issue drawn from its Markdown, its flags and run report; edit and approve. */
-export function DraftView({
-  api,
-  draft,
-  onChange,
-}: {
-  api: Api;
-  draft: Draft;
-  onChange: (d: Draft) => void;
-}) {
+export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; onChange: (d: Draft) => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,31 +126,19 @@ export function DraftView({
     body = (
       <label className="editor">
         Draft text
-        <textarea
-          value={editing}
-          onChange={(e) => setEditing(e.target.value)}
-          rows={24}
-          spellCheck
-        />
+        <textarea value={editing} onChange={(e) => setEditing(e.target.value)} rows={24} spellCheck />
       </label>
     );
   } else if (draft.text) {
     body = (
       <div className="draft-text" data-testid="draft-text">
-        <Markdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={rehypePlugins}
-          urlTransform={httpOnly}
-          components={components}
-        >
+        <Markdown rehypePlugins={rehypePlugins} urlTransform={httpOnly} components={components}>
           {draft.text}
         </Markdown>
       </div>
     );
   } else {
-    body = (
-      <p className="state">This draft has no text. Edit it to write some.</p>
-    );
+    body = <p className="state">This draft has no text. Edit it to write some.</p>;
   }
 
   return (
@@ -178,9 +153,7 @@ export function DraftView({
         Issue date {draft.issue_date} · updated {draft.updated_at}
       </p>
       <p data-testid="approval" className={draft.approved ? "good" : "bad"}>
-        {draft.approved
-          ? `Approved ${draft.approval?.approved_at ?? ""}`.trim()
-          : "Not approved"}
+        {draft.approved ? `Approved ${draft.approval?.approved_at ?? ""}`.trim() : "Not approved"}
       </p>
       {error && (
         <p role="alert" className="bad">
@@ -189,11 +162,7 @@ export function DraftView({
       )}
       <div className="actions">
         {editing === null ? (
-          <button
-            type="button"
-            onClick={() => setEditing(draft.text)}
-            disabled={busy}
-          >
+          <button type="button" onClick={() => setEditing(draft.text)} disabled={busy}>
             Edit
           </button>
         ) : (
@@ -212,11 +181,7 @@ export function DraftView({
               Save
             </button>
             {unsaved && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setEditing(draft.text)}
-              >
+              <button type="button" disabled={busy} onClick={() => setEditing(draft.text)}>
                 Discard changes
               </button>
             )}
@@ -256,10 +221,7 @@ export function DraftView({
         )}
       </div>
       {editing !== null && draft.approved && (
-        <p className="state">
-          This draft is approved. Saving a change clears the approval: approve
-          it again after.
-        </p>
+        <p className="state">This draft is approved. Saving a change clears the approval: approve it again after.</p>
       )}
       {body}
       <Flags flags={flags} />
