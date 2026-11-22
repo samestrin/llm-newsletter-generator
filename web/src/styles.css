@@ -327,8 +327,13 @@ nav button[aria-current] {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.draft-text > :first-child {
+  margin-top: 0;
+}
+.focus-line {
+  font-weight: 600;
 }
 .editor {
   display: block;
@@ -374,6 +379,20 @@ nav button[aria-current] {
   flex: none;
   width: 1.1em;
   height: 1.1em;
+}
+/* A flagged claim's note in the draft, under the claim it explains. */
+.flagged-claim .flag-note {
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-bad);
+  border-radius: var(--radius);
+  background: var(--color-flag-bg);
+}
+.flag-note blockquote {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border);
 }
 
 .table-scroll {

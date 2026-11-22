@@ -8,7 +8,9 @@ async function openDraft(page: Page) {
   await page.getByLabel("API token").fill("e2e-token");
   await page.getByRole("button", { name: "Connect" }).click();
   await page.getByRole("button", { name: /AI Weekly/ }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "AI Weekly" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "AI Weekly" }),
+  ).toBeVisible();
 }
 
 test.beforeEach(async ({ request, page }) => {
@@ -22,6 +24,62 @@ test("a draft containing markup is shown as text", async ({ page }) => {
   await openDraft(page);
   await expect(page.getByTestId("draft-text")).toContainText(MARKUP);
   await expect(page.locator("main img, main script")).toHaveCount(0);
+});
+
+test("the draft reads as a newsletter: links checked, script inert, flags explained beside the claim", async ({
+  page,
+  request,
+}) => {
+  await request.post("http://127.0.0.1:8787/__reset", {
+    data: {
+      focus: "practical AI tools",
+      text: [
+        "# AI Weekly",
+        "",
+        "## Lead story: [Tiny model wins](<https://example.com/story-1>)",
+        "",
+        "<script>alert(5)</script> [click](javascript:alert(6))",
+        "",
+        "- \\[1\\] **Flagged: unsupported.** The model scored 99% on every benchmark. ([source](<https://example.com/story-1>))",
+      ].join("\n"),
+      flags: [
+        {
+          id: "s1-c1",
+          story_id: "s1",
+          text: "The model scored 99% on every benchmark.",
+          status: "unsupported",
+          reason: "The source gives 91%.",
+          source_url: "https://example.com/story-1",
+          passage: "It scored 91% on the benchmark.",
+          explanation: "The article says 91%; the draft said 99%.",
+        },
+      ],
+    },
+  });
+  await openDraft(page);
+  const body = page.getByTestId("draft-text");
+  await expect(
+    body.getByRole("heading", {
+      level: 4,
+      name: "Lead story: Tiny model wins",
+    }),
+  ).toBeVisible();
+  await expect(body).toContainText("<script>alert(5)</script>");
+  await expect(page.locator("main script")).toHaveCount(0);
+  await expect(body.getByText("click")).toBeVisible();
+  await expect(body.locator("a:not([href^='http'])")).toHaveCount(0);
+  await expect(
+    body.getByRole("link", { name: "Tiny model wins" }),
+  ).toHaveAttribute("rel", "noopener noreferrer");
+  const note = body.getByRole("listitem").getByRole("note");
+  await expect(note).toContainText("The article says 91%; the draft said 99%.");
+  await expect(note).toContainText("It scored 91% on the benchmark.");
+  await expect(
+    note.getByRole("link", { name: "https://example.com/story-1" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("focus")).toHaveText(
+    "Focus: practical AI tools",
+  );
 });
 
 test("flags and the run report are visible", async ({ page }) => {
@@ -41,10 +99,15 @@ test("edit, then approve, and both are kept by the API", async ({ page }) => {
   await openDraft(page);
 
   await page.getByRole("button", { name: "Edit" }).click();
-  await page.getByLabel("Draft text").fill("# AI Weekly\n\nEdited by the reviewer.");
+  await page
+    .getByLabel("Draft text")
+    .fill("# AI Weekly\n\nEdited by the reviewer.");
   await expect(approve).toBeDisabled();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("draft-text")).toContainText("Edited by the reviewer.");
+  await page.getByRole("button", { name: "Done editing" }).click();
+  await expect(page.getByTestId("draft-text")).toContainText(
+    "Edited by the reviewer.",
+  );
   await expect(page.getByTestId("approval")).toHaveText("Not approved");
 
   await approve.click();
@@ -52,7 +115,9 @@ test("edit, then approve, and both are kept by the API", async ({ page }) => {
 
   // A fresh load reads it back from the API: the edit and the approval were stored.
   await openDraft(page);
-  await expect(page.getByTestId("draft-text")).toContainText("Edited by the reviewer.");
+  await expect(page.getByTestId("draft-text")).toContainText(
+    "Edited by the reviewer.",
+  );
   await expect(page.getByTestId("approval")).toHaveText(/^Approved/);
 });
 
@@ -75,7 +140,10 @@ async function axeIssues(page: Page) {
   const { violations } = await new AxeBuilder({ page }).analyze();
   return violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
-    .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
+    .map(
+      (v) =>
+        `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`,
+    );
 }
 
 /** Tab forward until `target` has focus; fails if it takes more than `limit` presses. */
@@ -112,7 +180,9 @@ test("axe finds no serious or critical issues on the token form, a draft and the
   expect(await axeIssues(page)).toEqual([]);
 });
 
-test("the colors follow the system light or dark setting", async ({ page }, testInfo) => {
+test("the colors follow the system light or dark setting", async ({
+  page,
+}, testInfo) => {
   const scheme = testInfo.project.use.colorScheme ?? "light";
   await openDraft(page);
   // Relative brightness (0 black, 1 white) of the page background and of its text.
@@ -133,9 +203,15 @@ test("the colors follow the system light or dark setting", async ({ page }, test
   }
 });
 
-test("the page fits the window width, with nothing scrolling sideways", async ({ page }) => {
+test("the page fits the window width, with nothing scrolling sideways", async ({
+  page,
+}) => {
   const fits = () =>
-    page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+    page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+    );
   await page.goto("/");
   expect(await fits()).toBe(true);
   await openDraft(page);
@@ -144,7 +220,9 @@ test("the page fits the window width, with nothing scrolling sideways", async ({
   expect(await fits()).toBe(true);
 });
 
-test("the page has a banner, the drafts navigation and a main landmark", async ({ page }) => {
+test("the page has a banner, the drafts navigation and a main landmark", async ({
+  page,
+}) => {
   await openDraft(page);
   await expect(page.getByRole("banner")).toContainText("Newsletter review");
   await expect(page.getByRole("navigation", { name: "Drafts" })).toBeVisible();
@@ -172,15 +250,21 @@ test("a keyboard user can skip to the content, connect and open a draft, with fo
   await tabTo(page, item);
   await expectFocusRing(item);
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { level: 2, name: "AI Weekly" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "AI Weekly" }),
+  ).toBeVisible();
 
   await tabTo(page, page.getByRole("button", { name: "Edit" }));
   await expectFocusRing(page.getByRole("button", { name: "Edit" }));
 });
 
-test("a flagged claim is marked by text and an icon, not by color alone", async ({ page }) => {
+test("a flagged claim is marked by text and an icon, not by color alone", async ({
+  page,
+}) => {
   await openDraft(page);
-  const flag = page.getByRole("region", { name: "Flags (1)" }).getByRole("listitem");
+  const flag = page
+    .getByRole("region", { name: "Flags (1)" })
+    .getByRole("listitem");
   await expect(flag).toContainText("Flagged: unsupported");
   await expect(flag.getByTestId("flag-icon")).toBeVisible();
 });

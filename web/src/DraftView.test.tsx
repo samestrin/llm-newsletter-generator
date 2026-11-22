@@ -49,7 +49,11 @@ function fakeApi(start: Draft) {
     }),
     getDraft: vi.fn(async () => draft),
     approve: vi.fn(async () => {
-      draft = { ...draft, approved: true, approval: { sha256: "x", approved_at: "now" } };
+      draft = {
+        ...draft,
+        approved: true,
+        approval: { sha256: "x", approved_at: "now" },
+      };
       return draft;
     }),
   } as unknown as Api & { saveText: ReturnType<typeof vi.fn> };
@@ -65,32 +69,48 @@ function show(overrides: Partial<Draft> = {}) {
   const api = fakeApi(draft);
   const user = userEvent.setup();
   const view = render(<Harness api={api} start={draft} />);
-  return { api, user, view, newsletter: () => screen.getByTestId("draft-text") };
+  return {
+    api,
+    user,
+    view,
+    newsletter: () => screen.getByTestId("draft-text"),
+  };
 }
 
 describe("the draft as a newsletter", () => {
   it("renders headings, lead, themes, stories and claim links from the Markdown", () => {
     const { newsletter } = show();
     const body = newsletter();
-    expect(within(body).getByRole("heading", { name: "AI Weekly" })).toBeInTheDocument();
-    const lead = within(body).getByRole("heading", { name: "Lead story: Tiny model wins" });
-    expect(within(lead).getByRole("link", { name: "Tiny model wins" })).toHaveAttribute(
-      "href",
-      "https://example.com/story-1",
-    );
+    expect(
+      within(body).getByRole("heading", { name: "AI Weekly" }),
+    ).toBeInTheDocument();
+    const lead = within(body).getByRole("heading", {
+      name: "Lead story: Tiny model wins",
+    });
+    expect(
+      within(lead).getByRole("link", { name: "Tiny model wins" }),
+    ).toHaveAttribute("href", "https://example.com/story-1");
     expect(body).toHaveTextContent("Themes");
     expect(body).toHaveTextContent("Why it matters: Laptops can run it.");
-    expect(within(body).getAllByRole("link", { name: "source" })[0]).toHaveAttribute(
-      "href",
-      "https://example.com/story-1",
-    );
+    expect(
+      within(body).getAllByRole("link", { name: "source" })[0],
+    ).toHaveAttribute("href", "https://example.com/story-1");
   });
 
   it("keeps the draft's headings below the page's own", () => {
     const { newsletter } = show();
-    expect(within(newsletter()).queryByRole("heading", { level: 1 })).toBeNull();
-    expect(within(newsletter()).queryByRole("heading", { level: 2 })).toBeNull();
-    expect(within(newsletter()).getByRole("heading", { level: 3, name: "AI Weekly" })).toBeInTheDocument();
+    expect(
+      within(newsletter()).queryByRole("heading", { level: 1 }),
+    ).toBeNull();
+    expect(
+      within(newsletter()).queryByRole("heading", { level: 2 }),
+    ).toBeNull();
+    expect(
+      within(newsletter()).getByRole("heading", {
+        level: 3,
+        name: "AI Weekly",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("opens links in a new tab with noopener noreferrer", () => {
@@ -140,7 +160,9 @@ describe("the draft as a newsletter", () => {
 
   it("says when the draft has no text", () => {
     show({ text: "" });
-    expect(screen.getByText("This draft has no text. Edit it to write some.")).toBeInTheDocument();
+    expect(
+      screen.getByText("This draft has no text. Edit it to write some."),
+    ).toBeInTheDocument();
   });
 });
 
@@ -152,10 +174,25 @@ describe("a flagged claim in plain words", () => {
       .find((li) => li.textContent?.includes(FLAG.text))!;
     const note = within(claim).getByRole("note");
     expect(note).toHaveTextContent("Flagged: unsupported");
-    expect(within(note).getByTestId("flag-icon")).toHaveAttribute("aria-hidden", "true");
+    expect(within(note).getByTestId("flag-icon")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
     expect(note).toHaveTextContent(FLAG.explanation!);
     expect(within(note).getByText(FLAG.passage!)).toBeInTheDocument();
-    expect(within(note).getByRole("link", { name: FLAG.source_url })).toHaveAttribute("rel", "noopener noreferrer");
+    expect(
+      within(note).getByRole("link", { name: FLAG.source_url }),
+    ).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("explains a flag once, at the claim, not again in the draft's own run report", () => {
+    const text = `${ISSUE}\n## Run report\n\n**Claims flagged**\n\n- \`s1-c1\` unsupported: ${FLAG.text} (${FLAG.reason})\n`;
+    const { newsletter } = show({ text });
+    const notes = within(newsletter()).getAllByRole("note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].closest("li")).toHaveTextContent(
+      "Flagged: unsupported, the source does not support this claim.",
+    );
   });
 
   it("does not mark a claim that is not flagged", () => {
@@ -176,7 +213,9 @@ describe("a flagged claim in plain words", () => {
 
   it("lists every flag in the Flags section too, with its explanation and passage", () => {
     show();
-    const item = within(screen.getByRole("region", { name: "Flags (1)" })).getByRole("listitem");
+    const item = within(
+      screen.getByRole("region", { name: "Flags (1)" }),
+    ).getByRole("listitem");
     expect(item).toHaveTextContent(FLAG.explanation!);
     expect(item).toHaveTextContent(FLAG.passage!);
   });
@@ -190,10 +229,15 @@ describe("edit, save, done editing", () => {
     await user.clear(box);
     await user.type(box, "# Edited{Enter}{Enter}Fixed by the reviewer.");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(api.saveText).toHaveBeenCalledWith(makeDraft().id, "# Edited\n\nFixed by the reviewer.");
+    expect(api.saveText).toHaveBeenCalledWith(
+      makeDraft().id,
+      "# Edited\n\nFixed by the reviewer.",
+    );
     expect(screen.getByLabelText("Draft text")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Done editing" }));
-    expect(within(newsletter()).getByRole("heading", { name: "Edited" })).toBeInTheDocument();
+    expect(
+      within(newsletter()).getByRole("heading", { name: "Edited" }),
+    ).toBeInTheDocument();
     expect(newsletter()).toHaveTextContent("Fixed by the reviewer.");
   });
 
@@ -210,22 +254,31 @@ describe("edit, save, done editing", () => {
   });
 
   it("warns that saving an approved draft clears its approval", async () => {
-    const { user } = show({ approved: true, approval: { sha256: "x", approved_at: "then" } });
+    const { user } = show({
+      approved: true,
+      approval: { sha256: "x", approved_at: "then" },
+    });
     await user.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.getByText(/Saving a change clears the approval/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Saving a change clears the approval/),
+    ).toBeInTheDocument();
     await user.type(screen.getByLabelText("Draft text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByTestId("approval")).toHaveTextContent("Not approved");
+    expect(await screen.findByTestId("approval")).toHaveTextContent(
+      "Not approved",
+    );
   });
 });
 
 describe("the run's focus", () => {
   it("is shown at the top of the draft and in the report", () => {
     show({ focus: "practical AI tools for small businesses" });
-    expect(screen.getByTestId("focus")).toHaveTextContent("Focus: practical AI tools for small businesses");
-    expect(screen.getByRole("region", { name: "Run report" })).toHaveTextContent(
+    expect(screen.getByTestId("focus")).toHaveTextContent(
       "Focus: practical AI tools for small businesses",
     );
+    expect(
+      screen.getByRole("region", { name: "Run report" }),
+    ).toHaveTextContent("Focus: practical AI tools for small businesses");
   });
 
   it("is read from the report when the draft has none", () => {
@@ -236,7 +289,9 @@ describe("the run's focus", () => {
   it("is not shown when the run had none", () => {
     show();
     expect(screen.queryByTestId("focus")).toBeNull();
-    expect(screen.getByRole("region", { name: "Run report" })).not.toHaveTextContent("Focus:");
+    expect(
+      screen.getByRole("region", { name: "Run report" }),
+    ).not.toHaveTextContent("Focus:");
   });
 });
 
@@ -244,7 +299,9 @@ describe("what the run left out", () => {
   it("still lists failed sources and dropped items on the draft", () => {
     show();
     const report = screen.getByRole("region", { name: "Run report" });
-    expect(report).toHaveTextContent("https://down.example.com/feed.xml: HTTP 503");
+    expect(report).toHaveTextContent(
+      "https://down.example.com/feed.xml: HTTP 503",
+    );
     expect(report).toHaveTextContent("Empty story");
     expect(report).toHaveTextContent("Dropped claim text");
   });
