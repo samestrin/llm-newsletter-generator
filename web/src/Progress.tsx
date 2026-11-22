@@ -97,6 +97,8 @@ export function Progress({ api, runId, onDone, onStartOver }: Props) {
   const [run, setRun] = useState<Run | null>(null);
   const [failures, setFailures] = useState(0);
   const [missing, setMissing] = useState(false);
+  // The server refused the poll with a 4xx other than 404: its status and plain message.
+  const [refused, setRefused] = useState<{ status: number; message: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [changedAt, setChangedAt] = useState(() => Date.now());
@@ -105,8 +107,11 @@ export function Progress({ api, runId, onDone, onStartOver }: Props) {
   const latest = useRef({ api, onDone });
   latest.current = { api, onDone };
   const last = useRef<Run | null>(null);
+  // The key a 401 refused: polling resumes once the page has another.
+  const refusedApi = useRef<Api | null>(null);
 
-  const over = run?.status === "done" || run?.status === "error" || missing || failures >= MAX_FAILURES;
+  const over =
+    run?.status === "done" || run?.status === "error" || missing || !!refused || failures >= MAX_FAILURES;
 
   useEffect(() => {
     let live = true;
@@ -143,6 +148,13 @@ export function Progress({ api, runId, onDone, onStartOver }: Props) {
           setMissing(true);
           return;
         }
+        // A refusal is not a lost connection: asking again gets the same answer, and each
+        // 401 would reopen the key panel. Stop and say so; a new key or Try again resumes.
+        if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429) {
+          if (e.status === 401) refusedApi.current = latest.current.api;
+          setRefused({ status: e.status, message: e.message });
+          return;
+        }
         failed += 1;
         setFailures(failed);
         if (failed >= MAX_FAILURES) return;
@@ -156,6 +168,13 @@ export function Progress({ api, runId, onDone, onStartOver }: Props) {
       clearTimeout(timer);
     };
   }, [runId, attempt]);
+
+  // The key was saved again after a 401: ask again with it.
+  useEffect(() => {
+    if (refused?.status !== 401 || api === refusedApi.current) return;
+    setRefused(null);
+    setAttempt((n) => n + 1);
+  }, [api, refused]);
 
   // A clock for the elapsed times and "Still working", only while the run goes.
   useEffect(() => {
@@ -171,6 +190,7 @@ export function Progress({ api, runId, onDone, onStartOver }: Props) {
 
   function tryAgain() {
     setFailures(0);
+    setRefused(null);
     setChangedAt(Date.now());
     setAttempt((n) => n + 1);
   }
@@ -186,7 +206,7 @@ export function Progress({ api, runId, onDone, onStartOver }: Props) {
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
-      {!run && !missing && failures === 0 && (
+      {!run && !missing && !refused && failures === 0 && (
         <p role="status" className="state">
           Asking how the run is going…
         </p>
@@ -219,6 +239,25 @@ export function Progress({ api, runId, onDone, onStartOver }: Props) {
           <button type="button" onClick={tryAgain}>
             Try again
           </button>
+          <button type="button" onClick={startOver}>
+            Start over
+          </button>
+        </div>
+      ) : refused ? (
+        <div role="alert" className="state state-error">
+          {refused.status === 401 ? (
+            <p>
+              The server refused the key: {refused.message}. Your newsletter may still be on its way: give the page
+              the key again and it carries on.
+            </p>
+          ) : (
+            <>
+              <p>The server refused to say how the run is going: {refused.message}.</p>
+              <button type="button" onClick={tryAgain}>
+                Try again
+              </button>
+            </>
+          )}
           <button type="button" onClick={startOver}>
             Start over
           </button>
