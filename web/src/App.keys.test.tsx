@@ -202,6 +202,24 @@ describe("the key panel on a demo-mode server", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("a refused key leaves the saved good key, its client and the draft list in place", async () => {
+    const api = keyApi();
+    const { user } = await start(api);
+    await saveKey(user, "openrouter", KEY);
+    await screen.findByRole("button", { name: /AI Weekly/ });
+    await user.click(screen.getByRole("button", { name: "Key" }));
+    await saveKey(user, "openrouter", "sk-wrong");
+    const panel = await screen.findByRole("region", { name: "Model key" });
+    expect(within(panel).getByRole("alert")).toHaveTextContent("X-Model-Key was refused by the provider");
+
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ preset: "openrouter", secret: KEY });
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(within(screen.getByRole("navigation")).getByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /AI Weekly/ }));
+    await screen.findByRole("heading", { level: 2, name: "AI Weekly" });
+    expect(api.calls.at(-1)!.headers.get("X-Model-Key")).toBe(KEY);
+  });
+
   it("Clear wipes both stores and leaves the panel open", async () => {
     stored("openrouter", KEY, true);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ preset: "demo", secret: CODE }));
