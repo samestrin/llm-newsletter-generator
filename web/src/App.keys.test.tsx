@@ -124,6 +124,7 @@ describe("the key panel on a demo-mode server", () => {
       await user.click(screen.getByRole("button", { name: "Edit" }));
       await user.type(screen.getByLabelText("Draft text"), "!");
       await user.click(screen.getByRole("button", { name: "Save" }));
+      await user.click(await screen.findByRole("button", { name: "Done editing" }));
       expect(await screen.findByTestId("draft-text")).toHaveTextContent("Second paragraph.!");
       await user.click(screen.getByRole("button", { name: "Key" }));
       await screen.findByRole("region", { name: "Model key" });

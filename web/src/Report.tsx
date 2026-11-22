@@ -1,15 +1,22 @@
 import { Component, type ReactNode } from "react";
 import type { Flag, Report } from "./api";
 
+/**
+ * `url` if it is an absolute http or https URL, else the empty string: no relative URL, no
+ * other scheme. It is the draft renderer's `urlTransform`, so a link the draft's Markdown
+ * writes is checked by the same rule as a flag's source link.
+ */
+export function httpOnly(url: string): string {
+  try {
+    return ["http:", "https:"].includes(new URL(url).protocol) ? url : "";
+  } catch {
+    return "";
+  }
+}
+
 /** A link only for http and https; any other URL is shown as plain text. */
 export function SafeLink({ href }: { href: string }) {
-  let safe = false;
-  try {
-    safe = ["http:", "https:"].includes(new URL(href).protocol);
-  } catch {
-    safe = false;
-  }
-  if (!safe) return <code>{href}</code>;
+  if (!httpOnly(href)) return <code>{href}</code>;
   return (
     <a href={href} target="_blank" rel="noopener noreferrer">
       {href}
@@ -32,6 +39,32 @@ function FlagIcon() {
   );
 }
 
+/**
+ * Why a claim is flagged, in plain words: the server's explanation (the model's reason on a
+ * draft from before explanations were kept), the source passage and the source link, marked
+ * by text and an icon.
+ */
+export function FlagNote({ flag }: { flag: Flag }) {
+  return (
+    <div role="note" className="flag-note">
+      <span className="flag-label">
+        <FlagIcon />
+        Flagged: {flag.status}
+      </span>{" "}
+      {flag.explanation || flag.reason}
+      {flag.passage && (
+        <>
+          <div className="muted">Source text:</div>
+          <blockquote>{flag.passage}</blockquote>
+        </>
+      )}
+      <div>
+        Source: <SafeLink href={flag.source_url} />
+      </div>
+    </div>
+  );
+}
+
 export function Flags({ flags }: { flags: Flag[] }) {
   return (
     <section aria-labelledby="flags-heading" className="flags">
@@ -42,17 +75,8 @@ export function Flags({ flags }: { flags: Flag[] }) {
         <ul>
           {flags.map((flag) => (
             <li key={flag.id} className="flag">
-              <span className="flag-label">
-                <FlagIcon />
-                Flagged: {flag.status}
-              </span>{" "}
-              <q>{flag.text}</q>
-              <div className="muted">
-                {flag.id} · {flag.reason}
-              </div>
-              <div>
-                Source: <SafeLink href={flag.source_url} />
-              </div>
+              <q>{flag.text}</q> <span className="muted">{flag.id}</span>
+              <FlagNote flag={flag} />
             </li>
           ))}
         </ul>
@@ -103,10 +127,20 @@ function ReportError() {
 }
 
 /** The run report section: loading, none saved, unreadable, or the report. */
-export function RunReport({ report, loading = false }: { report?: Report | null; loading?: boolean }) {
+export function RunReport({
+  report,
+  loading = false,
+  focus,
+}: {
+  report?: Report | null;
+  loading?: boolean;
+  /** The run's focus, shown first. */
+  focus?: string | null;
+}) {
   return (
     <section aria-labelledby="report-heading" className="report">
       <h3 id="report-heading">Run report</h3>
+      {focus && <p>Focus: {focus}</p>}
       {loading ? (
         <p className="state">Loading the run report…</p>
       ) : report == null ? (

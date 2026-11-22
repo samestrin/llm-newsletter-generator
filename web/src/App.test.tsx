@@ -240,6 +240,7 @@ describe("edit and approve", () => {
     await user.clear(box);
     await user.type(box, "Fixed text");
     await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Done editing" }));
     expect(await screen.findByTestId("draft-text")).toHaveTextContent("Fixed text");
     expect(api.calls).toContainEqual({
       method: "PUT",
@@ -254,8 +255,10 @@ describe("edit and approve", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.type(screen.getByLabelText("Draft text"), " more");
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.getByTestId("draft-text").textContent).toBe(makeDraft().text);
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+    await user.click(screen.getByRole("button", { name: "Done editing" }));
+    expect(screen.getByTestId("draft-text")).toHaveTextContent("Second paragraph.");
+    expect(screen.getByTestId("draft-text")).not.toHaveTextContent("more");
     expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
   });
 
@@ -419,6 +422,7 @@ describe("the draft's states", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.type(screen.getByLabelText("Draft text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Done editing" }));
     expect(await screen.findByTestId("draft-text")).toHaveTextContent(/!$/);
     expect(within(nav).getByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
   });
