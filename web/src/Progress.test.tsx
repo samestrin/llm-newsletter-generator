@@ -393,7 +393,7 @@ describe("live progress", () => {
 
   it("on a 401 stops polling at once and says the key was refused, not that contact was lost", async () => {
     sessionStorage.setItem(RUN_KEY, RUN_ID);
-    const api = fakeApi(["refused"]);
+    const api = fakeApi(["refused", SCRIPT[1]]);
     vi.stubGlobal("fetch", api.fetch);
     const unauthorized = vi.fn();
     const { rerender } = render(
@@ -426,6 +426,7 @@ describe("live progress", () => {
     await pass(0);
     expect(api.polled()).toBe(2);
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(stateOf("Fetching feeds")).toBe("Running");
   });
 
   it("on another 4xx stops polling and says the server refused, with Try again and Start over", async () => {
