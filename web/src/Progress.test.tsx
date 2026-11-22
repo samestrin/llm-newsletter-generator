@@ -106,12 +106,12 @@ const SCRIPT: Run[] = [
   ),
 ];
 
-type Answer = Run | "fail" | "missing" | "refused" | "bad";
+type Answer = Run | "fail" | "missing" | "refused" | "bad" | 408 | 429;
 
 /**
  * A fake of a demo-mode server: `GET /api/runs/{id}` answers the next of `answers` at each
  * poll and keeps answering the last one; "fail" is a network failure, "missing" a 404,
- * "refused" a 401 and "bad" a 400.
+ * "refused" a 401, "bad" a 400, and 408 or 429 that status.
  */
 function fakeApi(answers: Answer[] = SCRIPT) {
   const calls: { method: string; url: string; headers: Headers }[] = [];
@@ -130,6 +130,7 @@ function fakeApi(answers: Answer[] = SCRIPT) {
       if (answer === "missing") return json(404, { detail: "no such run" });
       if (answer === "refused") return json(401, { detail: "X-Demo-Code was not accepted" });
       if (answer === "bad") return json(400, { detail: "that is not a run id" });
+      if (answer === 408 || answer === 429) return json(answer, { detail: "try again later" });
       return json(200, answer);
     }
     if (method === "GET" && url === "/api/presets") return json(200, []);
@@ -443,6 +444,19 @@ describe("live progress", () => {
     expect(api.polled()).toBe(2);
     expect(stateOf("Grouping and ranking stories")).toBe("Running");
     expect(onStartOver).not.toHaveBeenCalled();
+  });
+
+  it.each([408, 429] as const)("on a %i keeps polling as a lost connection, not a refusal", async (status) => {
+    const api = fakeApi([SCRIPT[1], status, status, SCRIPT[2]]);
+    renderProgress(api);
+    await pass(2000);
+    expect(screen.getByText("Lost contact, retrying…")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    await pass(4000);
+    expect(api.polled()).toBe(4);
+    expect(screen.queryByText(/Lost contact/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(stateOf("Reading articles")).toBe("Running");
   });
 
   it("clears the done entry", async () => {
