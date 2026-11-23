@@ -1,7 +1,7 @@
 """The run report: everything that failed, was left out or is in doubt, and what it cost.
 
 It is built from the sources' failures, the link-only items whose article was read or
-skipped, the grouping step's error and the items it
+skipped, the grouping step's error or note and the items it
 left out, the edited issue (dropped claims, flagged claims,
 stories with nothing to show, the editor's own failure), the voice pass's
 `VoiceRun.report()` when there was one, and `LLMClient.report()`, whose steps and costs
@@ -57,6 +57,9 @@ class RunReport:
     """Items the grouping step dropped or could not group with the others."""
     grouping_error: str | None = None
     """Why the grouping step failed, when it did: then every item is its own story."""
+    grouping_note: str | None = None
+    """Why stories were not grouped by meaning when nothing failed: the provider has no
+    embedding model. Every item is its own story; this alone does not make `ok` false."""
     dropped_stories: list[DroppedStory] = field(default_factory=list)
     dropped_claims: list[DroppedClaim] = field(default_factory=list)
     flagged_claims: list[FlaggedClaim] = field(default_factory=list)
@@ -117,6 +120,7 @@ def build_report(
         linked_articles=list(linked or []),
         left_out=list(grouping.left_out) if grouping else [],
         grouping_error=grouping.error if grouping else None,
+        grouping_note=grouping.note if grouping else None,
         editor_error=edition.error,
         editor_message=edition.message,
         editor_rejections=list(edition.rejections),

@@ -135,6 +135,10 @@ Every call but the health check needs `Authorization: Bearer $NEWSLETTER_API_TOK
 | `NEWSLETTER_API_ORIGINS` | Comma-separated origins allowed to write, default `http://127.0.0.1:<port>,http://localhost:<port>` |
 | `NEWSLETTER_DATA_DIR` | Where drafts and runs are kept, default `$XDG_DATA_HOME/newsletter` (`~/.local/share/newsletter`) |
 | `NEWSLETTER_RUN_TIMEOUT` | Seconds a whole run may take, every model call and retry included, default 900 |
+| `NEWSLETTER_DEMO_BASE_URL` | The demo model gateway a demo code is sent to as its bearer; without it, a run with a demo code is refused with 503 |
+| `NEWSLETTER_DEMO_FAST_MODEL`, `NEWSLETTER_DEMO_REASONING_MODEL`, `NEWSLETTER_DEMO_EMBEDDING_MODEL` | The gateway's model per tier for a demo-code run, default `demo-fast`, `demo-reasoning`, `demo-embedding` |
+
+A run may use a model provider other than the server's. `POST /api/runs` with `X-Model-Preset` (a provider id from `GET /api/providers`) and the caller's own key as `X-Model-Key` runs on that provider's base URL and models with that key; `X-Demo-Code` runs on the demo gateway with the code as its bearer. The key or code is used for that run's model calls only: it is not stored, returned or logged, and it is redacted from the run's progress, error, draft and report like the server's own secrets. Timeouts and retries stay the server's; the server's prices are not applied to another provider's models. A provider with no embedding model (Synthetic) still runs: every item is its own story, in feed order, and the Grouping and ranking stories step and the run report say "Synthetic has no embedding model: stories are not grouped by meaning". With none of these headers the run uses the server's own key, as before.
 
 `uv run newsletter serve --seed-sample` writes the committed `open-models-week` sample, with its flagged claims and run report, as one draft at start: once, so a restart adds no second copy and an existing draft is never overwritten or re-approved. It needs no model key and no network, which is what the review deploy (`docker-compose.embassy.yml`, described in [`docs/deploy/embassy.md`](docs/deploy/embassy.md)) starts with.
 

@@ -9,15 +9,18 @@ One run at a time, counting a timed-out one still finishing, so runs cannot pile
 
 While it goes, `run["progress"]` lists every step with its state, saved at each event
 the runner reports; once the run is over, later events are thrown away like its result.
+
+Every secret is redacted from what a run stores and logs: the server's, and the run's
+own key or demo code (`RunRequest.credentials`), for that run only.
 """
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from newsletter.api.pipeline import RunRequest
-from newsletter.api.store import DraftStore, RunStore, new_id, now
+from newsletter.api.store import DraftStore, RunStore, new_id, now, redactor
 from newsletter.progress import Progress, State, end_steps, waiting_steps
 
 log = logging.getLogger(__name__)
@@ -37,13 +40,13 @@ class Jobs:
         drafts: DraftStore,
         *,
         timeout: float,
-        redact: Callable[[Any], Any],
+        secrets: Iterable[str],
     ):
         self.runner = runner
         self.runs = runs
         self.drafts = drafts
         self.timeout = timeout
-        self.redact = redact
+        self.secrets = [s for s in secrets if s]
         self._lock = threading.Lock()
         self._finished: dict[str, threading.Event] = {}
         self._idle = threading.Event()
@@ -81,7 +84,16 @@ class Jobs:
         """Wait until no run thread is left, a timed-out one included."""
         return self._idle.wait(timeout)
 
+    def _redactor(self, request: RunRequest) -> Callable[[Any], Any]:
+        """The server's secrets and this run's own key or code, longest first so one
+        inside another is redacted whole."""
+        secrets = set(self.secrets)
+        if request.credentials is not None:
+            secrets.add(request.credentials.secret)
+        return redactor(sorted(secrets, key=len, reverse=True))
+
     def _watch(self, run: dict[str, Any], request: RunRequest) -> None:
+        redact = self._redactor(request)
         outcome: dict[str, Any] = {}
         lock = threading.Lock()
         steps = {step["id"]: step for step in run["progress"]}
@@ -108,7 +120,7 @@ class Jobs:
                 if state != "running":
                     entry["ended_at"] = stamp
                 if detail is not None:
-                    entry["detail"] = self.redact(detail)
+                    entry["detail"] = redact(detail)
                 if done is not None:
                     entry["done"] = done
                 if total is not None:
@@ -117,7 +129,7 @@ class Jobs:
 
         def work() -> None:
             try:
-                content = self.redact(self.runner(request, progress))
+                content = redact(self.runner(request, progress))
                 with lock:
                     if outcome:  # Timed out already: its result is not used.
                         return
@@ -134,7 +146,7 @@ class Jobs:
                     steps["done"].update(state="done", ended_at=stamp)
                     steps["done"]["started_at"] = steps["done"]["started_at"] or stamp
             except Exception as error:
-                message = self.redact(f"{type(error).__name__}: {error}")
+                message = redact(f"{type(error).__name__}: {error}")
                 with lock:
                     if outcome:
                         log.warning("run %s failed after its timeout: %s", run["id"], message)

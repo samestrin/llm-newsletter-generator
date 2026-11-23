@@ -14,7 +14,7 @@ from importlib.resources import files
 from typing import Any
 
 from newsletter.config import HackerNewsConfig
-from newsletter.grouping import Embedder, Grouping, group_items
+from newsletter.grouping import Embedder, Grouping, group_items, ungrouped_items
 from newsletter.llm import LLMClient, LLMError
 from newsletter.progress import Progress, no_progress, plural
 from newsletter.sources import (
@@ -157,6 +157,7 @@ def gather_stories(
     fetch: Fetch = http_get,
     cache: FeedCache | None = None,
     progress: Progress = no_progress,
+    ungrouped: str | None = None,
 ) -> Gathered:
     """Read the feeds, then the pages, then Hacker News, keep the first `per_feed` items
     of each, read the linked article of each link-only item, and group and rank them by
@@ -167,6 +168,10 @@ def gather_stories(
     group is in `grouping.left_out`, and a failed embedding call is `grouping.error`.
     `progress` hears the start and end of the feeds, the articles and the grouping, and
     the feeds and articles counted `done` of `total` as each is read.
+
+    With `ungrouped` (the provider has no embedding model), no embedding call is made:
+    every item is its own story in feed order, and `ungrouped` is the grouping's note and
+    is said in the grouping step's detail.
     """
     page_source = PageSource(fetch=fetch)
     rss = RssSource(cache=cache, fetch=fetch)
@@ -206,12 +211,18 @@ def gather_stories(
     progress("articles", "done", **_articles_counts(linked.articles, len(linked.articles)))
 
     progress("grouping", "running")
-    grouping = group_items(linked.items, llm, topic=topic)
-    grouped = plural(len(grouping.stories), "story", "stories")
+    if ungrouped:
+        grouping = ungrouped_items(linked.items, note=ungrouped)
+    else:
+        grouping = group_items(linked.items, llm, topic=topic)
+    detail = (
+        f"{plural(len(grouping.stories), 'story', 'stories')} "
+        f"from {plural(len(linked.items), 'item')}"
+    )
     progress(
         "grouping",
         "failed" if grouping.error else "done",
-        detail=f"{grouped} from {plural(len(linked.items), 'item')}",
+        detail=f"{detail}; {grouping.note}" if grouping.note else detail,
     )
     return Gathered(grouping.stories, failures, grouping, linked.articles)
 

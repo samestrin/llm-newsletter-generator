@@ -69,6 +69,10 @@ Every feed was read, every story and claim was used, and every claim was support
 **Grouping failed:** {{ report.grouping_error }}
 
 {% endif %}
+{% if report.grouping_note %}
+**Not grouped:** {{ report.grouping_note }}
+
+{% endif %}
 {% if left_out %}
 **Items not grouped or dropped**
 

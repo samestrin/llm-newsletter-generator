@@ -66,6 +66,9 @@
 {% if report.grouping_error %}
 <p style="margin:0 0 12px;"><strong>Grouping failed:</strong> {{ report.grouping_error }}</p>
 {% endif %}
+{% if report.grouping_note %}
+<p style="margin:0 0 12px;"><strong>Not grouped:</strong> {{ report.grouping_note }}</p>
+{% endif %}
 {% if left_out %}
 <p style="margin:0 0 4px;font-weight:bold;">Items not grouped or dropped</p>
 <ul style="margin:0 0 12px;padding-left:20px;">

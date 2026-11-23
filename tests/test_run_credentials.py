@@ -66,12 +66,14 @@ def env(tmp_path, **changes) -> dict[str, str]:
     }
 
 
-def run_with(tmp_path, caplog, credential_headers, **env_changes):
+def run_with(tmp_path, caplog, credential_headers, *, answer=None, **env_changes):
     """Start one run through the API with the default runner on a fake transport and
     the fixture web, and return the run, its draft, every response body and the
-    transport's calls."""
+    transport's calls. `answer` replaces the fake model endpoint's replies."""
     settings = ApiSettings.from_env(env(tmp_path, **env_changes))
     transport = Recorded()
+    if answer is not None:
+        transport.inner = httpx.MockTransport(answer)
     runner = default_runner(settings.env, transport=httpx.MockTransport(transport), fetch=run_web)
     sent = {"Authorization": f"Bearer {TOKEN}", "Origin": ORIGIN, **credential_headers}
     bodies = []
@@ -116,7 +118,7 @@ def test_a_visitor_key_goes_only_to_its_providers_base_url(tmp_path, caplog):
     assert run["status"] == "done", run
     assert calls
     openrouter = PROVIDERS["openrouter"]
-    for url, bearer, model_name in calls:
+    for url, bearer, _ in calls:
         assert url.startswith(openrouter.base_url + "/")
         assert bearer == f"Bearer {KEY}"
     used = {model_name for _, _, model_name in calls}
@@ -134,21 +136,16 @@ def test_a_visitor_key_echoed_by_the_provider_is_redacted_everywhere(tmp_path, c
     def echo(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, text=f"bad key {request.headers['authorization']}")
 
-    settings = ApiSettings.from_env(env(tmp_path))
-    runner = default_runner(settings.env, transport=httpx.MockTransport(echo), fetch=run_web)
-    sent = {
-        "Authorization": f"Bearer {TOKEN}",
-        "Origin": ORIGIN,
-        "X-Model-Preset": "openai",
-        "X-Model-Key": KEY,
-    }
-    with caplog.at_level(logging.DEBUG):
-        with TestClient(create_app(settings, runner=runner)) as client:
-            started = client.post("/api/runs", json={"feeds": [NEWS]}, headers=sent)
-            assert client.app.state.jobs.wait(started.json()["id"], 30)
-            run = client.get(f"/api/runs/{started.json()['id']}", headers=sent)
-    assert run.json()["status"] == "error"
-    assert_nowhere(KEY, tmp_path, caplog, [started.text, run.text])
+    run, draft, bodies, calls = run_with(
+        tmp_path, caplog, {"X-Model-Preset": "openai", "X-Model-Key": KEY}, answer=echo
+    )
+
+    # A failed model call is kept in the report, not raised: the run itself finishes.
+    assert run["status"] == "done", run
+    assert calls
+    failed = [step["error"] for step in draft["report"]["steps"] if not step["ok"]]
+    assert failed and all("bad key Bearer [redacted]" in error for error in failed)
+    assert_nowhere(KEY, tmp_path, caplog, bodies)
 
 
 def test_a_run_error_holding_the_visitor_key_is_redacted_by_jobs(tmp_path, caplog):
@@ -366,3 +363,14 @@ def test_without_headers_the_run_uses_the_servers_own_settings(tmp_path, caplog)
 
 def test_run_settings_without_credentials_are_the_servers():
     assert run_settings(ENV, None) == Settings.from_env(ENV)
+
+
+def test_the_token_is_checked_before_the_credential_headers(tmp_path):
+    runner = FakeRunner()
+    settings = ApiSettings.from_env(env(tmp_path))
+    sent = {"Authorization": "Bearer wrong", "Origin": ORIGIN, "X-Model-Key": KEY}
+    with TestClient(create_app(settings, runner=runner)) as client:
+        response = client.post("/api/runs", json={"feeds": [NEWS]}, headers=sent)
+    assert response.status_code == 401
+    assert KEY not in response.text
+    assert runner.requests == []
