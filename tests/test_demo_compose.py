@@ -13,6 +13,7 @@ from newsletter.api.settings import SECRET_NAMES
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_FILE = ROOT / "docker-compose.demo.yml"
+LOCAL_FILE = ROOT / "docker-compose.yml"
 DEMO_MODELS = (
     "NEWSLETTER_DEMO_FAST_MODEL",
     "NEWSLETTER_DEMO_REASONING_MODEL",
@@ -265,3 +266,42 @@ def test_the_token_is_not_given_a_default_in_the_file() -> None:
     doc = _doc()
     doc["services"]["api"]["environment"]["NEWSLETTER_API_TOKEN"] = "${NEWSLETTER_API_TOKEN:-demo}"
     assert any("NEWSLETTER_API_TOKEN" in p for p in problems(doc))
+
+
+def local_problems(doc: dict) -> list[str]:
+    """How the local compose file breaks the local page: the page sends only the visitor's
+    key, which authenticates in demo mode only; serve needs its token; and there is no
+    demo gateway locally, so demo codes stay off."""
+    found = []
+    api = (doc.get("services") or {}).get("api") or {}
+    env = _env_values(api)
+    if env.get("NEWSLETTER_DEMO") != "1":
+        found.append("demo mode is not on (NEWSLETTER_DEMO=1): the local page would 401")
+    if not env.get("NEWSLETTER_API_TOKEN"):
+        found.append("NEWSLETTER_API_TOKEN is not set: serve will not start")
+    if "NEWSLETTER_DEMO_BASE_URL" in env:
+        found.append("NEWSLETTER_DEMO_BASE_URL is set: there is no demo gateway locally")
+    return found
+
+
+def _local() -> dict:
+    return yaml.safe_load(LOCAL_FILE.read_text())
+
+
+def test_the_local_file_runs_the_page_in_demo_mode() -> None:
+    assert local_problems(_local()) == []
+
+
+def test_the_local_check_catches_demo_mode_off_a_lost_token_or_a_gateway() -> None:
+    doc = _local()
+    doc["services"]["api"]["environment"]["NEWSLETTER_DEMO"] = "0"
+    assert any("demo mode" in p for p in local_problems(doc))
+    doc = _local()
+    del doc["services"]["api"]["environment"]["NEWSLETTER_DEMO"]
+    assert any("demo mode" in p for p in local_problems(doc))
+    doc = _local()
+    del doc["services"]["api"]["environment"]["NEWSLETTER_API_TOKEN"]
+    assert any("NEWSLETTER_API_TOKEN" in p for p in local_problems(doc))
+    doc = _local()
+    doc["services"]["api"]["environment"]["NEWSLETTER_DEMO_BASE_URL"] = "http://gw/v1"
+    assert any("gateway" in p for p in local_problems(doc))
