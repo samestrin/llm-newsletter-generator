@@ -210,6 +210,8 @@ cd web && npm ci && npm run build && npm test   # the review page: build, unit t
 npx playwright install chromium && npm run test:e2e   # browser test against a fake API, saves docs/img/
 ```
 
+The browser test runs every check at desktop width and at 360 px, in light and dark. `web/e2e/flow.spec.ts` walks a visitor's whole path (key, feeds, focus, each progress step, the draft with its flagged claim, edit, approve, the email preview) against the stateful fake in `web/e2e/fake-api.mjs`. `FAKE_API_REMOVE=progress-step`, `feed-check`, `focus` or `email` takes that part out of the fake, and the flow test then fails.
+
 `LIVE_URL=... npm run capture:live` (in `web/`, with `LIVE_TOKEN` for a token other than the local demo one) records a session on a running instance instead: the drafts list, the seeded issue with a flagged claim and its citation, Approve, and `/api/docs`, written to `docs/img/demo.gif`. Every frame is 1280x800 and a set of frames that is any other size, or longer than 30 s, is refused. The normal `test:e2e` run skips it.
 
 The screenshots' issue comes from fixtures in `web/e2e/fixtures/`, made from the `open-models-week` eval case. After a change to the renderer or the case, `uv run python tests/readme_issue.py` rewrites them; `uv run pytest` fails until it is run.

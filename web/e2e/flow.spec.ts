@@ -35,7 +35,9 @@ test.beforeEach(async ({ request, page }) => {
 
 /** Every serious or critical axe finding on the page as it is now, one line each. */
 async function axeIssues(page: Page) {
-  const { violations } = await new AxeBuilder({ page }).analyze();
+  // Legacy mode runs axe in the page itself. The default opens a second page to put the
+  // frames' results together, and that never opens once the sandboxed email preview is shown.
+  const { violations } = await new AxeBuilder({ page }).setLegacyMode().analyze();
   return violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
     .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);

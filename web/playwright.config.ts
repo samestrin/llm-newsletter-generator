@@ -36,7 +36,8 @@ export default defineConfig({
     {
       command: "node e2e/fake-api.mjs",
       url: `http://127.0.0.1:${API_PORT}/api/drafts`,
-      env: { FAKE_API_PORT: String(API_PORT), FAKE_API_ORIGINS: PAGE },
+      // FAKE_API_REMOVE takes a part of the fake away, to see the flow test catch it.
+      env: { FAKE_API_PORT: String(API_PORT), FAKE_API_ORIGINS: PAGE, FAKE_API_REMOVE: process.env.FAKE_API_REMOVE ?? "" },
       reuseExistingServer: false,
     },
     {
