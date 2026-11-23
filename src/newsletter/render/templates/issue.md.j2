@@ -45,6 +45,10 @@ Also covered by: {% for source in story.also %}{{ link(source.title, source.url)
 {% endfor %}
 ## Run report
 
+{% if report.focus %}
+**Focus:** {{ report.focus }}
+
+{% endif %}
 {% if report.ok %}
 Every feed was read, every story and claim was used, and every claim was supported.
 

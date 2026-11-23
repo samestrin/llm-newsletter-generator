@@ -144,9 +144,12 @@ class Edition:
         }
 
 
-def edit_issue(run: CheckRun, llm: LLMClient) -> Edition:
+def edit_issue(run: CheckRun, llm: LLMClient, *, focus: str | None = None) -> Edition:
     """One reasoning call, and one retry if its reply is rejected. Failures are kept on
-    the edition, not raised."""
+    the edition, not raised.
+
+    `focus` is the run's stated emphasis: the editor may lead with and favour the stories
+    that match it, under the same checks. Without one the prompt is as it always was."""
     edition = Edition(list(run.stories))
     editable = [story for story in run.stories if story.supported]
     if not editable:
@@ -154,7 +157,9 @@ def edit_issue(run: CheckRun, llm: LLMClient) -> Edition:
         edition.message = NOTHING_TO_EDIT
         return edition
 
-    prompt = fill(load_prompt("editor"), stories=_stories_block(editable))
+    prompt = fill(
+        load_prompt("editor"), focus=_focus_block(focus), stories=_stories_block(editable)
+    )
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
@@ -290,6 +295,13 @@ def _strings(value: Any) -> bool:
 
 def _bullets(lines: list[str]) -> str:
     return "\n".join(f"- {line}" for line in lines)
+
+
+def _focus_block(focus: str | None) -> str:
+    """The focus paragraph and its markers, ending in a blank line; empty without one."""
+    if not focus:
+        return ""
+    return fill(load_prompt("editor_focus"), focus=focus).rstrip("\n") + "\n\n"
 
 
 def _stories_block(stories: list[CheckedStory]) -> str:

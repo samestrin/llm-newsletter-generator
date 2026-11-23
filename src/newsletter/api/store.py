@@ -142,6 +142,8 @@ class DraftStore:
             "created_at": stamp,
             "updated_at": stamp,
         }
+        if content.get("focus"):
+            draft["focus"] = content["focus"]
         if owner_sha256:
             draft["owner_sha256"] = owner_sha256
         with self.files.lock:

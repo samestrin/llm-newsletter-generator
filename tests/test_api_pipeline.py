@@ -438,3 +438,63 @@ def test_an_editor_that_finishes_has_no_message():
     content = run_issue(request(), replay(), fetch=web, voice=VoiceSettings())
     assert content["report"]["editor_error"] is None
     assert content["report"]["editor_message"] is None
+
+
+# The run's focus: ranked by in place of the topic, stated to the editor, kept on the draft.
+
+FOCUS = "practical AI tools for small businesses"
+
+
+class Seen:
+    """The fake model of `test_cli`, keeping what each embedding and editor call got."""
+
+    def __init__(self):
+        self.embedded = []
+        self.editor_prompts = []
+        self.answer = model().handler
+
+    def __call__(self, request):
+        body = json.loads(request.content)
+        if request.url.path.endswith("/embeddings"):
+            self.embedded.append(body["input"])
+        elif (body.get("response_format") or {}).get("json_schema", {}).get("name") == "issue_edit":
+            self.editor_prompts.append(body["messages"][-1]["content"])
+        return self.answer(request)
+
+
+def focused_run(**changes) -> tuple[dict, Seen]:
+    seen = Seen()
+    llm = LLMClient(Settings.from_env(ENV), transport=httpx.MockTransport(seen))
+    content = run_issue(request(feeds=[NEWS], **changes), llm, fetch=run_web, voice=VoiceSettings())
+    return content, seen
+
+
+def test_a_focus_is_the_text_embedded_for_ranking_and_is_in_the_editor_prompt():
+    content, seen = focused_run(focus=FOCUS)
+
+    (inputs,) = seen.embedded
+    assert inputs[0] == FOCUS
+    assert "AI models" not in inputs  # The topic gives way to the focus.
+    (prompt,) = seen.editor_prompts
+    assert f"<focus>\n{FOCUS}\n</focus>" in prompt
+    assert content["focus"] == FOCUS
+    assert content["report"]["focus"] == FOCUS
+    assert f"**Focus:** {FOCUS}" in content["text"]
+
+
+def test_without_a_focus_the_topic_is_ranked_by_and_nothing_says_focus():
+    content, seen = focused_run()
+
+    assert seen.embedded[0][0] == "AI models"
+    assert "focus" not in seen.editor_prompts[0]
+    assert "focus" not in content
+    assert "focus" not in content["report"]
+    assert "Focus" not in content["text"]
+
+
+def test_a_run_without_a_focus_is_the_same_as_before_focus_existed():
+    before = run_issue(request(), replay(), fetch=web, voice=VoiceSettings())
+    again = run_issue(request(focus=None), replay(), fetch=web, voice=VoiceSettings())
+
+    assert set(before) == {"title", "issue_date", "text", "flags", "report"}
+    assert again == before

@@ -43,6 +43,8 @@ class RunRequest:
     pages: list[str] = field(default_factory=list)
     hackernews: HackerNewsConfig | None = None
     per_feed: int | None = None
+    focus: str | None = None
+    """The visitor's emphasis: ranked by in place of `topic` and stated to the editor."""
     failed_feeds: list[FeedFailure] = field(default_factory=list)
     """Feeds that failed the check before the run: not read, listed in the feeds step."""
     credentials: Credentials | None = field(default=None, repr=False)
@@ -103,7 +105,7 @@ def run_issue(
         pages=request.pages,
         hackernews=request.hackernews,
         llm=llm,
-        topic=request.topic,
+        topic=request.focus or request.topic,
         per_feed=request.per_feed,
         fetch=fetch,
         progress=progress,
@@ -143,7 +145,7 @@ def run_issue(
     )
 
     progress("editor", "running")
-    edition = edit_issue(checked, llm)
+    edition = edit_issue(checked, llm, focus=request.focus)
     if edition.error:
         progress("editor", "failed")
     else:
@@ -160,16 +162,20 @@ def run_issue(
         voiced.report(),
         gathered.grouping,
         linked=gathered.linked,
+        focus=request.focus,
     )
     issue_date = request.issue_date or date.today()
     text = render_markdown(Newsletter(request.title, issue_date, edition, stories, report))
-    return {
+    content = {
         "title": request.title,
         "issue_date": issue_date.isoformat(),
         "text": text,
         "flags": [asdict(flag) for flag in report.flagged_claims],
         "report": report.to_dict(),
     }
+    if request.focus:
+        content["focus"] = request.focus
+    return content
 
 
 def default_runner(

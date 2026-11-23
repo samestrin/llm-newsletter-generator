@@ -77,6 +77,9 @@ class RunReport:
     voice: dict[str, Any] = field(default_factory=dict)
     """`VoiceRun.report()`: which texts are in the writer's voice and why the others are
     not. Empty when no voice pass ran."""
+    focus: str | None = None
+    """The emphasis the run was asked for (`RunBody.focus`). Not in `to_dict` without one,
+    so the report of a run without a focus is as it was before focus existed."""
 
     @property
     def unknown_costs(self) -> int:
@@ -99,7 +102,10 @@ class RunReport:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {**asdict(self), "ok": self.ok}
+        data = {**asdict(self), "ok": self.ok}
+        if self.focus is None:
+            del data["focus"]
+        return data
 
 
 def build_report(
@@ -110,12 +116,14 @@ def build_report(
     voice: Mapping[str, Any] | None = None,
     grouping: Grouping | None = None,
     linked: list[LinkedArticle] | None = None,
+    focus: str | None = None,
 ) -> RunReport:
     """The report of one run. `stories` maps each story id to its source items, `usage`
     is `LLMClient.report()`, `voice` is `VoiceRun.report()` and `grouping` is the
-    `group_items` result the stories came from, and `linked` the link-only items whose
-    article was read or skipped."""
+    `group_items` result the stories came from, `linked` the link-only items whose
+    article was read or skipped, and `focus` the emphasis the run was asked for."""
     report = RunReport(
+        focus=focus or None,
         failed_sources=list(failures),
         linked_articles=list(linked or []),
         left_out=list(grouping.left_out) if grouping else [],
