@@ -44,6 +44,9 @@
 {% endfor %}
 <div class="report" style="margin:24px 0 0;padding-top:16px;border-top:2px solid #222222;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.4;color:#444444;">
 <h2 style="margin:0 0 8px;font-size:16px;">Run report</h2>
+{% if report.focus %}
+<p style="margin:0 0 12px;"><strong>Focus:</strong> {{ report.focus }}</p>
+{% endif %}
 {% if report.ok %}
 <p style="margin:0 0 12px;">Every feed was read, every story and claim was used, and every claim was supported.</p>
 {% endif %}

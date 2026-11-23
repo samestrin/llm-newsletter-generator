@@ -138,6 +138,8 @@ class DraftStore:
             "created_at": stamp,
             "updated_at": stamp,
         }
+        if content.get("focus"):
+            draft["focus"] = content["focus"]
         with self.files.lock:
             self.files.write(draft["id"], draft)
         return draft

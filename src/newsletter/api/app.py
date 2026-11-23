@@ -37,7 +37,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from newsletter import __version__
 from newsletter.api import seed
@@ -67,6 +67,7 @@ Body = TypeVar("Body", bound=BaseModel)
 MAX_FEEDS = 50
 DEMO_MAX_FEEDS = 6
 DEMO_PER_FEED = 3
+MAX_FOCUS = 300
 CHECKS_PER_MINUTE = 30
 """`POST /api/feeds/check` calls a minute, every caller together (owner, 2026-11-20)."""
 BUSY_RETRY_AFTER = 30
@@ -82,11 +83,23 @@ class RunBody(BaseModel):
     title: str = Field("Newsletter", min_length=1, max_length=200)
     topic: str | None = Field(None, min_length=1, max_length=200)
     """Default: the sources config's topic, else "news"."""
+    focus: str | None = Field(None, max_length=MAX_FOCUS)
+    """What the issue should put the emphasis on, e.g. "practical AI tools for small
+    businesses": ranked by in place of the topic and stated to the editor, which may lead
+    with and favour matching stories but adds no story or claim for it. Read as one line;
+    blank is none."""
     date: dt.date | None = None
     """Ignored in demo mode."""
     per_feed: int | None = Field(None, ge=1, le=100)
     """Items to read from each feed; default the sources config's, else every item. In
     demo mode at most 3."""
+
+    @field_validator("focus")
+    @classmethod
+    def _one_line(cls, focus: str | None) -> str | None:
+        if focus is None:
+            return None
+        return " ".join(focus.split()) or None
 
 
 class CheckBody(BaseModel):
@@ -180,6 +193,8 @@ class RunReport(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     ok: bool | None = None
+    focus: str | None = None
+    """The emphasis the run was asked for; absent when it had none."""
     failed_sources: list[dict[str, Any]] | None = None
     linked_articles: list[dict[str, Any]] | None = None
     left_out: list[dict[str, Any]] | None = None
@@ -235,6 +250,8 @@ class DraftView(BaseModel):
     created_at: str
     updated_at: str
     approved: bool
+    focus: str | None = None
+    """The emphasis the run was asked for; absent when it had none, and on older drafts."""
 
 
 class ProviderView(BaseModel):
@@ -719,7 +736,9 @@ def _run_request(body: RunBody, config: SourcesConfig | None) -> RunRequest:
     topic = body.topic or (config.topic if config else "news")
     per_feed = body.per_feed or (config.per_feed if config else None)
     if body.feeds:
-        return RunRequest(body.feeds, body.title, topic, body.date, per_feed=per_feed)
+        return RunRequest(
+            body.feeds, body.title, topic, body.date, per_feed=per_feed, focus=body.focus
+        )
     if config is None:
         raise HTTPException(422, "give at least one feed, or start serve with --config")
     return RunRequest(
@@ -730,4 +749,5 @@ def _run_request(body: RunBody, config: SourcesConfig | None) -> RunRequest:
         pages=list(config.pages),
         hackernews=config.hackernews,
         per_feed=per_feed,
+        focus=body.focus,
     )

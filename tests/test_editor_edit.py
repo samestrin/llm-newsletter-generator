@@ -414,7 +414,6 @@ def test_a_focus_is_in_the_editor_prompt_as_an_emphasis_between_markers():
 def test_without_a_focus_the_editor_prompt_is_the_one_before_focus_existed(focus):
     from newsletter.editor.edit import _stories_block
     from newsletter.issue import fill
-
     from test_prompts import SNAPSHOTS
 
     model = FakeModel(VALID)

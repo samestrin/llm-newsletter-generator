@@ -618,7 +618,9 @@ def test_no_voice_pass_or_nothing_to_voice_adds_no_voice_line(render):
 
 def test_the_report_states_the_focus_and_escapes_it():
     the_edition = edition()
-    report = build_report(FAILURES, the_edition, STORIES, fake_llm().report(), focus="<b>AI</b> [x](javascript:1)")
+    report = build_report(
+        FAILURES, the_edition, STORIES, fake_llm().report(), focus="<b>AI</b> [x](javascript:1)"
+    )
     paper = Newsletter("Weekly", date(2026, 11, 3), the_edition, STORIES, report)
 
     assert report.to_dict()["focus"] == "<b>AI</b> [x](javascript:1)"
@@ -626,7 +628,7 @@ def test_the_report_states_the_focus_and_escapes_it():
     assert r"**Focus:** \<b\>AI\</b\> \[x\](javascript:1)" in markdown
     html = render_html(paper)
     assert "<strong>Focus:</strong> &lt;b&gt;AI&lt;/b&gt; [x](javascript:1)" in html
-    assert "javascript:" not in "".join(links_of(html))
+    assert "javascript:" not in "".join(links_of(html).hrefs)
 
 
 @pytest.mark.parametrize("render", [render_html, render_markdown])
