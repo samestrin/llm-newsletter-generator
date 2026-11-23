@@ -32,6 +32,8 @@ GUARDED = {
     ("post", "/api/drafts/{draft_id}/approve"),
     ("get", "/api/drafts/{draft_id}/email"),
 }
+# Open to anyone: the page asks for the provider list before it has any credential.
+OPEN = {("get", "/api/health"), ("get", "/api/providers")}
 # The response model each route must name in its success schema. A bare `assert
 # schema` would also pass FastAPI's inferred `{"type": "object",
 # "additionalProperties": true}` fallback, which carries no field names.
@@ -44,6 +46,7 @@ SUCCESS_MODELS = {
     ("put", "/api/drafts/{draft_id}"): "DraftView",
     ("post", "/api/drafts/{draft_id}/approve"): "DraftView",
     ("get", "/api/drafts/{draft_id}/email"): "EmailPreview",
+    ("get", "/api/providers"): "ProviderView",  # array items
 }
 WRITES = {
     ("post", "/api/runs"),
@@ -181,13 +184,13 @@ def test_every_registered_route_is_in_the_spec_with_a_success_schema(client, spe
     }
 
     assert registered == set(operations)
-    assert registered == GUARDED | {("get", "/api/health")}
+    assert registered == GUARDED | OPEN
     assert registered == set(SUCCESS_MODELS)
     for key, operation in operations.items():
         schema = _success(operation)["content"]["application/json"]["schema"]
         name = SUCCESS_MODELS[key]
         ref = {"$ref": f"#/components/schemas/{name}"}
-        if key == ("get", "/api/drafts"):
+        if key in {("get", "/api/drafts"), ("get", "/api/providers")}:
             assert schema["type"] == "array", key
             assert schema["items"] == ref, key
         else:
