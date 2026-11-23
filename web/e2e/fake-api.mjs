@@ -224,5 +224,12 @@ createServer(async (req, res) => {
     draft = { ...draft, approval: { sha256: digest, approved_at: new Date().toISOString() } };
     return send(res, 200, view(draft));
   }
+  if (method === "GET" && url === `/api/drafts/${ID}/email`) {
+    if (!approved(draft)) {
+      return send(res, 409, { detail: "the draft's current text is not approved; approve it first" });
+    }
+    const html = `<!doctype html><html><body><pre>${draft.text.replace(/[&<>]/g, (c) => `&#${c.charCodeAt(0)};`)}</pre></body></html>`;
+    return send(res, 200, { html });
+  }
   return send(res, 404, { detail: "not found" });
 }).listen(PORT, "127.0.0.1");

@@ -1,4 +1,4 @@
-/** The page's calls to `newsletter serve`: check feeds, start a run, list, read, edit and approve drafts. */
+/** The page's calls to `newsletter serve`: check feeds, start a run, list, read, edit and approve drafts, preview the email. */
 import { modelHeaders, type ModelCredentials } from "./modelAccess";
 
 /** One entry of `GET /api/providers` (plan 08's `providers.json`); it holds no secrets. */
@@ -291,6 +291,8 @@ export function createApi(access: Access, base = "", onUnauthorized?: (error: Ap
       call<Draft>("POST", `/api/drafts/${encodeURIComponent(draft.id)}/approve`, {
         sha256: await sha256Hex(draft.text),
       }),
+    /** The approved text as an HTML email, to look at only: nothing is sent. 409 before approval. */
+    email: (id: string) => call<{ html: string }>("GET", `/api/drafts/${encodeURIComponent(id)}/email`),
   };
 }
 

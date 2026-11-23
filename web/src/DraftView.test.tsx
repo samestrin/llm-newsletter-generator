@@ -40,6 +40,8 @@ const FLAG: Flag = {
   explanation: "The article says 91%; the draft said 99%.",
 };
 
+const EMAIL = '<html><body><h1>Week in chips</h1><script>parent.sent = true</script></body></html>';
+
 function fakeApi(start: Draft) {
   let draft = start;
   return {
@@ -56,7 +58,12 @@ function fakeApi(start: Draft) {
       };
       return draft;
     }),
-  } as unknown as Api & { saveText: ReturnType<typeof vi.fn> };
+    email: vi.fn(async () => ({ html: EMAIL })),
+  } as unknown as Api & {
+    saveText: ReturnType<typeof vi.fn>;
+    approve: ReturnType<typeof vi.fn>;
+    email: ReturnType<typeof vi.fn>;
+  };
 }
 
 function Harness({ api, start }: { api: Api; start: Draft }) {
@@ -243,6 +250,87 @@ describe("edit, save, done editing", () => {
     await user.type(screen.getByLabelText("Draft text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByTestId("approval")).toHaveTextContent("Not approved");
+  });
+});
+
+describe("approve, then the email preview", () => {
+  const preview = () => screen.queryByRole("region", { name: "Email preview" });
+
+  it("is not there before Approve, even on a draft approved earlier", () => {
+    show();
+    expect(preview()).toBeNull();
+    expect(document.querySelector("iframe")).toBeNull();
+    show({ approved: true, approval: { sha256: "x", approved_at: "then" } });
+    expect(preview()).toBeNull();
+    expect(document.querySelector("iframe")).toBeNull();
+  });
+
+  it("opens after Approve with the API's HTML in an iframe that runs no script", async () => {
+    const { api, user } = show();
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    const region = await screen.findByRole("region", { name: "Email preview" });
+    expect(api.approve).toHaveBeenCalledTimes(1);
+    expect(api.email).toHaveBeenCalledWith(makeDraft().id);
+    expect(api.approve.mock.invocationCallOrder[0]).toBeLessThan(api.email.mock.invocationCallOrder[0]);
+    expect(screen.getByTestId("approval")).toHaveTextContent(/^Approved/);
+    const frame = within(region).getByTitle("Email preview") as HTMLIFrameElement;
+    expect(frame.tagName).toBe("IFRAME");
+    expect(frame.getAttribute("sandbox")).toBe("");
+    expect(frame.getAttribute("srcdoc")).toBe(EMAIL);
+    expect(frame.hasAttribute("src")).toBe(false);
+    expect(region).toHaveTextContent("Nothing was sent. This is what would go out.");
+  });
+
+  it("has no control that sends", async () => {
+    const { user } = show();
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByRole("region", { name: "Email preview" });
+    for (const control of screen.queryAllByRole("button")) expect(control).not.toHaveTextContent(/send/i);
+    expect(screen.queryAllByRole("link", { name: /send/i })).toEqual([]);
+    expect(document.querySelector("form")).toBeNull();
+  });
+
+  it("does not ask for the preview when the approval is refused", async () => {
+    const { api, user } = show();
+    api.approve.mockRejectedValueOnce(new Error("the draft changed since it was read; reload it and approve again"));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("the draft changed since it was read");
+    expect(api.email).not.toHaveBeenCalled();
+    expect(preview()).toBeNull();
+  });
+
+  it("says why when the preview cannot be read, and keeps the approval", async () => {
+    const { api, user } = show();
+    api.email.mockRejectedValueOnce(new Error("the draft's current text is not approved; approve it first"));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("approve it first");
+    expect(screen.getByTestId("approval")).toHaveTextContent(/^Approved/);
+    expect(preview()).toBeNull();
+  });
+
+  it("can be asked for again after it failed, without approving again", async () => {
+    const { api, user } = show();
+    expect(screen.queryByRole("button", { name: "Try the preview again" })).toBeNull();
+    api.email.mockRejectedValueOnce(new Error("could not reach the API"));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    await user.click(await screen.findByRole("button", { name: "Try the preview again" }));
+    const region = await screen.findByRole("region", { name: "Email preview" });
+    expect(within(region).getByTitle("Email preview")).toHaveAttribute("srcdoc", EMAIL);
+    expect(api.approve).toHaveBeenCalledTimes(1);
+    expect(api.email).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try the preview again" })).toBeNull();
+  });
+
+  it("goes away when an edit clears the approval", async () => {
+    const { user } = show();
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByRole("region", { name: "Email preview" });
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.type(screen.getByLabelText("Draft text"), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByTestId("approval")).toHaveTextContent("Not approved");
+    expect(preview()).toBeNull();
   });
 });
 

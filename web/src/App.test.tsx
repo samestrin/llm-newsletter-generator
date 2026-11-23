@@ -36,6 +36,10 @@ function fakeApi(start: Draft) {
       draft = { ...draft, approval: { sha256: body.sha256, approved_at: "now" }, approved: true };
       return json(200, draft);
     }
+    if (method === "GET" && url === `/api/drafts/${draft.id}/email`) {
+      if (!draft.approved) return json(409, { detail: "the draft's current text is not approved; approve it first" });
+      return json(200, { html: `<p>${draft.text}</p>` });
+    }
     return json(404, { detail: "not found" });
   });
   return {
@@ -272,6 +276,18 @@ describe("edit and approve", () => {
     const call = api.calls.find((c) => c.method === "POST");
     expect(call?.body).toEqual({ sha256: await sha(makeDraft().text) });
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+  });
+
+  it("then shows the email the API would send, and sends nothing", async () => {
+    const { api, user } = await openDraft();
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    const region = await screen.findByRole("region", { name: "Email preview" });
+    expect(region).toHaveTextContent("Nothing was sent. This is what would go out.");
+    expect(within(region).getByTitle("Email preview")).toHaveAttribute("srcdoc", `<p>${makeDraft().text}</p>`);
+    expect(api.calls.map((c) => `${c.method} ${c.url}`).slice(-2)).toEqual([
+      `POST /api/drafts/${makeDraft().id}/approve`,
+      `GET /api/drafts/${makeDraft().id}/email`,
+    ]);
   });
 
   it("refuses to show approved when the draft changed under the reviewer", async () => {
