@@ -21,6 +21,18 @@ class FetchError(Exception):
     """The request never produced an HTTP response: timeout, refused, bad URL."""
 
 
+class BadUrl(FetchError):
+    """Not an http(s) URL with a host."""
+
+
+class Refused(FetchError):
+    """The host is a private or loopback address."""
+
+
+class TooLarge(FetchError):
+    """The body is over the size cap."""
+
+
 @dataclass(frozen=True)
 class HttpResponse:
     status: int
@@ -103,11 +115,11 @@ def check_url(url: str) -> None:
     try:
         parts = urlsplit(url)
     except ValueError as error:
-        raise FetchError(f"bad URL: {error}") from error
+        raise BadUrl(f"bad URL: {error}") from error
     if parts.scheme not in ("http", "https"):
-        raise FetchError(f"only http and https URLs are fetched, not {url!r}")
+        raise BadUrl(f"only http and https URLs are fetched, not {url!r}")
     if not parts.hostname:
-        raise FetchError(f"bad URL: no host in {url!r}")
+        raise BadUrl(f"bad URL: no host in {url!r}")
 
 
 def check_public(url: str, resolve: Resolve) -> None:
@@ -121,7 +133,7 @@ def check_public(url: str, resolve: Resolve) -> None:
         if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
             address = address.ipv4_mapped
         if not address.is_global or address.is_multicast:
-            raise FetchError(f"refused: {host} is a private or loopback address ({address})")
+            raise Refused(f"refused: {host} is a private or loopback address ({address})")
 
 
 def resolve_host(host: str) -> list[str]:
@@ -147,10 +159,10 @@ def _read(response, max_bytes: int) -> bytes:
     """The body, or FetchError once it passes `max_bytes`, read no further than one byte over."""
     length = response.headers.get("Content-Length")
     if length and length.isdigit() and int(length) > max_bytes:
-        raise FetchError(f"response larger than {max_bytes} bytes")
+        raise TooLarge(f"response larger than {max_bytes} bytes")
     body = response.read(max_bytes + 1)
     if len(body) > max_bytes:
-        raise FetchError(f"response larger than {max_bytes} bytes")
+        raise TooLarge(f"response larger than {max_bytes} bytes")
     if length and length.isdigit() and len(body) < int(length):
         # A bounded read does not raise when the server breaks off early; check by hand.
         raise FetchError(f"incomplete response: {len(body)} of {length} bytes")

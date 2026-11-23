@@ -276,5 +276,7 @@ def test_the_app_registers_no_route_that_sends(client):
         ("POST", "/api/drafts/{draft_id}/approve"),
         ("GET", "/api/drafts/{draft_id}/email"),
         ("GET", "/api/providers"),
+        ("GET", "/api/presets"),
+        ("POST", "/api/feeds/check"),
     }
     assert not any("send" in path.lower() for _, path in registered)

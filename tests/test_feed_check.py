@@ -562,3 +562,25 @@ def test_an_unexpected_failure_reading_the_address_is_a_sentence_not_a_crash(cap
     result = fc.check_feed(GOOD, fetch=broken, resolve=public)
     assert result == fc.FeedCheck(ok=False, title=None, items=0, error=fc.UNREACHABLE)
     assert "something nobody planned for" in caplog.text
+
+
+def test_an_unreadable_robots_txt_means_the_address_did_not_answer():
+    def web(url, headers, timeout):
+        return HttpResponse(503) if url.endswith("/robots.txt") else HttpResponse(200, {}, RSS)
+
+    assert fc.check_feed(GOOD, fetch=web, resolve=public).error == fc.UNREACHABLE
+
+
+def test_a_run_that_loses_the_race_to_start_is_409_with_retry_after(tmp_path, web):
+    from newsletter.api.jobs import Busy
+
+    with api(tmp_path, web) as client:
+
+        def lost(request):
+            raise Busy("a run is already going")
+
+        client.app.state.jobs.start = lost
+        response = client.post("/api/runs", json={"feeds": [GOOD]}, headers=headers())
+    assert response.status_code == 409
+    assert response.json()["retry_after"] > 0
+    assert response.headers["retry-after"] == str(response.json()["retry_after"])

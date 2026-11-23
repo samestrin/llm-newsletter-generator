@@ -25,6 +25,7 @@ from newsletter.llm import ConfigError, LLMClient, Settings
 from newsletter.progress import Progress, no_progress, plural
 from newsletter.render import Newsletter, build_report, render_markdown
 from newsletter.sources.http import Fetch, http_get
+from newsletter.sources.rss import FeedFailure
 from newsletter.voice import VoiceSettings, voice_edition
 
 NO_EMBEDDING = "{label} has no embedding model: stories are not grouped by meaning"
@@ -42,6 +43,8 @@ class RunRequest:
     pages: list[str] = field(default_factory=list)
     hackernews: HackerNewsConfig | None = None
     per_feed: int | None = None
+    failed_feeds: list[FeedFailure] = field(default_factory=list)
+    """Feeds that failed the check before the run: not read, listed in the feeds step."""
     credentials: Credentials | None = field(default=None, repr=False)
     """The provider and the visitor's key or demo code; `None` for the server's own key.
     Never stored: the run record is built from the fields above it."""
@@ -105,6 +108,7 @@ def run_issue(
         fetch=fetch,
         progress=progress,
         ungrouped=ungrouped,
+        failed=request.failed_feeds,
     )
     stories = gathered.stories
 
