@@ -158,6 +158,7 @@ def gather_stories(
     cache: FeedCache | None = None,
     progress: Progress = no_progress,
     ungrouped: str | None = None,
+    failed: list[FeedFailure] | None = None,
 ) -> Gathered:
     """Read the feeds, then the pages, then Hacker News, keep the first `per_feed` items
     of each, read the linked article of each link-only item, and group and rank them by
@@ -172,6 +173,9 @@ def gather_stories(
     With `ungrouped` (the provider has no embedding model), no embedding call is made:
     every item is its own story in feed order, and `ungrouped` is the grouping's note and
     is said in the grouping step's detail.
+
+    `failed` are feeds that failed a check before the run: they are not read again, but
+    are counted and listed in the feeds step and are in `failures` like any other.
     """
     page_source = PageSource(fetch=fetch)
     rss = RssSource(cache=cache, fetch=fetch)
@@ -183,25 +187,27 @@ def gather_stories(
         )
         reads.append(source.collect)
 
-    progress("feeds", "running", done=0, total=len(reads))
-    collected: list[SourceResult] = []
+    collected = [SourceResult(failures=[failure]) for failure in failed or []]
+    total = len(collected) + len(reads)
+    listed = {"detail": _feeds_detail(collected, total)} if collected else {}
+    progress("feeds", "running", **listed, done=len(collected), total=total)
     for read in reads:
         collected.append(read())
         progress(
             "feeds",
             "running",
-            detail=_feeds_detail(collected, len(reads)),
+            detail=_feeds_detail(collected, total),
             done=len(collected),
-            total=len(reads),
+            total=total,
         )
     items = first_per_feed([item for result in collected for item in result.items], per_feed)
     failures = [failure for result in collected for failure in result.failures]
     progress(
         "feeds",
         "done",
-        detail=_feeds_detail(collected, len(reads)),
-        done=len(reads),
-        total=len(reads),
+        detail=_feeds_detail(collected, total),
+        done=total,
+        total=total,
     )
 
     def on_article(articles: list[LinkedArticle], total: int) -> None:

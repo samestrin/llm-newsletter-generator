@@ -12,6 +12,8 @@ Environment:
                              $XDG_DATA_HOME/newsletter (~/.local/share/newsletter)
     NEWSLETTER_RUN_TIMEOUT   seconds a run may take before it is reported as failed,
                              default 900
+    NEWSLETTER_DEMO          1 for demo mode: a run takes at most 6 feeds and 3 items per
+                             feed, and its `date` is ignored; off when unset
 """
 
 import os
@@ -36,6 +38,8 @@ class ApiSettings:
     origins: tuple[str, ...] = ()
     data_dir: Path = Path("data")
     run_timeout: float = DEFAULT_RUN_TIMEOUT
+    demo: bool = False
+    """Demo mode (`NEWSLETTER_DEMO=1`): the demo limits on a run apply."""
     env: Mapping[str, str] = field(default_factory=dict, repr=False)
     """The environment the pipeline reads its model and voice settings from."""
 
@@ -57,6 +61,7 @@ class ApiSettings:
             or (f"http://127.0.0.1:{port}", f"http://localhost:{port}"),
             data_dir=Path(data_dir).expanduser() if data_dir else _default_data_dir(env),
             run_timeout=DEFAULT_RUN_TIMEOUT if timeout is None else timeout,
+            demo=env.get("NEWSLETTER_DEMO", "").strip() == "1",
             env=env,
         )
 

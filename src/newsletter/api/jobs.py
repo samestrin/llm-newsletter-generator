@@ -26,6 +26,7 @@ from newsletter.progress import Progress, State, end_steps, waiting_steps
 log = logging.getLogger(__name__)
 
 Runner = Callable[[RunRequest, Progress], dict[str, Any]]
+BUSY = "a run is already going; wait for it to finish"
 
 
 class Busy(RuntimeError):
@@ -55,7 +56,7 @@ class Jobs:
     def start(self, request: RunRequest) -> dict[str, Any]:
         with self._lock:
             if not self._idle.is_set():
-                raise Busy("a run is already going; wait for it to finish")
+                raise Busy(BUSY)
             self._idle.clear()
             run = {
                 "id": new_id(),
@@ -74,6 +75,11 @@ class Jobs:
             self._finished[run["id"]] = threading.Event()
         threading.Thread(target=self._watch, args=(run, request), daemon=True).start()
         return run
+
+    @property
+    def busy(self) -> bool:
+        """A run is going, a timed-out one still finishing included."""
+        return not self._idle.is_set()
 
     def wait(self, run_id: str, timeout: float | None = None) -> bool:
         """Wait for a run to end, as done or as an error. False if it is still going."""

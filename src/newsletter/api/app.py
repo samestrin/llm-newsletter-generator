@@ -5,7 +5,13 @@ Every request but `GET /api/health` needs `Authorization: Bearer $NEWSLETTER_API
 A write (any method but GET, HEAD and OPTIONS) also needs an `Origin` in the allowed
 list and a JSON object body sent as `application/json`, so a page on another site
 cannot make one even with the token. Checks run in that order: 401, 403, then 415 or
-400. No error body echoes the request, and nothing returned or stored holds a secret.
+400. No error body echoes the request, but for the feeds of a run none of which could be
+read, each named with why; nothing returned or stored holds a secret.
+
+`POST /api/feeds/check` reads one address as a run would and says whether it is a feed a
+run can read, capped at `CHECKS_PER_MINUTE` calls a minute; `POST /api/runs` checks every
+feed it names the same way first. With `NEWSLETTER_DEMO=1` a run takes at most
+`DEMO_MAX_FEEDS` feeds and `DEMO_PER_FEED` items per feed, and its `date` is ignored.
 
 `GET /api/openapi.json` is the OpenAPI spec and `GET /api/docs` the Scalar reference
 that reads it (vendored in `newsletter/api/static/`, no CDN). Both are readable without
@@ -18,8 +24,11 @@ import datetime as dt
 import hmac
 import json
 import logging
+import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar
 
@@ -33,7 +42,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from newsletter import __version__
 from newsletter.api import seed
 from newsletter.api.credentials import PROVIDERS, Credentials, public_providers, request_credentials
-from newsletter.api.jobs import Busy, Jobs, Runner
+from newsletter.api.feed_check import RateLimit, check_feed
+from newsletter.api.jobs import BUSY, Busy, Jobs, Runner
 from newsletter.api.pipeline import RunRequest, default_runner, run_settings
 from newsletter.api.settings import ApiSettings
 from newsletter.api.store import (
@@ -47,12 +57,21 @@ from newsletter.api.store import (
 from newsletter.config import SourcesConfig
 from newsletter.llm import ConfigError
 from newsletter.render import render_email
+from newsletter.sources.http import Fetch, Resolve, http_get, resolve_host
+from newsletter.sources.rss import FeedFailure
 
 log = logging.getLogger(__name__)
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 Body = TypeVar("Body", bound=BaseModel)
 MAX_FEEDS = 50
+DEMO_MAX_FEEDS = 6
+DEMO_PER_FEED = 3
+CHECKS_PER_MINUTE = 30
+"""`POST /api/feeds/check` calls a minute, every caller together (owner, 2026-11-20)."""
+BUSY_RETRY_AFTER = 30
+"""Seconds a caller is told to wait when a run is already going."""
+PRESETS = json.loads((Path(__file__).parent / "presets.json").read_text(encoding="utf-8"))
 
 
 class RunBody(BaseModel):
@@ -64,6 +83,16 @@ class RunBody(BaseModel):
     topic: str | None = Field(None, min_length=1, max_length=200)
     """Default: the sources config's topic, else "news"."""
     date: dt.date | None = None
+    """Ignored in demo mode."""
+    per_feed: int | None = Field(None, ge=1, le=100)
+    """Items to read from each feed; default the sources config's, else every item. In
+    demo mode at most 3."""
+
+
+class CheckBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=2000)
 
 
 class EditBody(BaseModel):
@@ -223,10 +252,42 @@ class ProviderView(BaseModel):
     """`None` when the provider has no embedding model."""
 
 
+class PresetView(BaseModel):
+    """A set of public feeds the run form can fill in."""
+
+    id: str
+    label: str
+    feeds: list[str]
+
+
+class FeedCheckView(BaseModel):
+    """Whether a run can read the address: it answered, parses as RSS or Atom and has at
+    least one item. When not, `error` says why in one plain sentence."""
+
+    ok: bool
+    title: str | None
+    """The feed's own title, when `ok`."""
+    items: int
+    error: str | None
+
+
 class ErrorBody(BaseModel):
     """An error: the reason only, never the request."""
 
     detail: str
+
+
+class RetryLater(BaseModel):
+    """Not now: ask again in `retry_after` seconds, also sent as `Retry-After`."""
+
+    detail: str
+    retry_after: int
+
+
+class FeedProblem(BaseModel):
+    url: str
+    error: str
+    """The check's plain sentence."""
 
 
 class EmailPreview(BaseModel):
@@ -241,10 +302,13 @@ class ValidationProblem(BaseModel):
 
 
 class InvalidRequest(BaseModel):
-    """422: a field is missing or invalid (a list of problems), or the run names no
-    feed and `serve` was started without a config (a plain reason)."""
+    """422: a field is missing or invalid (a list of problems), the run names no feed and
+    `serve` was started without a config, or too many feeds for demo mode (a plain
+    reason), or no feed the run names could be read (a plain reason and `errors`)."""
 
     detail: str | list[ValidationProblem]
+    errors: list[FeedProblem] | None = None
+    """When no feed could be read: each feed and why."""
 
 
 UNAUTHORIZED = {401: {"description": "Missing or wrong bearer token.", "model": ErrorBody}}
@@ -261,7 +325,41 @@ WRITE_ERRORS = {
     },
 }
 
+RETRY_AFTER_HEADER = {
+    "Retry-After": {
+        "description": "Seconds to wait before asking again, as `retry_after`.",
+        "schema": {"type": "integer"},
+    }
+}
+RUN_GOING = {
+    409: {
+        "description": "A run is already going.",
+        "model": RetryLater,
+        "headers": RETRY_AFTER_HEADER,
+    }
+}
+TOO_MANY = {
+    429: {
+        "description": f"Over {CHECKS_PER_MINUTE} checks a minute.",
+        "model": RetryLater,
+        "headers": RETRY_AFTER_HEADER,
+    }
+}
+
 STATIC = Path(__file__).parent / "static"
+
+
+class Answer(Exception):
+    """An error answer with more than `detail`: sent as `body` with `headers`."""
+
+    def __init__(self, status: int, body: dict[str, Any], headers: dict[str, str] | None = None):
+        self.status = status
+        self.body = body
+        self.headers = headers or {}
+
+
+def retry_later(status: int, detail: str, seconds: int) -> Answer:
+    return Answer(status, {"detail": detail, "retry_after": seconds}, {"Retry-After": str(seconds)})
 
 
 def create_app(
@@ -270,10 +368,22 @@ def create_app(
     runner: Runner | None = None,
     config: SourcesConfig | None = None,
     seed_sample: bool = False,
+    fetch: Fetch | None = None,
+    resolve: Resolve | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> FastAPI:
     """The API. A run that names no feeds reads the sources in `config` (`serve --config`).
     With `seed_sample`, the committed sample draft is written at start, once (see
-    `newsletter.api.seed`)."""
+    `newsletter.api.seed`). Feeds are checked with `fetch` and `resolve` (default
+    `http_get` and `resolve_host`); `clock` times the check's rate cap. Those three are
+    for tests."""
+    fetch = fetch or http_get
+    resolve = resolve or resolve_host
+    checks = RateLimit(CHECKS_PER_MINUTE, 60, clock)
+
+    def check(url: str):
+        return check_feed(url, fetch=fetch, resolve=resolve)
+
     redact = redactor(settings.secrets)
     drafts = DraftStore(settings.data_dir)
     runs = RunStore(settings.data_dir)
@@ -372,6 +482,10 @@ def create_app(
         ]
         return JSONResponse({"detail": redact(problems)}, status_code=422)
 
+    @app.exception_handler(Answer)
+    async def answer(request: Request, error: Answer) -> JSONResponse:
+        return JSONResponse(redact(error.body), status_code=error.status, headers=error.headers)
+
     @app.get("/api/docs", include_in_schema=False)
     def api_reference() -> HTMLResponse:
         """The API reference: Scalar, vendored in `static/`, reading `/api/openapi.json`."""
@@ -395,6 +509,29 @@ def create_app(
         """
         return public_providers(PROVIDERS)
 
+    @app.get("/api/presets", response_model=list[PresetView])
+    def list_presets() -> list[dict[str, Any]]:
+        """Sets of public feeds (AI news, science, tech) the run form can fill in.
+
+        No token needed, like the provider list: it names public feeds only.
+        """
+        return PRESETS
+
+    @app.post(
+        "/api/feeds/check",
+        response_model=FeedCheckView,
+        responses={**WRITE_ERRORS, **TOO_MANY},
+    )
+    def check_one_feed(raw: Guarded) -> dict[str, Any]:
+        """Whether a run can read this address: fetched as every feed is (robots.txt, the
+        size cap, http and https only, never a private or loopback address), it answers,
+        parses as a feed and has at least one item. No model call. At most 30 a minute,
+        for every caller together; past that, 429 with `retry_after`."""
+        body = parse(CheckBody, raw)
+        if (wait := checks.take()) is not None:
+            raise retry_later(429, "too many feed checks; wait and try again", wait)
+        return asdict(check(body.url))
+
     @app.post(
         "/api/runs",
         status_code=202,
@@ -403,7 +540,7 @@ def create_app(
         responses={
             202: {"description": "The run is queued; follow it at `/api/runs/{id}`."},
             **WRITE_ERRORS,
-            409: {"description": "A run is already going.", "model": ErrorBody},
+            **RUN_GOING,
         },
     )
     def start_run(
@@ -413,18 +550,35 @@ def create_app(
         """Start a run. With `X-Model-Preset` and `X-Model-Key` it runs on that provider
         with the visitor's key; with `X-Demo-Code`, on the demo gateway; with neither, on
         the server's own key. The key or code is used for this run's model calls only and
-        is in nothing stored, returned or logged."""
+        is in nothing stored, returned or logged.
+
+        Every feed the body names is checked first, as `POST /api/feeds/check` does: the
+        run starts with the feeds that pass and lists the rest in its `Fetching feeds`
+        step; when none pass it is refused with 422 and each feed's `errors`. Feeds from
+        the sources config are the server's own and are not checked. In demo mode a run
+        takes at most 6 feeds, reads at most 3 items of each, and ignores `date`."""
         body = parse(RunBody, raw)
+        if settings.demo:
+            if len(body.feeds) > DEMO_MAX_FEEDS:
+                raise HTTPException(422, f"a demo run takes at most {DEMO_MAX_FEEDS} feeds")
+            body = body.model_copy(update={"date": None})
         if credentials is not None:
             try:
                 run_settings(settings.env, credentials)
             except ConfigError as error:
                 raise HTTPException(503, str(error)) from None
+        if jobs.busy:
+            raise retry_later(409, BUSY, BUSY_RETRY_AFTER)
         request = replace(_run_request(body, config), credentials=credentials)
+        if settings.demo:
+            per_feed = min(DEMO_PER_FEED, request.per_feed or DEMO_PER_FEED)
+            request = replace(request, per_feed=per_feed)
+        if body.feeds:
+            request = _checked(request, check)
         try:
             return jobs.start(request)
-        except Busy as error:
-            raise HTTPException(409, str(error)) from None
+        except Busy:
+            raise retry_later(409, BUSY, BUSY_RETRY_AFTER) from None
 
     @app.get(
         "/api/runs/{run_id}",
@@ -514,6 +668,23 @@ def create_app(
     return app
 
 
+def _checked(request: RunRequest, check) -> RunRequest:
+    """`request` with only the feeds that pass the check, and the rest as `failed_feeds`;
+    422 with every feed's error when none pass."""
+    with ThreadPoolExecutor(max_workers=min(8, len(request.feeds))) as pool:
+        results = list(pool.map(check, request.feeds))
+    failed = [
+        FeedFailure(url, result.error or "")
+        for url, result in zip(request.feeds, results, strict=True)
+        if not result.ok
+    ]
+    if len(failed) == len(request.feeds):
+        errors = [{"url": failure.url, "error": failure.reason} for failure in failed]
+        raise Answer(422, {"detail": "no feed could be read", "errors": errors})
+    good = [url for url, result in zip(request.feeds, results, strict=True) if result.ok]
+    return replace(request, feeds=good, failed_feeds=failed)
+
+
 def _token_ok(header: str | None, token: str | None) -> bool:
     if not token or not header:
         return False
@@ -546,7 +717,7 @@ def _summary(draft: dict[str, Any]) -> dict[str, Any]:
 def _run_request(body: RunBody, config: SourcesConfig | None) -> RunRequest:
     """The run `body` asks for. Feeds in the body replace every source in `config`."""
     topic = body.topic or (config.topic if config else "news")
-    per_feed = config.per_feed if config else None
+    per_feed = body.per_feed or (config.per_feed if config else None)
     if body.feeds:
         return RunRequest(body.feeds, body.title, topic, body.date, per_feed=per_feed)
     if config is None:

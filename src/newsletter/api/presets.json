@@ -1,0 +1,32 @@
+[
+  {
+    "id": "ai",
+    "label": "AI news",
+    "feeds": [
+      "https://openai.com/news/rss.xml",
+      "https://huggingface.co/blog/feed.xml",
+      "https://deepmind.google/blog/rss.xml",
+      "https://www.technologyreview.com/topic/artificial-intelligence/feed"
+    ]
+  },
+  {
+    "id": "science",
+    "label": "Science",
+    "feeds": [
+      "https://www.sciencedaily.com/rss/all.xml",
+      "https://www.nasa.gov/news-release/feed/",
+      "https://phys.org/rss-feed/",
+      "https://www.quantamagazine.org/feed/"
+    ]
+  },
+  {
+    "id": "tech",
+    "label": "Tech",
+    "feeds": [
+      "https://hnrss.org/frontpage",
+      "https://feeds.arstechnica.com/arstechnica/index",
+      "https://www.theverge.com/rss/index.xml",
+      "https://techcrunch.com/feed/"
+    ]
+  }
+]
