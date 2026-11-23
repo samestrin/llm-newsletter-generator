@@ -10,6 +10,10 @@ item whose embedding cannot be compared is its own story, ranked last and listed
 the call fails or its result cannot be used, every item is its own story in input
 order, each is listed, and the error is set. A missing `embedding` model raises
 `ConfigError` like any other model call.
+
+A provider with no embedding model at all calls `ungrouped_items` instead: every item
+is its own story in input order and `note` says why. That is not an error and no item
+is listed as left out, but an item with no text is still dropped and listed.
 """
 
 import math
@@ -47,6 +51,8 @@ class Grouping:
     """Story id to its closeness to the topic; None when it could not be compared."""
     left_out: list[LeftOut] = field(default_factory=list)
     error: str | None = None
+    note: str | None = None
+    """Why the stories were not grouped by meaning, when there was no model to do it."""
 
     @property
     def ok(self) -> bool:
@@ -83,14 +89,7 @@ def group_items(
         raise ValueError(f"threshold must be in (0, 1], got {threshold!r}")
 
     grouping = Grouping()
-    kept: list[Item] = []
-    for item in items:
-        if item.title.strip() or item.summary.strip():
-            kept.append(item)
-        else:
-            grouping.left_out.append(
-                LeftOut(item.title, item.link, "dropped: no title or summary to compare")
-            )
+    kept = _with_text(items, grouping)
     if not kept:
         return grouping
 
@@ -134,6 +133,28 @@ def group_items(
         grouping.stories[f"s{number}"] = members
         grouping.scores[f"s{number}"] = score
     return grouping
+
+
+def ungrouped_items(items: Sequence[Item], *, note: str) -> Grouping:
+    """Every item with text as its own story, in input order, with `note` saying why."""
+    grouping = Grouping(note=note)
+    for number, item in enumerate(_with_text(items, grouping), 1):
+        grouping.stories[f"s{number}"] = [item]
+        grouping.scores[f"s{number}"] = None
+    return grouping
+
+
+def _with_text(items: Sequence[Item], grouping: Grouping) -> list[Item]:
+    """The items with a title or summary; each other one is listed as dropped."""
+    kept: list[Item] = []
+    for item in items:
+        if item.title.strip() or item.summary.strip():
+            kept.append(item)
+        else:
+            grouping.left_out.append(
+                LeftOut(item.title, item.link, "dropped: no title or summary to compare")
+            )
+    return kept
 
 
 def _ungrouped(grouping: Grouping, items: list[Item], error: str, reason: str) -> Grouping:

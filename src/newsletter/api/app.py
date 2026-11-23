@@ -19,6 +19,7 @@ import hmac
 import json
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar
 
@@ -31,9 +32,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from newsletter import __version__
 from newsletter.api import seed
-from newsletter.api.credentials import PROVIDERS, public_providers
+from newsletter.api.credentials import PROVIDERS, Credentials, public_providers, request_credentials
 from newsletter.api.jobs import Busy, Jobs, Runner
-from newsletter.api.pipeline import RunRequest, default_runner
+from newsletter.api.pipeline import RunRequest, default_runner, run_settings
 from newsletter.api.settings import ApiSettings
 from newsletter.api.store import (
     Conflict,
@@ -44,6 +45,7 @@ from newsletter.api.store import (
     redactor,
 )
 from newsletter.config import SourcesConfig
+from newsletter.llm import ConfigError
 from newsletter.render import render_email
 
 log = logging.getLogger(__name__)
@@ -153,6 +155,8 @@ class RunReport(BaseModel):
     linked_articles: list[dict[str, Any]] | None = None
     left_out: list[dict[str, Any]] | None = None
     grouping_error: str | None = None
+    grouping_note: str | None = None
+    """Why stories were not grouped by meaning: the provider has no embedding model."""
     dropped_stories: list[dict[str, Any]] | None = None
     dropped_claims: list[dict[str, Any]] | None = None
     flagged_claims: list[dict[str, Any]] | None = None
@@ -278,7 +282,7 @@ def create_app(
         runs,
         drafts,
         timeout=settings.run_timeout,
-        redact=redact,
+        secrets=settings.secrets,
     )
 
     @asynccontextmanager
@@ -402,9 +406,21 @@ def create_app(
             409: {"description": "A run is already going.", "model": ErrorBody},
         },
     )
-    def start_run(raw: Guarded) -> dict[str, Any]:
+    def start_run(
+        raw: Guarded,
+        credentials: Annotated[Credentials | None, Depends(request_credentials)],
+    ) -> dict[str, Any]:
+        """Start a run. With `X-Model-Preset` and `X-Model-Key` it runs on that provider
+        with the visitor's key; with `X-Demo-Code`, on the demo gateway; with neither, on
+        the server's own key. The key or code is used for this run's model calls only and
+        is in nothing stored, returned or logged."""
         body = parse(RunBody, raw)
-        request = _run_request(body, config)
+        if credentials is not None:
+            try:
+                run_settings(settings.env, credentials)
+            except ConfigError as error:
+                raise HTTPException(503, str(error)) from None
+        request = replace(_run_request(body, config), credentials=credentials)
         try:
             return jobs.start(request)
         except Busy as error:
