@@ -60,7 +60,10 @@ async function addFeed(page: Page, n: number, url: string) {
   await address.blur();
 }
 
-/** Watch each step run in turn, with its counts and elapsed time, until the draft opens. */
+/**
+ * Watch each step run in turn, with its counts and elapsed time, until the draft opens. Each
+ * shows for one 2 s poll, so nothing slow runs here: the demo-code test checks axe mid-run.
+ */
 async function watchEveryStep(page: Page) {
   await expect(page.getByRole("heading", { name: "Making your newsletter…" })).toBeVisible();
   const steps = page.locator('ol[aria-label="Steps"] > li');
@@ -79,7 +82,6 @@ async function watchEveryStep(page: Page) {
       const feeds = steps.first();
       await expect(feeds).toContainText("2 of 3 loaded, 1 failed:");
       await expect(feeds.getByRole("list", { name: "Feeds that failed" })).toHaveText(`${FLAKY} HTTP 503`);
-      await checkPage(page);
     }
   }
 }
