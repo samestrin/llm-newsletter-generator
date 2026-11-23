@@ -1,10 +1,13 @@
 """The HTTP API: start a run, read its status, list, read, edit and approve drafts,
 and preview an approved draft as an HTML email. Nothing here sends mail.
 
-Every request but `GET /api/health` needs `Authorization: Bearer $NEWSLETTER_API_TOKEN`.
-A write (any method but GET, HEAD and OPTIONS) also needs an `Origin` in the allowed
-list and a JSON object body sent as `application/json`, so a page on another site
-cannot make one even with the token. Checks run in that order: 401, 403, then 415 or
+Every request but `GET /api/health`, `/api/providers` and `/api/presets` needs
+`Authorization: Bearer $NEWSLETTER_API_TOKEN`. With `NEWSLETTER_DEMO=1` the page's own
+credential stands in for the token: `X-Model-Preset` with a well-formed `X-Model-Key`, or
+`demo` with a well-formed `X-Demo-Code` (see `credentials.well_formed`). With demo mode off
+those headers alone are a 401. A write (any method but GET, HEAD and OPTIONS) also needs
+an `Origin` in the allowed list and a JSON object body sent as `application/json`, so a
+page on another site cannot make one even with the token. Checks run in that order: 401, 403, then 415 or
 400. No error body echoes the request, but for the feeds of a run none of which could be
 read, each named with why; nothing returned or stored holds a secret.
 
@@ -50,7 +53,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from newsletter import __version__
 from newsletter.api import seed
-from newsletter.api.credentials import PROVIDERS, Credentials, public_providers, request_credentials
+from newsletter.api.credentials import (
+    PROVIDERS,
+    Credentials,
+    public_providers,
+    request_credentials,
+    well_formed,
+)
 from newsletter.api.feed_check import RateLimit, check_feed
 from newsletter.api.jobs import BUSY, Busy, Jobs, Runner
 from newsletter.api.pipeline import RunRequest, default_runner, run_settings
@@ -344,7 +353,13 @@ class InvalidRequest(BaseModel):
     """When no feed could be read: each feed and why."""
 
 
-UNAUTHORIZED = {401: {"description": "Missing or wrong bearer token.", "model": ErrorBody}}
+UNAUTHORIZED = {
+    401: {
+        "description": "Missing or wrong bearer token; in demo mode, also no well-formed "
+        "`X-Model-Preset` with `X-Model-Key` or `X-Demo-Code` in its place.",
+        "model": ErrorBody,
+    }
+}
 NOT_FOUND = {
     404: {
         "description": "No draft or run with this id; in demo mode, also one that is not "
@@ -458,7 +473,9 @@ def create_app(
             "Generate text-only newsletters from RSS feeds using LLMs: start a run, read "
             "its status, list, read, edit and approve drafts, and preview an approved "
             "draft as an HTML email. Nothing here sends mail. Every route but "
-            "`/api/health` needs the bearer token. The spec and the reference at "
+            "`/api/health`, `/api/providers` and `/api/presets` needs the bearer token; in "
+            "demo mode a well-formed `X-Model-Preset` with `X-Model-Key` or `X-Demo-Code` "
+            "does instead. The spec and the reference at "
             "`/api/docs` are readable without it; they hold route names and schemas only."
         ),
         docs_url=None,  # /api/docs is the Scalar reference below; /redoc stays off
@@ -496,7 +513,10 @@ def create_app(
     ) -> dict[str, Any] | None:
         if request.method not in SAFE_METHODS and not settings.token:
             raise HTTPException(503, "writes are off: set NEWSLETTER_API_TOKEN")
-        if not _token_ok(request.headers.get("authorization"), settings.token):
+        if not (
+            _token_ok(request.headers.get("authorization"), settings.token)
+            or (settings.demo and _page_credential(request))
+        ):
             raise HTTPException(
                 401, "missing or wrong token", headers={"WWW-Authenticate": "Bearer"}
             )
@@ -791,6 +811,16 @@ def _token_ok(header: str | None, token: str | None) -> bool:
     if scheme.lower() != "bearer" or not sent:
         return False
     return hmac.compare_digest(sent.encode("utf-8"), token.encode("utf-8"))
+
+
+def _page_credential(request: Request) -> bool:
+    """The request carries the page's credential: a provider with a well-formed key, or a
+    demo code. Checked for shape only; the provider checks the key itself when a run uses
+    it."""
+    headers = request.headers
+    return well_formed(
+        headers.get("x-model-preset"), headers.get("x-model-key"), headers.get("x-demo-code")
+    )
 
 
 def _found(lookup, item_id: str, *args):

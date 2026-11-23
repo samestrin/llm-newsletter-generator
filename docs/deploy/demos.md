@@ -11,7 +11,7 @@ The droplet's half is **fleet-deploy's**, not this repo's: the deploy-target ent
   - `web` (target `web`) is the built demo page behind nginx, which forwards `/api/` to `api:8000` unchanged (`web/nginx.conf`).
 - **No host port.** Traefik reaches `web` on the external Docker network `proxy`, where it also answers as `newsletter`, so the gateway's router points at `http://newsletter:80`. `api` stays on the compose's internal network; only nginx reaches it. (The droplet's edge network and router are fleet-deploy's half.)
 - **Demo mode is on** (`NEWSLETTER_DEMO=1`). A run needs a demo code or a visitor key; the server does not spend a key of its own on a visitor's run.
-- **No model key in the file.** The gateway key is read from `.env.demo` on the droplet (below). The demo gateway URL and the demo model names are set in the file; they are not secrets.
+- **No secret in the file.** The gateway key and the API token are read from `.env.demo` on the droplet (below). The demo gateway URL and the demo model names are set in the file; they are not secrets.
 - Health: `api` keeps the same healthcheck as `docker-compose.yml` (`GET /api/health`); `web` fetches `/` through nginx and requires the built page's `<div id="root">`, then checks `/api/health` through the same nginx, so one check proves the page and the proxied API together. fleet-deploy's receiver waits for `web`'s healthcheck and rolls back to the previous images if it fails.
 - `restart: unless-stopped`. Drafts live in the `drafts` volume (`/data`), which survives deploys.
 - The project is named `llm-newsletter-generator` and no service sets `image:`, so the images are `llm-newsletter-generator-api` and `llm-newsletter-generator-web`. The receiver tags each `:latest` as `:rollback` before a deploy.
@@ -33,13 +33,16 @@ The non-secret demo settings are set in the compose file's `environment:` block:
 
 The demo model names are the ones the gateway must serve for this app; fleet-deploy's gateway entry maps them (the droplet's litellm config is its half). The gateway URL is the litellm service on the droplet's internal models network.
 
-### The gateway key: `.env.demo`
+### The secrets: `.env.demo`
 
-The gateway key comes only from `.env.demo` beside the compose file on the droplet (mode 600). It is never in git (`.gitignore` lists it), and it is never written in the compose file. Compose will not start without it.
+The gateway key and the API token come only from `.env.demo` beside the compose file on the droplet (mode 600). It is never in git (`.gitignore` lists it), and neither value is ever written in the compose file. Compose will not start without the file, and `api` will not start without the token.
 
 | Variable | What to set |
 | --- | --- |
 | `NEWSLETTER_API_KEY` | The gateway key the droplet holds for this app. It is a secret: it is redacted from everything the API stores, returns or logs, and it is never a visitor's demo code or key. |
+| `NEWSLETTER_API_TOKEN` | A long random token, for example `openssl rand -hex 32`, made on the droplet. No default: `newsletter serve` will not start without one, and anyone holding it is the operator, who reads every visitor's drafts and can start a run on the gateway key. The page never sends it; it is for the operator's own calls (`Authorization: Bearer`) and is redacted like the key. |
+
+The page does not use the token. In demo mode a visitor's own credential authenticates the page's calls: `X-Model-Preset` with a well-formed `X-Model-Key`, or `demo` with a well-formed `X-Demo-Code`. Without one, and without the token, every route but `/api/health`, `/api/providers` and `/api/presets` answers 401, so no one runs on the server's key. The key or code is still checked by its provider or the gateway when a run uses it, and is never stored or logged.
 
 A visitor's run does not use this key: a demo code goes to the gateway as its own bearer, and a visitor key goes only to that visitor's provider. The key in `.env.demo` is the server's own gateway credential, kept on the droplet and out of git.
 
@@ -72,9 +75,9 @@ The per-IP rate limit is the droplet's Traefik **`ratelimit-models`** middleware
 Validate the file anywhere (CI's `compose` job does this with a dummy settings file):
 
 ```bash
-printf 'NEWSLETTER_API_KEY=ci-dummy\n' > .env.demo
+printf 'NEWSLETTER_API_KEY=ci-dummy\nNEWSLETTER_API_TOKEN=ci-dummy\n' > .env.demo
 docker compose -f docker-compose.demo.yml config -q
 rm .env.demo
 ```
 
-`tests/test_demo_compose.py` guards the shape the deploy depends on: no `ports:`, no secret in the file, demo mode on, the gateway key only from `.env.demo`, the demo gateway and model names set, an https origin, a reasoning timeout of 300 and a run timeout that fits it, a data volume, `serve --seed-sample`, and `web`'s healthcheck.
+`tests/test_demo_compose.py` guards the shape the deploy depends on: no `ports:`, no secret in the file, demo mode on, the gateway key and the API token only from `.env.demo` (listed above, and in CI's dummy file), the demo gateway and model names set, an https origin, a reasoning timeout of 300 and a run timeout that fits it, a data volume, `serve --seed-sample`, and `web`'s healthcheck.
