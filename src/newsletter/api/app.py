@@ -7,9 +7,9 @@ credential stands in for the token: `X-Model-Preset` with a well-formed `X-Model
 `demo` with a well-formed `X-Demo-Code` (see `credentials.well_formed`). With demo mode off
 those headers alone are a 401. A write (any method but GET, HEAD and OPTIONS) also needs
 an `Origin` in the allowed list and a JSON object body sent as `application/json`, so a
-page on another site cannot make one even with the token. Checks run in that order: 401, 403, then 415 or
-400. No error body echoes the request, but for the feeds of a run none of which could be
-read, each named with why; nothing returned or stored holds a secret.
+page on another site cannot make one even with the token. Checks run in that order: 401,
+403, then 415 or 400. No error body echoes the request, but for the feeds of a run none of
+which could be read, each named with why; nothing returned or stored holds a secret.
 
 `POST /api/feeds/check` reads one address as a run would and says whether it is a feed a
 run can read, capped at `CHECKS_PER_MINUTE` calls a minute; `POST /api/runs` checks every
