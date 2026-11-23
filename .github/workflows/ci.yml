@@ -68,6 +68,9 @@ jobs:
       - name: The API answers with the token
         run: |
           curl -fsS -H "Authorization: Bearer demo-token-change-me" http://localhost:8080/api/drafts
+      - name: The API answers the page's own headers (a visitor key, demo mode)
+        run: |
+          curl -fsS -H "X-Model-Preset: openrouter" -H "X-Model-Key: ci-dummy-key" http://localhost:8080/api/drafts
       # nginx's SPA fallback (web/nginx.conf) answers a missing /api/ route with a 200
       # index.html, so these check the body, not the status: the spec must parse as JSON
       # with paths, and the reference must be the Scalar page, not the SPA's root div.
