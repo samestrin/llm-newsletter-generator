@@ -14,9 +14,11 @@ async function openForm(page: Page) {
 
 const row = (page: Page, n: number) => page.getByRole("group", { name: `Feed ${n}` });
 
+// Runs stay on their first step here; flow.spec.ts watches one go all the way.
 test.beforeEach(async ({ request }) => {
   await request.post(`${API}/__reset`);
   await request.post(`${API}/__keys`);
+  await request.post(`${API}/__hold`);
 });
 
 test("the form checks each feed, then starts a run with the focus", async ({ page }) => {
@@ -29,21 +31,23 @@ test("the form checks each feed, then starts a run with the focus", async ({ pag
   await page.getByRole("button", { name: "AI news" }).click();
   await expect(row(page, 1)).toContainText("OK, 20 items");
   await expect(row(page, 2)).toContainText("OK, 4 items");
+  await page.getByRole("button", { name: "Add a feed" }).click();
+  await row(page, 3).getByLabel("Feed 3 address").fill("https://flaky.example.com/feed.xml");
   await page.getByLabel(/Focus/).fill("practical AI tools");
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.filter((v) => v.impact === "serious" || v.impact === "critical")).toEqual([]);
   const started = page.waitForRequest((r) => r.url().endsWith("/api/runs") && r.method() === "POST");
   await make.click();
   expect((await started).postDataJSON()).toEqual({
-    feeds: ["https://good.example.com/feed.xml", "https://also.example.com/rss"],
+    feeds: ["https://good.example.com/feed.xml", "https://also.example.com/rss", "https://flaky.example.com/feed.xml"],
     focus: "practical AI tools",
   });
   await expect(page.getByRole("heading", { name: "Making your newsletter…" })).toBeVisible();
   const feeds = page.getByRole("list", { name: "Steps" }).getByRole("listitem").first();
   await expect(feeds).toContainText("Fetching feeds");
   await expect(feeds).toContainText("Running");
-  await expect(feeds.getByRole("list", { name: "Feeds that failed" })).toContainText("https://down.example.com/feed.xml HTTP 503");
-  await expect(page.getByRole("progressbar", { name: "Fetching feeds: 2 of 2" })).toBeVisible();
+  await expect(feeds.getByRole("list", { name: "Feeds that failed" })).toContainText("https://flaky.example.com/feed.xml HTTP 503");
+  await expect(page.getByRole("progressbar", { name: "Fetching feeds: 3 of 3" })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("e2e-owner-token");
   const after = await new AxeBuilder({ page }).analyze();
   expect(after.violations.filter((v) => v.impact === "serious" || v.impact === "critical")).toEqual([]);
