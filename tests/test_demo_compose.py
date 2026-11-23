@@ -253,8 +253,11 @@ def test_the_env_file_holds_the_token_serve_needs() -> None:
     # .env.demo carries it, so `compose config` checks the file as the droplet has it.
     assert "NEWSLETTER_API_TOKEN" in SECRET_NAMES
     assert set(ENV_FILE_NAMES) <= _env_file_table()
-    ci = CI.read_text()
-    (line,) = [line for line in ci.splitlines() if "> .env.demo" in line]
+    steps = yaml.safe_load(CI.read_text())["jobs"]["compose"]["steps"]
+    (run,) = [
+        step["run"] for step in steps if "docker-compose.demo.yml config" in step.get("run", "")
+    ]
+    (line,) = [line for line in run.splitlines() if "> .env.demo" in line]
     for name in ENV_FILE_NAMES:
         assert f"{name}=" in line, name
     (check,) = [line for line in DOCS.read_text().splitlines() if "> .env.demo" in line]

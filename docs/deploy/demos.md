@@ -40,7 +40,7 @@ The gateway key and the API token come only from `.env.demo` beside the compose 
 | Variable | What to set |
 | --- | --- |
 | `NEWSLETTER_API_KEY` | The gateway key the droplet holds for this app. It is a secret: it is redacted from everything the API stores, returns or logs, and it is never a visitor's demo code or key. |
-| `NEWSLETTER_API_TOKEN` | A long random token, for example `openssl rand -hex 32`, made on the droplet. No default: `newsletter serve` will not start without one, and anyone holding it is the operator, who reads every visitor's drafts and can start a run on the gateway key. The page never sends it; it is for the operator's own calls (`Authorization: Bearer`) and is redacted like the key. |
+| `NEWSLETTER_API_TOKEN` | A long random token, for example `openssl rand -hex 32`, made on the droplet. No default: `newsletter serve` will not start without one, and anyone holding it passes the API's token check and can start a run on the server's gateway key. It does not open visitors' drafts: in demo mode drafts and runs are still scoped by owner token, so the token alone sees only the seeded example. The page never sends it; it is for the operator's own calls (`Authorization: Bearer`) and is redacted like the key. |
 
 The page does not use the token. In demo mode a visitor's own credential authenticates the page's calls: `X-Model-Preset` with a well-formed `X-Model-Key`, or `demo` with a well-formed `X-Demo-Code`. Without one, and without the token, every route but `/api/health`, `/api/providers` and `/api/presets` answers 401, so no one runs on the server's key. The key or code is still checked by its provider or the gateway when a run uses it, and is never stored or logged.
 
