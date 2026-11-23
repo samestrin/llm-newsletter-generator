@@ -169,8 +169,12 @@ def test_providers_are_served_with_every_field_and_no_secret(api):
         assert secret not in response.text
 
 
-def test_providers_need_the_token(api):
-    assert api.get("/api/providers").status_code == 401
+def test_providers_need_no_token(api):
+    # The page asks for the list before it holds any credential (web/src/api.ts
+    # listProviders); a 401 here would hide the visitor key and demo-code panel.
+    open_answer = api.get("/api/providers")
+    assert open_answer.status_code == 200
+    assert open_answer.json() == api.get("/api/providers", headers=headers()).json()
 
 
 def test_providers_are_in_the_spec_and_the_spec_is_complete(api):

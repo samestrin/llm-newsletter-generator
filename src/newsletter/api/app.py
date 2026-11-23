@@ -383,14 +383,12 @@ def create_app(
         """Report that the service is up. No token needed."""
         return {"ok": True}
 
-    @app.get(
-        "/api/providers",
-        dependencies=[Depends(guard)],
-        response_model=list[ProviderView],
-        responses=UNAUTHORIZED,
-    )
+    @app.get("/api/providers", response_model=list[ProviderView])
     def list_providers() -> list[dict[str, Any]]:
-        """The model providers a run may use, from `providers.json`. Holds no secret."""
+        """The model providers a run may use, from `providers.json`. Holds no secret.
+
+        No token needed: the page asks for this list before it holds any credential.
+        """
         return public_providers(PROVIDERS)
 
     @app.post(

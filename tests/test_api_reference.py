@@ -31,8 +31,9 @@ GUARDED = {
     ("put", "/api/drafts/{draft_id}"),
     ("post", "/api/drafts/{draft_id}/approve"),
     ("get", "/api/drafts/{draft_id}/email"),
-    ("get", "/api/providers"),
 }
+# Open to anyone: the page asks for the provider list before it has any credential.
+OPEN = {("get", "/api/health"), ("get", "/api/providers")}
 # The response model each route must name in its success schema. A bare `assert
 # schema` would also pass FastAPI's inferred `{"type": "object",
 # "additionalProperties": true}` fallback, which carries no field names.
@@ -183,7 +184,7 @@ def test_every_registered_route_is_in_the_spec_with_a_success_schema(client, spe
     }
 
     assert registered == set(operations)
-    assert registered == GUARDED | {("get", "/api/health")}
+    assert registered == GUARDED | OPEN
     assert registered == set(SUCCESS_MODELS)
     for key, operation in operations.items():
         schema = _success(operation)["content"]["application/json"]["schema"]
