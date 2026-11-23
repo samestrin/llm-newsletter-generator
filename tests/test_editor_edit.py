@@ -392,3 +392,45 @@ def test_a_missing_reasoning_model_is_a_config_error():
 
     with pytest.raises(ConfigError, match="no reasoning model"):
         edit_issue(check_run(), llm)
+
+
+# The run's focus: a stated emphasis in the prompt, which changes no other rule.
+
+FOCUS = "practical AI tools for small businesses"
+
+
+def test_a_focus_is_in_the_editor_prompt_as_an_emphasis_between_markers():
+    model = FakeModel(VALID)
+    edit_issue(check_run(), make_llm(model), focus=FOCUS)
+
+    prompt = model.requests[0]["messages"][-1]["content"]
+    assert f"<focus>\n{FOCUS}\n</focus>" in prompt
+    assert "may not add a story or a claim" in prompt
+    assert prompt.index("</focus>") < prompt.index("Reply with JSON only")
+    assert prompt.index("</focus>") < prompt.index("<stories>")
+
+
+@pytest.mark.parametrize("focus", [None, ""])
+def test_without_a_focus_the_editor_prompt_is_the_one_before_focus_existed(focus):
+    from newsletter.editor.edit import _stories_block
+    from newsletter.issue import fill
+
+    from test_prompts import SNAPSHOTS
+
+    model = FakeModel(VALID)
+    edit_issue(check_run(), make_llm(model), focus=focus)
+
+    before = (SNAPSHOTS.parent / "editor_before_focus.md").read_text(encoding="utf-8")
+    editable = [story for story in check_run().stories if story.supported]
+    expected = fill(before, stories=_stories_block(editable))
+    assert model.requests[0]["messages"][-1]["content"] == expected
+    assert "focus" not in expected
+
+
+def test_a_focus_changes_no_rule_of_the_edit():
+    bad = edit(lead="s9")  # Rejected with a focus as without one.
+    model = FakeModel(bad, bad)
+    edition = edit_issue(check_run(), make_llm(model), focus=FOCUS)
+
+    assert len(model.requests) == 2
+    assert edition.error and edition.rejections

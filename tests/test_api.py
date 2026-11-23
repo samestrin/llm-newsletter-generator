@@ -1145,3 +1145,81 @@ def test_a_run_that_failed_has_no_editor_message(tmp_path):
         run = run_and_wait(client)
     assert run["status"] == "error"
     assert run["editor_message"] is None
+
+
+# A run's focus: optional, up to 300 characters, kept on the request the runner gets.
+
+FOCUS = "practical AI tools for small businesses"
+
+
+def test_a_run_passes_its_focus_to_the_runner_and_keeps_the_topic(client, runner):
+    run_and_wait(client, {**RUN, "focus": f"  {FOCUS}\n"})
+    (request,) = runner.requests
+    assert request.focus == FOCUS
+    assert request.topic == "AI"
+
+
+@pytest.mark.parametrize("body", [RUN, {**RUN, "focus": None}, {**RUN, "focus": "   "}])
+def test_a_run_without_a_focus_has_none(client, runner, body):
+    run_and_wait(client, body)
+    assert runner.requests[0].focus is None
+
+
+def test_a_focus_reads_as_one_line():
+    from newsletter.api.app import RunBody
+
+    assert RunBody(focus="small\n\n  businesses\t now").focus == "small businesses now"
+
+
+def test_a_focus_over_300_characters_is_refused(client, runner):
+    assert run_and_wait(client, {**RUN, "focus": "x" * 300})["status"] == "done"
+    response = client.post("/api/runs", json={**RUN, "focus": "x" * 301}, headers=headers())
+    assert response.status_code == 422
+    assert len(runner.requests) == 1
+
+
+def test_a_run_from_the_sources_config_keeps_its_focus(tmp_path, runner):
+    app = create_app(make_settings(tmp_path), runner=runner, config=CONFIG)
+    with TestClient(app) as client:
+        run_and_wait(client, {"focus": FOCUS})
+    assert runner.requests[0].focus == FOCUS
+    assert runner.requests[0].topic == "open models"
+
+
+def test_the_draft_and_its_report_carry_the_focus(tmp_path):
+    content = {**CONTENT, "focus": FOCUS, "report": {**CONTENT["report"], "focus": FOCUS}}
+    with TestClient(create_app(make_settings(tmp_path), runner=FakeRunner(content))) as client:
+        draft = make_draft(client)
+    assert draft["focus"] == FOCUS
+    assert draft["report"]["focus"] == FOCUS
+
+
+def test_a_draft_without_a_focus_has_no_focus_key(client):
+    draft = make_draft(client)
+    assert "focus" not in draft
+    assert "focus" not in draft["report"]
+
+
+def test_a_draft_saved_before_focus_existed_loads(tmp_path):
+    draft_id = "0" * 32
+    old = {
+        "id": draft_id,
+        "run_id": "1" * 32,
+        "title": "Weekly",
+        "issue_date": "2026-11-02",
+        "text": TEXT,
+        "flags": [],
+        "report": {"ok": True, "flagged_claims": []},
+        "approval": None,
+        "created_at": "2026-11-02T00:00:00+00:00",
+        "updated_at": "2026-11-02T00:00:00+00:00",
+    }
+    folder = tmp_path / "data" / "drafts"
+    folder.mkdir(parents=True)
+    (folder / f"{draft_id}.json").write_text(json.dumps(old), "utf-8")
+    with TestClient(create_app(make_settings(tmp_path), runner=FakeRunner())) as client:
+        response = client.get(f"/api/drafts/{draft_id}", headers=headers())
+        listed = client.get("/api/drafts", headers=headers())
+    assert response.status_code == 200, response.text
+    assert response.json() == {**old, "approved": False}
+    assert [d["id"] for d in listed.json()] == [draft_id]
