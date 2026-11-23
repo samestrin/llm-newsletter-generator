@@ -106,6 +106,10 @@ test("edit, then approve, and both are kept by the API", async ({ page }) => {
 
   await approve.click();
   await expect(page.getByTestId("approval")).toHaveText(/^Approved/);
+  const preview = page.getByRole("region", { name: "Email preview" });
+  await expect(preview).toContainText("Nothing was sent. This is what would go out.");
+  await expect(preview.locator("iframe")).toHaveAttribute("sandbox", "");
+  await expect(preview.frameLocator("iframe").locator("body")).toContainText("Edited by the reviewer.");
 
   // A fresh load reads it back from the API: the edit and the approval were stored.
   await openDraft(page);

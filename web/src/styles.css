@@ -332,6 +332,18 @@ nav button[aria-current] {
 .draft-text > :first-child {
   margin-top: 0;
 }
+.email-preview {
+  margin: var(--space-4) 0;
+}
+/* The email brings its own colours, as a mail client shows it. */
+.email-preview iframe {
+  display: block;
+  width: 100%;
+  height: 32rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
 .focus-line {
   font-weight: 600;
 }

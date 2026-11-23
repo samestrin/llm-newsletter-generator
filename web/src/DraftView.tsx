@@ -101,19 +101,22 @@ export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; on
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The email for the text that was approved here; an edit that clears the approval hides it.
+  const [email, setEmail] = useState<{ text: string; html: string } | null>(null);
+  const preview = email && draft.approved && email.text === draft.text ? email.html : null;
   const unsaved = editing !== null && editing !== draft.text;
   const flags = useMemo(() => draft.flags ?? [], [draft.flags]);
   const components = useMemo(() => withFlags(flags), [flags]);
   const rehypePlugins = useMemo(() => [markFlags(flags)], [flags]);
   const focus = draft.focus || draft.report?.focus;
 
-  async function act(action: () => Promise<Draft>, after?: (d: Draft) => void) {
+  async function act(action: () => Promise<Draft>, after?: (d: Draft) => void | Promise<void>) {
     setBusy(true);
     setError(null);
     try {
       const updated = await action();
       onChange(updated);
-      after?.(updated);
+      await after?.(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -214,12 +217,25 @@ export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; on
             className="primary"
             disabled={busy || unsaved}
             title={unsaved ? "Save or discard the edit first" : undefined}
-            onClick={() => act(() => api.approve(draft))}
+            onClick={() =>
+              act(
+                () => api.approve(draft),
+                async (approved) => setEmail({ text: approved.text, html: (await api.email(approved.id)).html }),
+              )
+            }
           >
             Approve
           </button>
         )}
       </div>
+      {preview !== null && (
+        <section className="email-preview" aria-labelledby="email-preview-title">
+          <h3 id="email-preview-title">Email preview</h3>
+          <p className="state">Nothing was sent. This is what would go out.</p>
+          {/* sandbox="" with no allow-* lets the email run no script, submit no form and open nothing. */}
+          <iframe title="Email preview" sandbox="" srcDoc={preview} />
+        </section>
+      )}
       {editing !== null && draft.approved && (
         <p className="state">This draft is approved. Saving a change clears the approval: approve it again after.</p>
       )}
