@@ -18,6 +18,11 @@ DEMO_MODELS = (
     "NEWSLETTER_DEMO_REASONING_MODEL",
     "NEWSLETTER_DEMO_EMBEDDING_MODEL",
 )
+ENV_FILE_NAMES = ("NEWSLETTER_API_KEY", "NEWSLETTER_API_TOKEN")
+"""The secrets `.env.demo` holds on the droplet: the gateway key, and the operator token
+`newsletter serve` will not start without. Secrets, so never in the compose file."""
+DOCS = ROOT / "docs" / "deploy" / "demos.md"
+CI = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def _env_names(service: dict) -> set[str]:
@@ -231,3 +236,32 @@ def test_the_check_catches_a_lost_healthcheck_or_network() -> None:
     doc = _doc()
     doc["networks"]["proxy"]["external"] = False
     assert any("proxy" in p for p in problems(doc))
+
+
+def _env_file_table() -> set[str]:
+    """The variable names in the `.env.demo` table of the deploy page."""
+    heading = next(h for h in DOCS.read_text().split("\n### ")[1:] if "`.env.demo`" in h)
+    section = heading.split("\n## ", 1)[0]
+    rows = [line for line in section.splitlines() if line.startswith("| `")]
+    return {row.split("`", 2)[1] for row in rows}
+
+
+def test_the_env_file_holds_the_token_serve_needs() -> None:
+    # `serve` exits without NEWSLETTER_API_TOKEN and the file may not set it, so the
+    # token comes from .env.demo: the deploy page lists it there, and CI's dummy
+    # .env.demo carries it, so `compose config` checks the file as the droplet has it.
+    assert "NEWSLETTER_API_TOKEN" in SECRET_NAMES
+    assert set(ENV_FILE_NAMES) <= _env_file_table()
+    ci = CI.read_text()
+    (line,) = [line for line in ci.splitlines() if "> .env.demo" in line]
+    for name in ENV_FILE_NAMES:
+        assert f"{name}=" in line, name
+    (check,) = [line for line in DOCS.read_text().splitlines() if "> .env.demo" in line]
+    for name in ENV_FILE_NAMES:
+        assert f"{name}=" in check, name
+
+
+def test_the_token_is_not_given_a_default_in_the_file() -> None:
+    doc = _doc()
+    doc["services"]["api"]["environment"]["NEWSLETTER_API_TOKEN"] = "${NEWSLETTER_API_TOKEN:-demo}"
+    assert any("NEWSLETTER_API_TOKEN" in p for p in problems(doc))
