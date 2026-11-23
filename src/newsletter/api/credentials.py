@@ -145,6 +145,19 @@ def request_credentials(
     return Credentials(PROVIDERS[preset], key)
 
 
+def well_formed(preset: str | None, key: str | None, code: str | None) -> bool:
+    """Whether the headers are a credential the page sends: `X-Model-Preset` with a
+    well-formed `X-Model-Key` for that provider, or `demo` with a well-formed
+    `X-Demo-Code`, as `request_credentials` accepts them. Demo mode lets such a request
+    past the token check; the key or code is still checked by its provider when used."""
+    if not (preset or "").strip():
+        return False
+    try:
+        return request_credentials(preset, key, code) is not None
+    except HTTPException:
+        return False
+
+
 def _unprocessable(detail: str) -> HTTPException:
     return HTTPException(status_code=422, detail=detail)
 

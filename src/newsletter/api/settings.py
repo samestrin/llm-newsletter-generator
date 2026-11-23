@@ -2,8 +2,10 @@
 
 Environment:
 
-    NEWSLETTER_API_TOKEN     the token every request but the health check must send, as
-                             `Authorization: Bearer <token>`; without it, writes are refused
+    NEWSLETTER_API_TOKEN     the token every request but the health check, the provider
+                             list and the presets must send, as `Authorization: Bearer
+                             <token>`; without it, writes are refused. In demo mode the
+                             page's model credential stands in for it
     NEWSLETTER_API_HOST      bind address, default 127.0.0.1
     NEWSLETTER_API_PORT      port, default 8000
     NEWSLETTER_API_ORIGINS   comma-separated origins a write may come from, default

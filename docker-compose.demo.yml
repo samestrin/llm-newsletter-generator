@@ -5,8 +5,8 @@
 #
 # No host port: Traefik reaches the web page on the external `proxy` network, and nginx
 # forwards /api to the api service on the internal network. Demo mode is on: a visitor
-# brings a demo code or their own key, and the gateway key is read from .env.demo, which
-# exists on the droplet and never in git. `serve --seed-sample` writes the committed
+# brings a demo code or their own key, and the gateway key and API token are read from
+# .env.demo, which exists on the droplet and never in git. `serve --seed-sample` writes the committed
 # sample as one draft at start, once, for "See an example".
 name: llm-newsletter-generator # images are <name>-<service>, which fleet-deploy's receiver tags for rollback
 
@@ -18,8 +18,10 @@ services:
       context: .
       target: api
     command: ["/app/.venv/bin/newsletter", "serve", "--seed-sample"]
-    # The gateway key (NEWSLETTER_API_KEY) lives only in this file on the droplet,
-    # mode 600, never in git. No secret is written below.
+    # The gateway key (NEWSLETTER_API_KEY) and the API token (NEWSLETTER_API_TOKEN,
+    # which serve will not start without) live only in this file on the droplet, mode
+    # 600, never in git. No secret is written below. The page never sends the token:
+    # in demo mode a visitor's key or demo code authenticates its calls.
     env_file:
       - .env.demo
     environment:
