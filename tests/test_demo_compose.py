@@ -13,7 +13,11 @@ from newsletter.api.settings import SECRET_NAMES
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_FILE = ROOT / "docker-compose.demo.yml"
-DEMO_MODELS = ("NEWSLETTER_DEMO_FAST_MODEL", "NEWSLETTER_DEMO_REASONING_MODEL", "NEWSLETTER_DEMO_EMBEDDING_MODEL")
+DEMO_MODELS = (
+    "NEWSLETTER_DEMO_FAST_MODEL",
+    "NEWSLETTER_DEMO_REASONING_MODEL",
+    "NEWSLETTER_DEMO_EMBEDDING_MODEL",
+)
 
 
 def _env_names(service: dict) -> set[str]:
@@ -150,7 +154,9 @@ def test_the_check_catches_a_lost_gateway_or_model_name() -> None:
 
 def test_the_check_catches_a_wrong_origin_or_timeouts() -> None:
     doc = _doc()
-    doc["services"]["api"]["environment"]["NEWSLETTER_API_ORIGINS"] = "http://newsletter.samestrin.com"
+    doc["services"]["api"]["environment"]["NEWSLETTER_API_ORIGINS"] = (
+        "http://newsletter.samestrin.com"
+    )
     assert any("https origin" in p for p in problems(doc))
     doc = _doc()
     doc["services"]["api"]["environment"]["NEWSLETTER_REASONING_TIMEOUT"] = "60"
