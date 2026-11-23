@@ -43,7 +43,10 @@ export type Report = {
   dropped_stories?: { story_id: string; title: string; link: string; reason: string }[];
   dropped_claims?: { id: string; story_id: string; text: string; passage?: string; reason: string }[];
   flagged_claims?: Flag[];
+  /** The raw error of an editor pass that failed. */
   editor_error?: string | null;
+  /** The same failure in one plain sentence, set only when the editor failed. */
+  editor_message?: string | null;
   editor_rejections?: string[];
   steps?: {
     step?: string;
@@ -53,7 +56,8 @@ export type Report = {
     completion_tokens?: number | null;
     cost?: number | null;
   }[];
-  total_cost?: number;
+  total_cost?: number | null;
+  /** False when a step's cost is unknown, so `total_cost` leaves it out. */
   cost_complete?: boolean;
   failed_steps?: string[];
   voice?: {

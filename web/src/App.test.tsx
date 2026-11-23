@@ -161,7 +161,8 @@ describe("flags", () => {
 
 describe("the run report", () => {
   it("shows what failed, was dropped or kept neutral, and the cost", async () => {
-    await openDraft();
+    const { user } = await openDraft();
+    await user.click(screen.getByRole("button", { name: "Show details" }));
     const report = screen.getByRole("region", { name: "Run report" });
     expect(report).toHaveTextContent("Problems found");
     expect(report).toHaveTextContent("https://down.example.com/feed.xml");
@@ -175,7 +176,8 @@ describe("the run report", () => {
     expect(report).toHaveTextContent("fast-model");
     expect(report).toHaveTextContent("$0.0042");
     expect(report).toHaveTextContent("unknown");
-    expect(report).toHaveTextContent("1 step cost unknown");
+    expect(report).toHaveTextContent("some costs unknown");
+    expect(report).toHaveTextContent("1 step cost unknown, not counted in the total.");
   });
 
   it("lists the linked articles read for link-only items, and the skipped ones with why", async () => {
@@ -217,7 +219,8 @@ describe("the run report", () => {
   // file equal to the API's answer, so this reads the field names the API really sends.
   it("shows the token counts of a report the API served", async () => {
     const served = JSON.parse(readFileSync(join(__dirname, "contract", "seed-report.json"), "utf-8"));
-    await openDraft(fakeApi(makeDraft({ report: served })));
+    const { user } = await openDraft(fakeApi(makeDraft({ report: served })));
+    await user.click(screen.getByRole("button", { name: "Show details" }));
     const table = screen.getByRole("region", { name: "Model calls table" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(served.steps.length);
