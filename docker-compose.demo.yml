@@ -1,0 +1,85 @@
+# The public demo on the `demos` droplet, behind the droplet's Traefik at
+# https://newsletter.samestrin.com (the host name is proposed; the owner confirms it on
+# fleet-deploy's PR). See docs/deploy/demos.md. For local use, run docker-compose.yml;
+# for the private review copy, docker-compose.embassy.yml.
+#
+# No host port: Traefik reaches the web page on the external `proxy` network, and nginx
+# forwards /api to the api service on the internal network. Demo mode is on: a visitor
+# brings a demo code or their own key, and the gateway key is read from .env.demo, which
+# exists on the droplet and never in git. `serve --seed-sample` writes the committed
+# sample as one draft at start, once, for "See an example".
+name: llm-newsletter-generator # images are <name>-<service>, which fleet-deploy's receiver tags for rollback
+
+services:
+  api:
+    # Built from the repo's Dockerfile (target api). No image: the receiver tags
+    # compose's default <name>-<service> names :rollback before each deploy.
+    build:
+      context: .
+      target: api
+    command: ["/app/.venv/bin/newsletter", "serve", "--seed-sample"]
+    # The gateway key (NEWSLETTER_API_KEY) lives only in this file on the droplet,
+    # mode 600, never in git. No secret is written below.
+    env_file:
+      - .env.demo
+    environment:
+      NEWSLETTER_DEMO: "1"
+      # The droplet's model gateway (litellm). A demo code is sent here as its bearer.
+      NEWSLETTER_DEMO_BASE_URL: http://litellm:4000/v1
+      # The demo model names the gateway serves for this app (fleet-deploy's gateway
+      # entry maps them; see docs/deploy/demos.md).
+      NEWSLETTER_DEMO_FAST_MODEL: demo-fast
+      NEWSLETTER_DEMO_REASONING_MODEL: demo-reasoning
+      NEWSLETTER_DEMO_EMBEDDING_MODEL: demo-embedding
+      # The demo's https origin: a write from any other origin is refused.
+      NEWSLETTER_API_ORIGINS: https://newsletter.samestrin.com
+      # A reasoning-model edit may take minutes; the run timeout must fit a whole run
+      # (the editor alone can retry up to 3 x 300 s), not just one call.
+      NEWSLETTER_REASONING_TIMEOUT: "300"
+      NEWSLETTER_RUN_TIMEOUT: "1800"
+    volumes:
+      - drafts:/data
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+    depends_on:
+      api:
+        condition: service_healthy
+    # fleet-deploy's entry names service: web, and the receiver waits for this
+    # healthcheck. It fetches the built page (/ must contain the app's root
+    # element) and /api/health, both through nginx, so it proves the page and
+    # the proxied API together. busybox wget ships in the nginx alpine image.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1/ | grep -q '<div id="root">' && wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      default: {}
+      proxy:
+        # Traefik's router for the demo host points at http://newsletter:80.
+        aliases:
+          - newsletter
+    restart: unless-stopped
+
+networks:
+  # Owned by the droplet's Traefik stack (fleet-deploy wires the demo host's edge).
+  proxy:
+    external: true
+
+volumes:
+  drafts:

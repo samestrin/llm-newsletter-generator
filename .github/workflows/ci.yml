@@ -53,6 +53,11 @@ jobs:
           printf 'NEWSLETTER_API_TOKEN=ci-dummy\nNEWSLETTER_API_ORIGINS=https://newsletter.estr.in\n' > .env.embassy
           docker compose -f docker-compose.embassy.yml config -q
           rm .env.embassy
+      - name: The demo compose file is valid
+        run: |
+          printf 'NEWSLETTER_API_KEY=ci-dummy\n' > .env.demo
+          docker compose -f docker-compose.demo.yml config -q
+          rm .env.demo
       - run: docker compose up --build --wait --wait-timeout 300
       - name: The page is served
         run: curl -fsS http://localhost:8080/ | grep -q '<div id="root">'
