@@ -308,6 +308,20 @@ describe("approve, then the email preview", () => {
     expect(preview()).toBeNull();
   });
 
+  it("can be asked for again after it failed, without approving again", async () => {
+    const { api, user } = show();
+    expect(screen.queryByRole("button", { name: "Try the preview again" })).toBeNull();
+    api.email.mockRejectedValueOnce(new Error("could not reach the API"));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    await user.click(await screen.findByRole("button", { name: "Try the preview again" }));
+    const region = await screen.findByRole("region", { name: "Email preview" });
+    expect(within(region).getByTitle("Email preview")).toHaveAttribute("srcdoc", EMAIL);
+    expect(api.approve).toHaveBeenCalledTimes(1);
+    expect(api.email).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try the preview again" })).toBeNull();
+  });
+
   it("goes away when an edit clears the approval", async () => {
     const { user } = show();
     await user.click(screen.getByRole("button", { name: "Approve" }));
