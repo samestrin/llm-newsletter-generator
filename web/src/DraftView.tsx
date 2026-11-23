@@ -104,6 +104,19 @@ export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; on
   // The email for the text that was approved here; an edit that clears the approval hides it.
   const [email, setEmail] = useState<{ text: string; html: string } | null>(null);
   const preview = email && draft.approved && email.text === draft.text ? email.html : null;
+  // The text approved here whose preview could not be read, so it can be asked for again.
+  const [emailFailed, setEmailFailed] = useState<string | null>(null);
+  const retry = preview === null && draft.approved && emailFailed === draft.text;
+
+  async function showEmail(approved: Draft) {
+    try {
+      setEmail({ text: approved.text, html: (await api.email(approved.id)).html });
+      setEmailFailed(null);
+    } catch (e) {
+      setEmailFailed(approved.text);
+      throw e;
+    }
+  }
   const unsaved = editing !== null && editing !== draft.text;
   const flags = useMemo(() => draft.flags ?? [], [draft.flags]);
   const components = useMemo(() => withFlags(flags), [flags]);
@@ -217,14 +230,14 @@ export function DraftView({ api, draft, onChange }: { api: Api; draft: Draft; on
             className="primary"
             disabled={busy || unsaved}
             title={unsaved ? "Save or discard the edit first" : undefined}
-            onClick={() =>
-              act(
-                () => api.approve(draft),
-                async (approved) => setEmail({ text: approved.text, html: (await api.email(approved.id)).html }),
-              )
-            }
+            onClick={() => act(() => api.approve(draft), showEmail)}
           >
             Approve
+          </button>
+        )}
+        {retry && (
+          <button type="button" disabled={busy} onClick={() => act(async () => draft, showEmail)}>
+            Try the preview again
           </button>
         )}
       </div>
