@@ -66,6 +66,17 @@ describe("createApi", () => {
     });
   });
 
+  it("reads the email preview with a GET and no body", async () => {
+    const draft = makeDraft();
+    const fetch = vi.fn().mockResolvedValue(reply(200, { html: "<p>hi</p>" }));
+    vi.stubGlobal("fetch", fetch);
+    expect(await createApi({ token: "t" }).email(draft.id)).toEqual({ html: "<p>hi</p>" });
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe(`/api/drafts/${draft.id}/email`);
+    expect(init.method).toBe("GET");
+    expect(init.body).toBeUndefined();
+  });
+
   it("raises the server's reason with the status", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(409, { detail: "the draft changed" })));
     const error = await createApi({ token: "t" }).approve(makeDraft()).catch((e) => e);
