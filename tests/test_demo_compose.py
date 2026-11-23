@@ -32,7 +32,11 @@ def _env_values(service: dict) -> dict[str, str]:
     env = service.get("environment") or {}
     if isinstance(env, dict):
         return {name: str(value) for name, value in env.items()}
-    return dict(entry.split("=", 1) for entry in env)
+    values = {}
+    for entry in env:
+        name, _, value = entry.partition("=")
+        values[name] = value
+    return values
 
 
 def _env_files(service: dict) -> list[str]:
@@ -125,6 +129,19 @@ def test_the_check_catches_a_secret_in_the_file() -> None:
     doc = _doc()
     doc["services"]["api"]["environment"] = ["NEWSLETTER_API_KEY=literal"]
     assert any("NEWSLETTER_API_KEY" in p for p in problems(doc))
+
+
+def test_the_check_reads_the_list_form_of_environment() -> None:
+    # Compose also accepts environment as a list of NAME=value strings; the
+    # shipped settings in that form still hold the contract.
+    doc = _doc()
+    env = doc["services"]["api"]["environment"]
+    doc["services"]["api"]["environment"] = [f"{name}={value}" for name, value in env.items()]
+    assert problems(doc) == []
+    # A bare pass-through name carries no inline value: demo mode is then not on.
+    doc = _doc()
+    doc["services"]["api"]["environment"] = ["NEWSLETTER_DEMO"]
+    assert any("demo mode" in p for p in problems(doc))
 
 
 def test_the_check_catches_an_image_name() -> None:
