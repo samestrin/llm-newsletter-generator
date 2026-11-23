@@ -13,7 +13,8 @@ Environment:
     NEWSLETTER_RUN_TIMEOUT   seconds a run may take before it is reported as failed,
                              default 900
     NEWSLETTER_DEMO          1 for demo mode: a run takes at most 6 feeds and 3 items per
-                             feed, and its `date` is ignored; off when unset
+                             feed, and its `date` is ignored, and each draft belongs to the
+                             browser that made it (`X-Owner-Token`); off when unset
 """
 
 import os
@@ -39,7 +40,8 @@ class ApiSettings:
     data_dir: Path = Path("data")
     run_timeout: float = DEFAULT_RUN_TIMEOUT
     demo: bool = False
-    """Demo mode (`NEWSLETTER_DEMO=1`): the demo limits on a run apply."""
+    """Demo mode (`NEWSLETTER_DEMO=1`): the demo limits on a run apply, and drafts and runs
+    are scoped to the owner token their run answered."""
     env: Mapping[str, str] = field(default_factory=dict, repr=False)
     """The environment the pipeline reads its model and voice settings from."""
 

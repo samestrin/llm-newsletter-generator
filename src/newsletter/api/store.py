@@ -124,7 +124,11 @@ class DraftStore:
     def __init__(self, data_dir: Path):
         self.files = JsonFiles(data_dir / "drafts")
 
-    def create(self, content: dict[str, Any], *, run_id: str) -> dict[str, Any]:
+    def create(
+        self, content: dict[str, Any], *, run_id: str, owner_sha256: str | None = None
+    ) -> dict[str, Any]:
+        """A new draft. `owner_sha256`, the sha256 of a demo run's owner token, is kept
+        only when given: a draft without it has no owner."""
         stamp = now()
         draft = {
             "id": new_id(),
@@ -138,6 +142,8 @@ class DraftStore:
             "created_at": stamp,
             "updated_at": stamp,
         }
+        if owner_sha256:
+            draft["owner_sha256"] = owner_sha256
         with self.files.lock:
             self.files.write(draft["id"], draft)
         return draft

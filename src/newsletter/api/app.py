@@ -13,6 +13,14 @@ run can read, capped at `CHECKS_PER_MINUTE` calls a minute; `POST /api/runs` che
 feed it names the same way first. With `NEWSLETTER_DEMO=1` a run takes at most
 `DEMO_MAX_FEEDS` feeds and `DEMO_PER_FEED` items per feed, and its `date` is ignored.
 
+In demo mode a draft belongs to the browser that made it. `POST /api/runs` answers a
+random owner token once, as `owner_token`; only its sha256 is kept, as `owner_sha256` on
+the run and its draft, and the token itself is in no file, log or report. Sent back as
+`X-Owner-Token`, it scopes the draft routes and `GET /api/runs/{id}`: a draft with no
+owner (the seeded example) is readable by everyone and changed by no one (403), and any
+other draft or run answers only its own token, else 404 as if it did not exist. With demo
+mode off the header is ignored and every route is as before.
+
 `GET /api/openapi.json` is the OpenAPI spec and `GET /api/docs` the Scalar reference
 that reads it (vendored in `newsletter/api/static/`, no CDN). Both are readable without
 the token: the spec holds route names and schemas only, and the reference's "Test
@@ -24,6 +32,7 @@ import datetime as dt
 import hmac
 import json
 import logging
+import secrets
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -32,7 +41,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -53,6 +62,7 @@ from newsletter.api.store import (
     RunStore,
     is_approved,
     redactor,
+    text_sha256,
 )
 from newsletter.config import SourcesConfig
 from newsletter.llm import ConfigError
@@ -71,6 +81,9 @@ CHECKS_PER_MINUTE = 30
 """`POST /api/feeds/check` calls a minute, every caller together (owner, 2026-11-20)."""
 BUSY_RETRY_AFTER = 30
 """Seconds a caller is told to wait when a run is already going."""
+OWNER_TOKEN_BYTES = 32
+"""Random bytes in a demo run's owner token: 256 bits."""
+EXAMPLE_FIXED = "the example draft cannot be changed in demo mode"
 PRESETS = json.loads((Path(__file__).parent / "presets.json").read_text(encoding="utf-8"))
 
 
@@ -153,6 +166,9 @@ class RunView(BaseModel):
     editor_message: str | None = None
     """When the editor failed in a finished run, one plain sentence saying so; the raw
     error is only in the draft's report, as `editor_error`."""
+    owner_token: str | None = None
+    """Demo mode only, in the answer to `POST /api/runs` and never again: send it back as
+    `X-Owner-Token` to read this run and its draft. The server keeps only its sha256."""
 
 
 class FlaggedClaim(BaseModel):
@@ -312,7 +328,13 @@ class InvalidRequest(BaseModel):
 
 
 UNAUTHORIZED = {401: {"description": "Missing or wrong bearer token.", "model": ErrorBody}}
-NOT_FOUND = {404: {"description": "No draft or run with this id.", "model": ErrorBody}}
+NOT_FOUND = {
+    404: {
+        "description": "No draft or run with this id; in demo mode, also one that is not "
+        "the example and not made with the `X-Owner-Token` sent.",
+        "model": ErrorBody,
+    }
+}
 WRITE_ERRORS = {
     **UNAUTHORIZED,
     400: {"description": "The body is not JSON, or not a JSON object.", "model": ErrorBody},
@@ -321,6 +343,16 @@ WRITE_ERRORS = {
     422: {"description": "A field is missing or invalid.", "model": InvalidRequest},
     503: {
         "description": "Writes are off: NEWSLETTER_API_TOKEN is not set.",
+        "model": ErrorBody,
+    },
+}
+
+DRAFT_WRITE_ERRORS = {
+    **WRITE_ERRORS,
+    **NOT_FOUND,
+    403: {
+        "description": "This origin may not write; or, in demo mode, the draft is the "
+        "example, which no one may change.",
         "model": ErrorBody,
     },
 }
@@ -430,6 +462,7 @@ def create_app(
             "X-Model-Preset",
             "X-Model-Key",
             "X-Demo-Code",
+            "X-Owner-Token",
         ],
     )
 
@@ -466,6 +499,38 @@ def create_app(
         return body
 
     Guarded = Annotated[dict[str, Any], Depends(guard)]
+    OwnerToken = Annotated[
+        str | None,
+        Header(
+            alias="X-Owner-Token",
+            description="Demo mode: the `owner_token` `POST /api/runs` answered. Without "
+            "it only the example is shown. Ignored with demo mode off.",
+        ),
+    ]
+
+    def visible(item: dict[str, Any], owner_token: str | None) -> bool:
+        """With demo mode off, always; in demo mode, an item with no owner or one made
+        with `owner_token`."""
+        owner = item.get("owner_sha256")
+        if not settings.demo or not owner:
+            return True
+        if not owner_token:
+            return False
+        sent = text_sha256(owner_token).encode("ascii")
+        return hmac.compare_digest(sent, str(owner).encode("utf-8"))
+
+    def owned(lookup, item_id: str, owner_token: str | None) -> dict[str, Any]:
+        """The item, or 404 alike when there is none or it is not this browser's."""
+        item = _found(lookup, item_id)
+        if not visible(item, owner_token):
+            raise HTTPException(404, "not found")
+        return item
+
+    def changeable(draft_id: str, owner_token: str | None) -> None:
+        """404 for a draft this browser cannot see; 403 for the example in demo mode."""
+        draft = owned(drafts.get, draft_id, owner_token)
+        if settings.demo and not draft.get("owner_sha256"):
+            raise HTTPException(403, EXAMPLE_FIXED)
 
     def parse(model: type[Body], body: dict[str, Any]) -> Body:
         # Read here, after the guard: a body parameter would be read before it.
@@ -552,6 +617,9 @@ def create_app(
         the server's own key. The key or code is used for this run's model calls only and
         is in nothing stored, returned or logged.
 
+        In demo mode the answer holds `owner_token`, once: send it as `X-Owner-Token` to
+        read the run and its draft. Only its sha256 is kept.
+
         Every feed the body names is checked first, as `POST /api/feeds/check` does: the
         run starts with the feeds that pass and lists the rest in its `Fetching feeds`
         step; when none pass it is refused with 422 and each feed's `errors`. Feeds from
@@ -575,10 +643,17 @@ def create_app(
             request = replace(request, per_feed=per_feed)
         if body.feeds:
             request = _checked(request, check)
+        if not settings.demo:
+            try:
+                return jobs.start(request)
+            except Busy:
+                raise retry_later(409, BUSY, BUSY_RETRY_AFTER) from None
+        owner_token = secrets.token_urlsafe(OWNER_TOKEN_BYTES)
         try:
-            return jobs.start(request)
+            run = jobs.start(request, owner_sha256=text_sha256(owner_token))
         except Busy:
             raise retry_later(409, BUSY, BUSY_RETRY_AFTER) from None
+        return {**_unowned(run), "owner_token": owner_token}
 
     @app.get(
         "/api/runs/{run_id}",
@@ -587,9 +662,10 @@ def create_app(
         response_model_exclude_unset=True,
         responses={**UNAUTHORIZED, **NOT_FOUND},
     )
-    def get_run(run_id: str) -> dict[str, Any]:
-        """A run's status, and its draft id once it is done."""
-        return _found(runs.get, run_id)
+    def get_run(run_id: str, owner_token: OwnerToken = None) -> dict[str, Any]:
+        """A run's status, and its draft id once it is done. In demo mode, only the
+        example's run or one made with `X-Owner-Token`."""
+        return _unowned(owned(runs.get, run_id, owner_token))
 
     @app.get(
         "/api/drafts",
@@ -598,9 +674,10 @@ def create_app(
         response_model_exclude_unset=True,
         responses=UNAUTHORIZED,
     )
-    def list_drafts() -> list[dict[str, Any]]:
-        """Every draft, newest first, without its text."""
-        return [_summary(draft) for draft in drafts.list()]
+    def list_drafts(owner_token: OwnerToken = None) -> list[dict[str, Any]]:
+        """Every draft, newest first, without its text. In demo mode, the example and the
+        drafts made with `X-Owner-Token` only."""
+        return [_summary(draft) for draft in drafts.list() if visible(draft, owner_token)]
 
     @app.get(
         "/api/drafts/{draft_id}",
@@ -609,19 +686,21 @@ def create_app(
         response_model_exclude_unset=True,
         responses={**UNAUTHORIZED, **NOT_FOUND},
     )
-    def get_draft(draft_id: str) -> dict[str, Any]:
+    def get_draft(draft_id: str, owner_token: OwnerToken = None) -> dict[str, Any]:
         """A draft whole: its text, flags, run report and approval."""
-        return _view(_found(drafts.get, draft_id))
+        return _view(owned(drafts.get, draft_id, owner_token))
 
     @app.put(
         "/api/drafts/{draft_id}",
         response_model=DraftView,
         response_model_exclude_unset=True,
-        responses={**WRITE_ERRORS, **NOT_FOUND},
+        responses=DRAFT_WRITE_ERRORS,
     )
-    def edit_draft(draft_id: str, raw: Guarded) -> dict[str, Any]:
-        """Replace the draft's text. Any edit clears the approval."""
+    def edit_draft(draft_id: str, raw: Guarded, owner_token: OwnerToken = None) -> dict[str, Any]:
+        """Replace the draft's text. Any edit clears the approval. In demo mode, only a
+        draft made with `X-Owner-Token`; the example is 403."""
         body = parse(EditBody, raw)
+        changeable(draft_id, owner_token)
         return _view(_found(drafts.edit, draft_id, body.text))
 
     @app.post(
@@ -629,17 +708,20 @@ def create_app(
         response_model=DraftView,
         response_model_exclude_unset=True,
         responses={
-            **WRITE_ERRORS,
-            **NOT_FOUND,
+            **DRAFT_WRITE_ERRORS,
             409: {
                 "description": "The draft changed since it was read.",
                 "model": ErrorBody,
             },
         },
     )
-    def approve_draft(draft_id: str, raw: Guarded) -> dict[str, Any]:
-        """Approve the draft's text as it is now; with `sha256`, only if it is that text."""
+    def approve_draft(
+        draft_id: str, raw: Guarded, owner_token: OwnerToken = None
+    ) -> dict[str, Any]:
+        """Approve the draft's text as it is now; with `sha256`, only if it is that text.
+        In demo mode, only a draft made with `X-Owner-Token`; the example is 403."""
         body = parse(ApproveBody, raw)
+        changeable(draft_id, owner_token)
         try:
             return _view(_found(drafts.approve, draft_id, body.sha256))
         except Conflict as error:
@@ -658,9 +740,9 @@ def create_app(
             },
         },
     )
-    def draft_email(draft_id: str) -> dict[str, str]:
+    def draft_email(draft_id: str, owner_token: OwnerToken = None) -> dict[str, str]:
         """The approved text as an HTML email, in the issue's shell. Nothing is sent."""
-        draft = _found(drafts.get, draft_id)
+        draft = owned(drafts.get, draft_id, owner_token)
         if not is_approved(draft):
             raise HTTPException(409, "the draft's current text is not approved; approve it first")
         return {"html": render_email(draft["text"])}
@@ -701,8 +783,13 @@ def _found(lookup, item_id: str, *args):
         raise HTTPException(404, "not found") from None
 
 
+def _unowned(item: dict[str, Any]) -> dict[str, Any]:
+    """A run or draft as answered: without its owner's sha256."""
+    return {key: value for key, value in item.items() if key != "owner_sha256"}
+
+
 def _view(draft: dict[str, Any]) -> dict[str, Any]:
-    return {**draft, "approved": is_approved(draft)}
+    return {**_unowned(draft), "approved": is_approved(draft)}
 
 
 def _summary(draft: dict[str, Any]) -> dict[str, Any]:
