@@ -124,6 +124,7 @@ describe("the key panel on a demo-mode server", () => {
       await user.click(screen.getByRole("button", { name: "Edit" }));
       await user.type(screen.getByLabelText("Draft text"), "!");
       await user.click(screen.getByRole("button", { name: "Save" }));
+      await user.click(await screen.findByRole("button", { name: "Done editing" }));
       expect(await screen.findByTestId("draft-text")).toHaveTextContent("Second paragraph.!");
       await user.click(screen.getByRole("button", { name: "Key" }));
       await screen.findByRole("region", { name: "Model key" });
@@ -199,6 +200,35 @@ describe("the key panel on a demo-mode server", () => {
     expect(await screen.findByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Model key" })).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("a refused key leaves the saved good key, its client and the draft list in place", async () => {
+    const api = keyApi();
+    const { user } = await start(api);
+    await saveKey(user, "openrouter", KEY);
+    await screen.findByRole("button", { name: /AI Weekly/ });
+    await user.click(screen.getByRole("button", { name: "Key" }));
+    await saveKey(user, "openrouter", "sk-wrong");
+    const panel = await screen.findByRole("region", { name: "Model key" });
+    expect(within(panel).getByRole("alert")).toHaveTextContent("X-Model-Key was refused by the provider");
+
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ preset: "openrouter", secret: KEY });
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(within(screen.getByRole("navigation")).getByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /AI Weekly/ }));
+    await screen.findByRole("heading", { level: 2, name: "AI Weekly" });
+    expect(api.calls.at(-1)!.headers.get("X-Model-Key")).toBe(KEY);
+  });
+
+  it("a new key that meets another failure is kept, so Try again uses it", async () => {
+    const api = keyApi();
+    const { user } = await start(api);
+    api.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "the API is busy" }), { status: 503 }));
+    await saveKey(user, "openrouter", KEY);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ preset: "openrouter", secret: KEY });
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: /AI Weekly/ })).toBeInTheDocument();
   });
 
   it("Clear wipes both stores and leaves the panel open", async () => {

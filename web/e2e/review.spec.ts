@@ -24,6 +24,62 @@ test("a draft containing markup is shown as text", async ({ page }) => {
   await expect(page.locator("main img, main script")).toHaveCount(0);
 });
 
+test("the draft reads as a newsletter: links checked, script inert, flags explained beside the claim", async ({
+  page,
+  request,
+}) => {
+  await request.post("http://127.0.0.1:8787/__reset", {
+    data: {
+      focus: "practical AI tools",
+      text: [
+        "# AI Weekly",
+        "",
+        "## Lead story: [Tiny model wins](<https://example.com/story-1>)",
+        "",
+        "<script>alert(5)</script> [click](javascript:alert(6))",
+        "",
+        "- \\[1\\] **Flagged: unsupported.** The model scored 99% on every benchmark. ([source](<https://example.com/story-1>))",
+      ].join("\n"),
+      flags: [
+        {
+          id: "s1-c1",
+          story_id: "s1",
+          text: "The model scored 99% on every benchmark.",
+          status: "unsupported",
+          reason: "The source gives 91%.",
+          source_url: "https://example.com/story-1",
+          passage: "It scored 91% on the benchmark.",
+          explanation: "The article says 91%; the draft said 99%.",
+        },
+      ],
+    },
+  });
+  await openDraft(page);
+  const body = page.getByTestId("draft-text");
+  await expect(
+    body.getByRole("heading", {
+      level: 4,
+      name: "Lead story: Tiny model wins",
+    }),
+  ).toBeVisible();
+  await expect(body).toContainText("<script>alert(5)</script>");
+  await expect(page.locator("main script")).toHaveCount(0);
+  await expect(body.getByText("click")).toBeVisible();
+  await expect(body.locator("a:not([href^='http'])")).toHaveCount(0);
+  await expect(
+    body.getByRole("link", { name: "Tiny model wins" }),
+  ).toHaveAttribute("rel", "noopener noreferrer");
+  const note = body.getByRole("listitem").getByRole("note");
+  await expect(note).toContainText("The article says 91%; the draft said 99%.");
+  await expect(note).toContainText("It scored 91% on the benchmark.");
+  await expect(
+    note.getByRole("link", { name: "https://example.com/story-1" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("focus")).toHaveText(
+    "Focus: practical AI tools",
+  );
+});
+
 test("flags and the run report are visible", async ({ page }) => {
   await openDraft(page);
   const flags = page.getByRole("region", { name: "Flags (1)" });
@@ -44,11 +100,16 @@ test("edit, then approve, and both are kept by the API", async ({ page }) => {
   await page.getByLabel("Draft text").fill("# AI Weekly\n\nEdited by the reviewer.");
   await expect(approve).toBeDisabled();
   await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Done editing" }).click();
   await expect(page.getByTestId("draft-text")).toContainText("Edited by the reviewer.");
   await expect(page.getByTestId("approval")).toHaveText("Not approved");
 
   await approve.click();
   await expect(page.getByTestId("approval")).toHaveText(/^Approved/);
+  const preview = page.getByRole("region", { name: "Email preview" });
+  await expect(preview).toContainText("Nothing was sent. This is what would go out.");
+  await expect(preview.locator("iframe")).toHaveAttribute("sandbox", "");
+  await expect(preview.frameLocator("iframe").locator("body")).toContainText("Edited by the reviewer.");
 
   // A fresh load reads it back from the API: the edit and the approval were stored.
   await openDraft(page);

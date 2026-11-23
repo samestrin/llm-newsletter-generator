@@ -1,4 +1,4 @@
-/** The page's calls to `newsletter serve`: check feeds, start a run, list, read, edit and approve drafts. */
+/** The page's calls to `newsletter serve`: check feeds, start a run, list, read, edit and approve drafts, preview the email. */
 import { modelHeaders, type ModelCredentials } from "./modelAccess";
 
 /** One entry of `GET /api/providers` (plan 08's `providers.json`); it holds no secrets. */
@@ -24,19 +24,29 @@ export type Flag = {
   story_id: string;
   text: string;
   status: string;
+  /** The check's own reason: the model's, or why the check failed. */
   reason: string;
   source_url: string;
+  /** The source text the claim was tied to; absent from older drafts. */
+  passage?: string | null;
+  /** Why it is flagged, in plain words built by the server; absent from older drafts. */
+  explanation?: string | null;
 };
 
 /** `RunReport.to_dict()`; every field optional, so an older or partial report still shows. */
 export type Report = {
   ok?: boolean;
+  /** What the visitor asked the issue to be about, if they gave a focus. */
+  focus?: string | null;
   failed_sources?: { url: string; reason: string }[];
   linked_articles?: { title: string; link: string; status: string; reason?: string | null }[];
   dropped_stories?: { story_id: string; title: string; link: string; reason: string }[];
   dropped_claims?: { id: string; story_id: string; text: string; passage?: string; reason: string }[];
   flagged_claims?: Flag[];
+  /** The raw error of an editor pass that failed. */
   editor_error?: string | null;
+  /** The same failure in one plain sentence, set only when the editor failed. */
+  editor_message?: string | null;
   editor_rejections?: string[];
   steps?: {
     step?: string;
@@ -46,7 +56,8 @@ export type Report = {
     completion_tokens?: number | null;
     cost?: number | null;
   }[];
-  total_cost?: number;
+  total_cost?: number | null;
+  /** False when a step's cost is unknown, so `total_cost` leaves it out. */
   cost_complete?: boolean;
   failed_steps?: string[];
   voice?: {
@@ -70,6 +81,8 @@ export type Draft = {
   approved: boolean;
   created_at: string;
   updated_at: string;
+  /** The run's focus, when the server keeps it on the draft. */
+  focus?: string | null;
 };
 
 export type DraftSummary = Omit<Draft, "text" | "flags" | "report" | "approval"> & { flags: number };
@@ -278,6 +291,8 @@ export function createApi(access: Access, base = "", onUnauthorized?: (error: Ap
       call<Draft>("POST", `/api/drafts/${encodeURIComponent(draft.id)}/approve`, {
         sha256: await sha256Hex(draft.text),
       }),
+    /** The approved text as an HTML email, to look at only: nothing is sent. 409 before approval. */
+    email: (id: string) => call<{ html: string }>("GET", `/api/drafts/${encodeURIComponent(id)}/email`),
   };
 }
 

@@ -106,11 +106,12 @@ const SCRIPT: Run[] = [
   ),
 ];
 
-type Answer = Run | "fail" | "missing";
+type Answer = Run | "fail" | "missing" | "refused" | "bad" | 408 | 429;
 
 /**
  * A fake of a demo-mode server: `GET /api/runs/{id}` answers the next of `answers` at each
- * poll and keeps answering the last one; "fail" is a network failure, "missing" a 404.
+ * poll and keeps answering the last one; "fail" is a network failure, "missing" a 404,
+ * "refused" a 401, "bad" a 400, and 408 or 429 that status.
  */
 function fakeApi(answers: Answer[] = SCRIPT) {
   const calls: { method: string; url: string; headers: Headers }[] = [];
@@ -127,6 +128,9 @@ function fakeApi(answers: Answer[] = SCRIPT) {
       const answer = answers[Math.min(polls++, answers.length - 1)];
       if (answer === "fail") throw new TypeError("Failed to fetch");
       if (answer === "missing") return json(404, { detail: "no such run" });
+      if (answer === "refused") return json(401, { detail: "X-Demo-Code was not accepted" });
+      if (answer === "bad") return json(400, { detail: "that is not a run id" });
+      if (answer === 408 || answer === 429) return json(answer, { detail: "try again later" });
       return json(200, answer);
     }
     if (method === "GET" && url === "/api/presets") return json(200, []);
@@ -388,6 +392,73 @@ describe("live progress", () => {
     expect(api.polled()).toBe(1);
   });
 
+  it("on a 401 stops polling at once and says the key was refused, not that contact was lost", async () => {
+    sessionStorage.setItem(RUN_KEY, RUN_ID);
+    const api = fakeApi(["refused", SCRIPT[1]]);
+    vi.stubGlobal("fetch", api.fetch);
+    const unauthorized = vi.fn();
+    const { rerender } = render(
+      <Progress
+        api={createApi({ model: { preset: "demo", secret: CODE } }, "", unauthorized)}
+        runId={RUN_ID}
+        onDone={vi.fn()}
+        onStartOver={vi.fn()}
+      />,
+    );
+    await pass(0);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("The server refused the key: X-Demo-Code was not accepted.");
+    expect(alert).not.toHaveTextContent(/Lost contact/);
+    await pass(2000 * MAX_FAILURES * 2);
+    expect(api.polled()).toBe(1);
+    expect(unauthorized).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Lost contact/)).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+    // Not over: the run may still finish, so a key saved again resumes it.
+    expect(sessionStorage.getItem(RUN_KEY)).toBe(RUN_ID);
+    rerender(
+      <Progress
+        api={createApi({ model: { preset: "demo", secret: CODE } }, "", unauthorized)}
+        runId={RUN_ID}
+        onDone={vi.fn()}
+        onStartOver={vi.fn()}
+      />,
+    );
+    await pass(0);
+    expect(api.polled()).toBe(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(stateOf("Fetching feeds")).toBe("Running");
+  });
+
+  it("on another 4xx stops polling and says the server refused, with Try again and Start over", async () => {
+    sessionStorage.setItem(RUN_KEY, RUN_ID);
+    const api = fakeApi(["bad", SCRIPT[3]]);
+    const { onStartOver } = renderProgress(api);
+    await pass(0);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("The server refused to say how the run is going: that is not a run id.");
+    await pass(20_000);
+    expect(api.polled()).toBe(1);
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+    await pass(0);
+    expect(api.polled()).toBe(2);
+    expect(stateOf("Grouping and ranking stories")).toBe("Running");
+    expect(onStartOver).not.toHaveBeenCalled();
+  });
+
+  it.each([408, 429] as const)("on a %i keeps polling as a lost connection, not a refusal", async (status) => {
+    const api = fakeApi([SCRIPT[1], status, status, SCRIPT[2]]);
+    renderProgress(api);
+    await pass(2000);
+    expect(screen.getByText("Lost contact, retrying…")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    await pass(4000);
+    expect(api.polled()).toBe(4);
+    expect(screen.queryByText(/Lost contact/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(stateOf("Reading articles")).toBe("Running");
+  });
+
   it("clears the done entry", async () => {
     sessionStorage.setItem(RUN_KEY, RUN_ID);
     renderProgress(fakeApi([SCRIPT.at(-1)!]));
@@ -455,6 +526,30 @@ describe("the run in the page", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
     await pass(0);
     expect(api.polled()).toBe(1);
+    expect(stateOf("Writing claims")).toBe("Running");
+  });
+
+  it("a 401 while polling reopens the key panel once, and the run resumes when the key is saved again", async () => {
+    keep();
+    sessionStorage.setItem(RUN_KEY, RUN_ID);
+    const api = fakeApi(["refused", SCRIPT[4]]);
+    vi.stubGlobal("fetch", api.fetch);
+    render(<App />);
+    await pass(0);
+    let panel = screen.getByRole("region", { name: "Model key" });
+    expect(panel).toHaveTextContent("X-Demo-Code was not accepted");
+    fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
+    await pass(2000 * MAX_FAILURES * 2);
+    expect(api.polled()).toBe(1);
+    expect(screen.queryByRole("region", { name: "Model key" })).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent("The server refused the key");
+    fireEvent.click(screen.getByRole("button", { name: "Key" }));
+    panel = screen.getByRole("region", { name: "Model key" });
+    fireEvent.change(within(panel).getByLabelText("Provider"), { target: { value: "demo" } });
+    fireEvent.change(within(panel).getByLabelText("Demo code", { selector: "input" }), { target: { value: CODE } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    await pass(0);
+    expect(api.polled()).toBe(2);
     expect(stateOf("Writing claims")).toBe("Running");
   });
 

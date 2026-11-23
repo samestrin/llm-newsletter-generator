@@ -90,18 +90,26 @@ export default function App() {
     // Once, on the first visit: the providers do not change while the page is open.
   }, []);
 
-  async function loadList(client: Api) {
+  /** List the drafts with `client` and make it the page's client; `false` when it was refused. */
+  async function loadList(client: Api): Promise<boolean> {
+    const before = drafts;
     setDrafts({ state: "loading" });
     try {
       setDrafts({ state: "ready", value: await client.listDrafts() });
       setApi(client);
     } catch (e) {
+      const rejected = e instanceof ApiError && e.status === 401;
+      // A refused key keeps the list the working client already showed.
       setDrafts(
-        keyed.current && e instanceof ApiError && e.status === 401
-          ? { state: "idle" }
+        keyed.current && rejected
+          ? before.state === "ready"
+            ? before
+            : { state: "idle" }
           : { state: "error", message: message(e) },
       );
+      return !rejected;
     }
+    return true;
   }
 
   function connect(event: FormEvent) {
@@ -109,11 +117,15 @@ export default function App() {
     void loadList(createApi({ token }, API_BASE));
   }
 
-  function saveKey(model: ModelCredentials, remember: boolean) {
+  /**
+   * Keep a new key unless the API refuses it: a refused one leaves the saved key and its client
+   * in place. Any other failure keeps it, so Try again retries with it.
+   */
+  async function saveKey(model: ModelCredentials, remember: boolean) {
+    setPanel({ open: false, error: null });
+    if (!(await loadList(keyApi(model)))) return;
     saveCredentials(model, remember);
     setCredentials({ ...model, remember });
-    setPanel({ open: false, error: null });
-    void loadList(keyApi(model));
   }
 
   function clearKey() {

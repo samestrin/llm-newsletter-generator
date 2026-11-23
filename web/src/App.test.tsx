@@ -36,6 +36,10 @@ function fakeApi(start: Draft) {
       draft = { ...draft, approval: { sha256: body.sha256, approved_at: "now" }, approved: true };
       return json(200, draft);
     }
+    if (method === "GET" && url === `/api/drafts/${draft.id}/email`) {
+      if (!draft.approved) return json(409, { detail: "the draft's current text is not approved; approve it first" });
+      return json(200, { html: `<p>${draft.text}</p>` });
+    }
     return json(404, { detail: "not found" });
   });
   return {
@@ -161,7 +165,8 @@ describe("flags", () => {
 
 describe("the run report", () => {
   it("shows what failed, was dropped or kept neutral, and the cost", async () => {
-    await openDraft();
+    const { user } = await openDraft();
+    await user.click(screen.getByRole("button", { name: "Show details" }));
     const report = screen.getByRole("region", { name: "Run report" });
     expect(report).toHaveTextContent("Problems found");
     expect(report).toHaveTextContent("https://down.example.com/feed.xml");
@@ -175,7 +180,8 @@ describe("the run report", () => {
     expect(report).toHaveTextContent("fast-model");
     expect(report).toHaveTextContent("$0.0042");
     expect(report).toHaveTextContent("unknown");
-    expect(report).toHaveTextContent("1 step cost unknown");
+    expect(report).toHaveTextContent("some costs unknown");
+    expect(report).toHaveTextContent("1 step cost unknown, not counted in the total.");
   });
 
   it("lists the linked articles read for link-only items, and the skipped ones with why", async () => {
@@ -217,7 +223,8 @@ describe("the run report", () => {
   // file equal to the API's answer, so this reads the field names the API really sends.
   it("shows the token counts of a report the API served", async () => {
     const served = JSON.parse(readFileSync(join(__dirname, "contract", "seed-report.json"), "utf-8"));
-    await openDraft(fakeApi(makeDraft({ report: served })));
+    const { user } = await openDraft(fakeApi(makeDraft({ report: served })));
+    await user.click(screen.getByRole("button", { name: "Show details" }));
     const table = screen.getByRole("region", { name: "Model calls table" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(served.steps.length);
@@ -240,6 +247,7 @@ describe("edit and approve", () => {
     await user.clear(box);
     await user.type(box, "Fixed text");
     await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Done editing" }));
     expect(await screen.findByTestId("draft-text")).toHaveTextContent("Fixed text");
     expect(api.calls).toContainEqual({
       method: "PUT",
@@ -254,8 +262,10 @@ describe("edit and approve", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.type(screen.getByLabelText("Draft text"), " more");
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.getByTestId("draft-text").textContent).toBe(makeDraft().text);
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+    await user.click(screen.getByRole("button", { name: "Done editing" }));
+    expect(screen.getByTestId("draft-text")).toHaveTextContent("Second paragraph.");
+    expect(screen.getByTestId("draft-text")).not.toHaveTextContent("more");
     expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
   });
 
@@ -266,6 +276,18 @@ describe("edit and approve", () => {
     const call = api.calls.find((c) => c.method === "POST");
     expect(call?.body).toEqual({ sha256: await sha(makeDraft().text) });
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+  });
+
+  it("then shows the email the API would send, and sends nothing", async () => {
+    const { api, user } = await openDraft();
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    const region = await screen.findByRole("region", { name: "Email preview" });
+    expect(region).toHaveTextContent("Nothing was sent. This is what would go out.");
+    expect(within(region).getByTitle("Email preview")).toHaveAttribute("srcdoc", `<p>${makeDraft().text}</p>`);
+    expect(api.calls.map((c) => `${c.method} ${c.url}`).slice(-2)).toEqual([
+      `POST /api/drafts/${makeDraft().id}/approve`,
+      `GET /api/drafts/${makeDraft().id}/email`,
+    ]);
   });
 
   it("refuses to show approved when the draft changed under the reviewer", async () => {
@@ -419,6 +441,7 @@ describe("the draft's states", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.type(screen.getByLabelText("Draft text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Done editing" }));
     expect(await screen.findByTestId("draft-text")).toHaveTextContent(/!$/);
     expect(within(nav).getByRole("alert")).toHaveTextContent("Could not load the drafts: the API is busy");
   });
