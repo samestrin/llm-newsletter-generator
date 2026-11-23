@@ -59,6 +59,7 @@ In demo mode the API enforces (epic 08.1):
 - **6 feeds** — a run takes at most 6 feed URLs; a 7th is refused.
 - **One run at a time** — a second `POST /api/runs` while one is running answers 409 with a `retry_after`; the page shows "Someone else is making one right now. Try again in a minute."
 - `POST /api/feeds/check` is capped at 30 checks a minute (429 with `retry_after` over the cap).
+- **Drafts belong to the browser that made them** — a run's answer carries an owner token, once; the page keeps it in session storage and sends it as `X-Owner-Token`. A visitor sees the seeded example and their own drafts and runs only; anyone else's is a 404. No one may edit or approve the example (403). The server keeps only the token's sha256.
 
 Each demo code also carries its own budget, expiry and requests/tokens-per-minute at the gateway, and the gateway has a monthly backstop budget.
 

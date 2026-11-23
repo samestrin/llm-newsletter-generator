@@ -179,9 +179,13 @@ def test_a_browser_reads_edits_approves_and_emails_its_own_draft(tmp_path):
         run, token = start(client)
         draft_id = run["draft_id"]
         read = client.get(f"/api/drafts/{draft_id}", headers=owner(token))
-        edit = client.put(f"/api/drafts/{draft_id}", json={"text": "# Mine\n"}, headers=owner(token))
+        edit = client.put(
+            f"/api/drafts/{draft_id}", json={"text": "# Mine\n"}, headers=owner(token)
+        )
         approve = client.post(
-            f"/api/drafts/{draft_id}/approve", json={"sha256": sha("# Mine\n")}, headers=owner(token)
+            f"/api/drafts/{draft_id}/approve",
+            json={"sha256": sha("# Mine\n")},
+            headers=owner(token),
         )
         email = client.get(f"/api/drafts/{draft_id}/email", headers=owner(token))
     assert read.status_code == 200
@@ -221,7 +225,9 @@ def test_no_one_edits_or_approves_the_example(tmp_path, method, path, body, who)
     with demo(tmp_path) as client:
         _, a = start(client)
         sent = a if who == "a" else None
-        response = client.request(method, path.format(id=example["id"]), json=body, headers=owner(sent))
+        response = client.request(
+            method, path.format(id=example["id"]), json=body, headers=owner(sent)
+        )
         after = client.get(f"/api/drafts/{example['id']}", headers=owner(None)).json()
     assert response.status_code == 403
     assert "example" in response.json()["detail"]
@@ -307,5 +313,8 @@ def test_the_header_and_the_owner_token_field_are_in_the_spec(tmp_path):
         names = {(p["in"], p["name"].lower()) for p in parameters}
         assert ("header", "x-owner-token") in names, (method, path)
     assert "owner_token" in spec["components"]["schemas"]["RunView"]["properties"]
-    for method, path in (("put", "/api/drafts/{draft_id}"), ("post", "/api/drafts/{draft_id}/approve")):
+    for method, path in (
+        ("put", "/api/drafts/{draft_id}"),
+        ("post", "/api/drafts/{draft_id}/approve"),
+    ):
         assert "example" in spec["paths"][path][method]["responses"]["403"]["description"]

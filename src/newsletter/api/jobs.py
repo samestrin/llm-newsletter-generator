@@ -53,7 +53,8 @@ class Jobs:
         self._idle = threading.Event()
         self._idle.set()
 
-    def start(self, request: RunRequest) -> dict[str, Any]:
+    def start(self, request: RunRequest, *, owner_sha256: str | None = None) -> dict[str, Any]:
+        """Queue the run. With `owner_sha256` (demo mode), the run and its draft keep it."""
         with self._lock:
             if not self._idle.is_set():
                 raise Busy(BUSY)
@@ -71,6 +72,8 @@ class Jobs:
                 "progress": waiting_steps(),
                 "editor_message": None,
             }
+            if owner_sha256:
+                run["owner_sha256"] = owner_sha256
             self.runs.save(run)
             self._finished[run["id"]] = threading.Event()
         threading.Thread(target=self._watch, args=(run, request), daemon=True).start()
@@ -139,7 +142,9 @@ class Jobs:
                 with lock:
                     if outcome:  # Timed out already: its result is not used.
                         return
-                    draft = self.drafts.create(content, run_id=run["id"])
+                    draft = self.drafts.create(
+                        content, run_id=run["id"], owner_sha256=run.get("owner_sha256")
+                    )
                     report = content.get("report")
                     outcome.update(
                         status="done",
