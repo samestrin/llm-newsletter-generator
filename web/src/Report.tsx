@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from "react";
+import { Component, useId, useState, type ReactNode } from "react";
 import type { Flag, Report } from "./api";
 
 /**
@@ -156,16 +156,41 @@ export function RunReport({
   );
 }
 
-function ReportBody({ report }: { report: Report }) {
+/**
+ * The run in a few lines, built from the report: the models used (each once), the number
+ * of model calls, the total cost, and the editor's plain message when it failed.
+ */
+function Summary({ report }: { report: Report }) {
   const steps = report.steps ?? [];
-  const unknown = steps.filter((s) => s.cost == null).length;
+  const models = [...new Set(steps.map((s) => s.model).filter(Boolean))];
+  // An older report has no cost_complete: a step with no cost means the same.
+  const complete = report.cost_complete ?? steps.every((s) => s.cost != null);
+  const failed = report.editor_message || (report.editor_error && "The editor failed.");
+  return (
+    <>
+      <ul aria-label="Run summary">
+        <li>Models used: {models.length ? models.join(", ") : "none"}</li>
+        <li>Steps: {steps.length}</li>
+        <li>
+          Total cost: {report.total_cost == null ? "unknown" : money(report.total_cost)}
+          {report.total_cost != null && !complete && ", some costs unknown"}
+        </li>
+      </ul>
+      {failed && <p className="bad">{failed}</p>}
+    </>
+  );
+}
+
+function ReportBody({ report }: { report: Report }) {
+  const [open, setOpen] = useState(false);
+  const details = useId();
   const voice = report.voice;
   return (
     <>
       <p className={report.ok === false ? "bad" : "good"}>
         {report.ok === false ? "Problems found" : "Nothing failed, was left out or is flagged"}
       </p>
-      {report.editor_error && <p className="bad">Editor failed: {report.editor_error}</p>}
+      <Summary report={report} />
       <List
         title="Failed sources"
         items={report.failed_sources}
@@ -227,6 +252,29 @@ function ReportBody({ report }: { report: Report }) {
           />
         </>
       )}
+      <button
+        type="button"
+        className="link-button"
+        aria-expanded={open}
+        aria-controls={details}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? "Hide details" : "Show details"}
+      </button>
+      <div id={details} hidden={!open}>
+        {open && <Details report={report} />}
+      </div>
+    </>
+  );
+}
+
+/** The editor's raw error, each model call and the cost it left out: behind Show details. */
+function Details({ report }: { report: Report }) {
+  const steps = report.steps ?? [];
+  const unknown = steps.filter((s) => s.cost == null).length;
+  return (
+    <>
+      {report.editor_error && <p className="bad">Editor failed: {report.editor_error}</p>}
       <h4>Model calls</h4>
       {steps.length === 0 ? (
         <p>None.</p>
@@ -258,10 +306,11 @@ function ReportBody({ report }: { report: Report }) {
           </table>
         </div>
       )}
-      <p>
-        Total cost: {money(report.total_cost ?? 0)}
-        {unknown > 0 && ` (${unknown} step${unknown === 1 ? "" : "s"} cost unknown, not counted)`}
-      </p>
+      {unknown > 0 && (
+        <p>
+          {unknown} step{unknown === 1 ? "" : "s"} cost unknown, not counted in the total.
+        </p>
+      )}
     </>
   );
 }

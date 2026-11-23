@@ -44,7 +44,7 @@ describe("the run summary", () => {
   });
 
   it("says the total is unknown when the report has none", () => {
-    const { summary } = show({ steps: [{ step: "edit", model: "m", cost: null }], total_cost: null as unknown as number });
+    const { summary } = show({ steps: [{ step: "edit", model: "m", cost: null }], total_cost: null });
     expect(summary).toHaveTextContent("Total cost: unknown");
   });
 
