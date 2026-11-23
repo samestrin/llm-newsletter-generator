@@ -212,7 +212,9 @@ def test_a_loopback_url_is_refused_over_http_too(tmp_path, web):
 
 def test_the_check_needs_the_token_and_a_url(tmp_path, web):
     with api(tmp_path, web) as client:
-        no_token = client.post("/api/feeds/check", json={"url": GOOD}, headers={"Origin": headers()["Origin"]})
+        no_token = client.post(
+            "/api/feeds/check", json={"url": GOOD}, headers={"Origin": headers()["Origin"]}
+        )
         no_url = client.post("/api/feeds/check", json={}, headers=headers())
         extra = client.post("/api/feeds/check", json={"url": GOOD, "x": 1}, headers=headers())
     assert no_token.status_code == 401
@@ -276,7 +278,9 @@ def test_a_run_lists_the_bad_feed_in_its_fetching_feeds_step(tmp_path):
     from test_cli import ENV, NEWS, by_meaning, model, run_web
 
     def run_and_page(url, headers, timeout):
-        return Web()(url, headers, timeout) if url in (PAGE, DOWN) else run_web(url, headers, timeout)
+        return (
+            Web()(url, headers, timeout) if url in (PAGE, DOWN) else run_web(url, headers, timeout)
+        )
 
     runner = default_runner(ENV, transport=model(embed=by_meaning), fetch=run_and_page)
     with api(tmp_path, run_and_page, runner=runner) as client:
@@ -463,7 +467,9 @@ def test_with_demo_mode_off_the_old_request_shapes_work(tmp_path):
     with api(tmp_path, web, runner=runner) as client:
         response = client.post("/api/runs", json=body, headers=headers())
         assert client.app.state.jobs.wait(response.json()["id"], 5)
-        per_feed = client.post("/api/runs", json={"feeds": [GOOD], "per_feed": 10}, headers=headers())
+        per_feed = client.post(
+            "/api/runs", json={"feeds": [GOOD], "per_feed": 10}, headers=headers()
+        )
         assert client.app.state.jobs.wait(per_feed.json()["id"], 5)
     assert response.status_code == 202, response.text
     first, second = runner.requests
@@ -521,3 +527,38 @@ def test_the_new_routes_and_the_retry_after_answers_are_in_the_spec(tmp_path, we
         "error",
     }
     assert TOKEN not in str(spec)
+
+
+def test_demo_mode_keeps_a_smaller_per_feed_from_the_sources_config(tmp_path, web):
+    from test_api import CONFIG  # per_feed=2
+
+    runner = FakeRunner()
+    settings = make_settings(tmp_path, NEWSLETTER_DEMO="1")
+    app = create_app(settings, runner=runner, config=CONFIG, fetch=web, resolve=public)
+    with TestClient(app) as client:
+        response = client.post("/api/runs", json={"feeds": [GOOD]}, headers=headers())
+        assert client.app.state.jobs.wait(response.json()["id"], 5)
+    assert runner.requests[0].per_feed == 2
+
+
+def test_the_feed_errors_hold_no_secret(tmp_path, web):
+    leaky = f"https://page.example.org/?key={TOKEN}"
+
+    class Leaky(Web):
+        def __call__(self, url, headers, timeout):
+            return super().__call__(PAGE if url == leaky else url, headers, timeout)
+
+    with api(tmp_path, Leaky()) as client:
+        response = client.post("/api/runs", json={"feeds": [leaky]}, headers=headers())
+    assert response.status_code == 422
+    assert TOKEN not in response.text
+    assert response.json()["errors"][0]["error"] == fc.NOT_A_FEED
+
+
+def test_an_unexpected_failure_reading_the_address_is_a_sentence_not_a_crash(caplog):
+    def broken(url, headers, timeout):
+        raise ValueError("something nobody planned for")
+
+    result = fc.check_feed(GOOD, fetch=broken, resolve=public)
+    assert result == fc.FeedCheck(ok=False, title=None, items=0, error=fc.UNREACHABLE)
+    assert "something nobody planned for" in caplog.text
