@@ -175,7 +175,7 @@ Each connector is optional and is set up only when its key is set. Each makes on
 
 ### Try it
 
-No model key needed, either on the public demo or on your own machine.
+No server-side model key needed: the public demo gives you a demo code, and on your own machine you paste your own provider key into the page.
 
 **The public demo.** [`docs/deploy/demos.md`](docs/deploy/demos.md) covers the public demo on the `demos` droplet: its host, how a demo code is handed out, and the limits (3 items per feed, 6 feeds, one run at a time). The droplet's deploy is the deploy repo's half, and that page says what is set up. A visitor brings a demo code or their own model key:
 
