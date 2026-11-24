@@ -2,7 +2,7 @@
 
 The public demo of the newsletter generator runs on the `demos` droplet at `https://newsletter.samestrin.com` (the host name is proposed, matching the other demos' `<app>.samestrin.com`; the owner confirms it on fleet-deploy's PR), behind the droplet's Traefik. A visitor brings a **demo code** or **their own model key**, fills the form, watches every step live, and reads a draft whose claims are checked against their sources. Nothing sends mail. This page covers what this repo ships for it: [`docker-compose.demo.yml`](../../docker-compose.demo.yml).
 
-The droplet's half is **fleet-deploy's**, not this repo's: the deploy-target entry, the Traefik router for the demo host, the demo-code entries, and the gateway model mapping. This repo ships the compose file, this page, and the shape test. The demo itself also needs the demo-mode API (demo code / visitor key access, `GET /api/providers`, `POST /api/feeds/check`, the demo limits and per-browser draft scoping), which is epic 08.1's code; the compose file is the deploy shape and its CI check validates the file, not a running demo.
+The droplet's half is **fleet-deploy's**, not this repo's: the deploy-target entry, the Traefik router for the demo host, the demo-code entries, and the gateway model mapping. This repo ships the compose file, this page, and the shape test. The demo-mode API it needs (demo code / visitor key access, `GET /api/providers`, `POST /api/feeds/check`, the demo limits and per-browser draft scoping) shipped in 1.2.0; the compose file is the deploy shape and its CI check validates the file, not a running demo.
 
 ## What the compose file runs
 
